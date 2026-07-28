@@ -92,12 +92,14 @@ export const actionsDropdownCSS = `
 
   body.actions-dropdown-open #customersTableScroll,
   body.actions-dropdown-open #requestsTableScroll,
-  body.actions-dropdown-open #usersTableScroll {
+  body.actions-dropdown-open #usersTableScroll,
+  body.actions-dropdown-open #followupsTableScroll {
     pointer-events: none;
   }
   body.actions-dropdown-open #customersTableScroll tbody tr,
   body.actions-dropdown-open #requestsTableScroll tbody tr,
-  body.actions-dropdown-open #usersTableScroll tbody tr {
+  body.actions-dropdown-open #usersTableScroll tbody tr,
+  body.actions-dropdown-open #followupsTableScroll tbody tr {
     pointer-events: none;
   }
   body.actions-dropdown-open .actions-dropdown-menu,

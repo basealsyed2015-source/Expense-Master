@@ -62,7 +62,15 @@
       "Bash(awk 'NR>=19500 && NR<=19556{print NR\": \"$0}' src/index.tsx)",
       "Bash(awk -F: '$1 > 32940 && $1 < 32970')",
       "Bash(sed -i '341,422d' src/reports-module.ts)",
-      "Bash(sed -n '338,345p' src/reports-module.ts)"
+      "Bash(sed -n '338,345p' src/reports-module.ts)",
+      "Bash(npx vitest *)",
+      "Bash(awk *)",
+      "Bash(npx --yes vite build)",
+      "Bash(ffprobe --version)",
+      "Bash(where ffprobe *)",
+      "Bash(where mkvmerge *)",
+      "Bash(where mkvtoolnix *)",
+      "PowerShell(Get-Command *)"
     ]
   }
 }

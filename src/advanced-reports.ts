@@ -177,21 +177,78 @@ export const customersReportPage = `<!DOCTYPE html>
                     <tbody id="reportTable" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
+            <div class="p-4 border-t flex items-center justify-between gap-3 flex-wrap no-print">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-700 whitespace-nowrap">عدد الصفوف:</span>
+                    <select id="reportPageSize" onchange="setReportPageSize(this.value)" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="15">15</option></select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="prevBtn" onclick="setReportPage('prev')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">السابق</button>
+                    <span id="pageInfo" class="text-sm text-gray-600 whitespace-nowrap"></span>
+                    <button id="nextBtn" onclick="setReportPage('next')" class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-sm font-semibold hover:bg-gray-50">التالي</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         let reportData = [];
         const authToken = localStorage.getItem('authToken');
-        
-        async function loadReport() {
+        const reportPaging = { page: 1, pageSize: 15, total: 0 };
+
+        function getPageSizeOptions(total) {
+            const base = [15, 30, 50, 100];
+            const totalNum = Number(total) || 0;
+            const options = [base[0]];
+            for (let i = 1; i < base.length; i++) {
+                const size = base[i];
+                const prev = base[i - 1];
+                if (totalNum >= size) { options.push(size); continue; }
+                if (totalNum > prev) options.push(size);
+                break;
+            }
+            return options;
+        }
+
+        function renderPaginationUI() {
+            const pageSizeSelect = document.getElementById('reportPageSize');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const info = document.getElementById('pageInfo');
+            if (!pageSizeSelect || !prevBtn || !nextBtn || !info) return;
+
+            const total = reportPaging.total;
+            const options = getPageSizeOptions(total);
+            if (options.indexOf(reportPaging.pageSize) === -1) reportPaging.pageSize = 15;
+            pageSizeSelect.innerHTML = options
+                .map((n) => '<option value="' + n + '" ' + (n === reportPaging.pageSize ? 'selected' : '') + '>' + n + '</option>')
+                .join('');
+
+            const totalPages = Math.max(1, Math.ceil(total / reportPaging.pageSize));
+            reportPaging.page = Math.max(1, Math.min(reportPaging.page, totalPages));
+            const start = total === 0 ? 0 : (reportPaging.page - 1) * reportPaging.pageSize + 1;
+            const end = Math.min(total, reportPaging.page * reportPaging.pageSize);
+            info.textContent = total === 0 ? '0 \\ 0' : (start + '-' + end + ' من ' + total);
+            prevBtn.disabled = reportPaging.page <= 1;
+            nextBtn.disabled = reportPaging.page >= totalPages;
+            prevBtn.classList.toggle('opacity-50', prevBtn.disabled);
+            nextBtn.classList.toggle('opacity-50', nextBtn.disabled);
+        }
+
+        async function loadReport(page, pageSize) {
+            reportPaging.page = page || reportPaging.page;
+            if (pageSize) reportPaging.pageSize = pageSize;
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('tableContainer').classList.add('hidden');
             try {
                 const response = await axios.get('/api/customers', {
+                    params: { page: reportPaging.page, pageSize: reportPaging.pageSize },
                     headers: { 'Authorization': 'Bearer ' + authToken }
                 });
-                
                 if (response.data.success) {
                     reportData = response.data.data || [];
+                    reportPaging.total = response.data.total || reportData.length;
+                    reportPaging.page = response.data.page || reportPaging.page;
                     displayReport();
                 }
             } catch (error) {
@@ -201,16 +258,17 @@ export const customersReportPage = `<!DOCTYPE html>
                 document.getElementById('loading').classList.add('hidden');
             }
         }
-        
+
         function displayReport() {
-            document.getElementById('totalCustomers').textContent = reportData.length;
+            document.getElementById('totalCustomers').textContent = reportPaging.total;
             document.getElementById('reportDate').textContent = new Date().toLocaleDateString('ar-SA');
             document.getElementById('tableContainer').classList.remove('hidden');
-            
+
+            const offset = (reportPaging.page - 1) * reportPaging.pageSize;
             const tbody = document.getElementById('reportTable');
             tbody.innerHTML = reportData.map((customer, index) => \`
                 <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-3">\${index + 1}</td>
+                    <td class="px-4 py-3">\${offset + index + 1}</td>
                     <td class="px-4 py-3 font-medium">\${customer.full_name}</td>
                     <td class="px-4 py-3">\${customer.phone}</td>
                     <td class="px-4 py-3">\${customer.email || '-'}</td>
@@ -220,23 +278,35 @@ export const customersReportPage = `<!DOCTYPE html>
                     <td class="px-4 py-3">\${customer.assigned_employee_name || 'غير محدد'}</td>
                 </tr>
             \`).join('');
+
+            renderPaginationUI();
         }
-        
+
+        window.setReportPage = function(directionOrPage) {
+            let page = reportPaging.page;
+            if (directionOrPage === 'prev') page -= 1;
+            else if (directionOrPage === 'next') page += 1;
+            else { const p = Number(directionOrPage); if (Number.isFinite(p)) page = p; }
+            const totalPages = Math.max(1, Math.ceil(reportPaging.total / reportPaging.pageSize));
+            page = Math.max(1, Math.min(totalPages, page));
+            if (page !== reportPaging.page) loadReport(page);
+        }
+
+        window.setReportPageSize = function(value) {
+            const parsed = Number(value);
+            loadReport(1, Number.isFinite(parsed) && parsed > 0 ? parsed : 15);
+        }
+
         function searchTable() {
             const searchValue = document.getElementById('searchInput').value.toLowerCase();
             const tbody = document.getElementById('reportTable');
             const rows = tbody.querySelectorAll('tr');
-            
             rows.forEach(row => {
                 const text = row.textContent.toLowerCase();
-                if (text.includes(searchValue)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                row.style.display = text.includes(searchValue) ? '' : 'none';
             });
         }
-        
+
         window.exportToExcel = function() {
             const ws = XLSX.utils.json_to_sheet(reportData.map(c => ({
                 'الاسم': c.full_name,
@@ -251,8 +321,8 @@ export const customersReportPage = `<!DOCTYPE html>
             XLSX.utils.book_append_sheet(wb, ws, 'العملاء');
             XLSX.writeFile(wb, 'تقرير_العملاء_' + new Date().toISOString().split('T')[0] + '.xlsx');
         }
-        
-        document.addEventListener('DOMContentLoaded', loadReport);
+
+        document.addEventListener('DOMContentLoaded', function() { loadReport(1, 15); });
     </script>
 </body>
 </html>`;

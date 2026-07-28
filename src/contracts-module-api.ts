@@ -191,6 +191,33 @@ function normalizeTemplateStampUrl(
   }
 }
 
+function normalizeTemplateBrandingImageUrl(
+  raw: unknown
+): { ok: true; value: string | null } | { ok: false; response: Response } {
+  if (raw == null || raw === '') return { ok: true, value: null }
+  const s = typeof raw === 'string' ? raw.trim() : String(raw).trim()
+  if (!s) return { ok: true, value: null }
+  if (s.startsWith('/api/attachments/view/')) {
+    if (s.includes('..') || s.length > 2000) {
+      return {
+        ok: false,
+        response: new Response(
+          JSON.stringify({ error: 'image_url_invalid', detail: 'رابط الصورة غير صالح.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+        )
+      }
+    }
+    return { ok: true, value: s }
+  }
+  return {
+    ok: false,
+    response: new Response(
+      JSON.stringify({ error: 'image_url_invalid', detail: 'ارفع الصورة من صفحة القالب (R2).' }),
+      { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+    )
+  }
+}
+
 function tenantFilterClause(
   info: UserInfo,
   c: Context,
@@ -359,7 +386,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     // List cards never need full template HTML bodies (can be hundreds of KB each).
     const selectCols =
       table === 'contract_templates'
-        ? 'id, tenant_id, template_name, template_type, variables_list, is_active, court_city, render_mode, stamp_url, created_at'
+        ? 'id, tenant_id, template_name, template_type, variables_list, is_active, court_city, render_mode, stamp_url, document_watermark_url, document_watermark_enabled, document_watermark_opacity, document_header_url, document_header_enabled, document_header_opacity, document_footer_url, document_footer_enabled, document_footer_opacity, created_at'
         : '*'
     const { results } = await c.env.DB.prepare(
       `SELECT ${selectCols} FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
@@ -419,14 +446,25 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       }
       const stampNorm = normalizeTemplateStampUrl(body.stamp_url)
       if (!stampNorm.ok) return stampNorm.response
+      const wmNorm = normalizeTemplateBrandingImageUrl(body.document_watermark_url)
+      if (!wmNorm.ok) return wmNorm.response
+      const hdrNorm = normalizeTemplateBrandingImageUrl(body.document_header_url)
+      if (!hdrNorm.ok) return hdrNorm.response
+      const ftrNorm = normalizeTemplateBrandingImageUrl(body.document_footer_url)
+      if (!ftrNorm.ok) return ftrNorm.response
       const renderMode = String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured'
+      const clampWm = (v: unknown, def: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0.03, n)) : def }
+      const clampLh = (v: unknown, def: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0.1, n)) : def }
       let r: { meta: { last_row_id: number | null } }
       try {
         r = await c.env.DB.prepare(
           `INSERT INTO contract_templates (
             tenant_id, template_name, template_type, header_content, body_content, footer_content,
-            variables_list, is_active, court_city, render_mode, stamp_url
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`
+            variables_list, is_active, court_city, render_mode, stamp_url,
+            document_watermark_url, document_watermark_enabled, document_watermark_opacity,
+            document_header_url, document_header_enabled, document_header_opacity,
+            document_footer_url, document_footer_enabled, document_footer_opacity
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -439,7 +477,16 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.is_active !== undefined ? (body.is_active ? 1 : 0) : 1,
             body.court_city ?? null,
             renderMode,
-            stampNorm.value
+            stampNorm.value,
+            wmNorm.value,
+            body.document_watermark_enabled ? 1 : 0,
+            clampWm(body.document_watermark_opacity, 0.12),
+            hdrNorm.value,
+            body.document_header_enabled ? 1 : 0,
+            clampLh(body.document_header_opacity, 1),
+            ftrNorm.value,
+            body.document_footer_enabled ? 1 : 0,
+            clampLh(body.document_footer_opacity, 1)
           )
           .run()
       } catch (e: unknown) {
@@ -707,6 +754,50 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         fields.push('render_mode = ?')
         vals.push(String(body.render_mode ?? 'structured') === 'document' ? 'document' : 'structured')
       }
+      const clampWmU = (v: unknown, def: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0.03, n)) : def }
+      const clampLhU = (v: unknown, def: number) => { const n = Number(v); return Number.isFinite(n) ? Math.min(1, Math.max(0.1, n)) : def }
+      if (method === 'PUT' || body.document_watermark_url !== undefined) {
+        const norm = normalizeTemplateBrandingImageUrl(body.document_watermark_url)
+        if (!norm.ok) return norm.response
+        fields.push('document_watermark_url = ?')
+        vals.push(norm.value)
+      }
+      if (method === 'PUT' || body.document_watermark_enabled !== undefined) {
+        fields.push('document_watermark_enabled = ?')
+        vals.push(body.document_watermark_enabled ? 1 : 0)
+      }
+      if (method === 'PUT' || body.document_watermark_opacity !== undefined) {
+        fields.push('document_watermark_opacity = ?')
+        vals.push(clampWmU(body.document_watermark_opacity, 0.12))
+      }
+      if (method === 'PUT' || body.document_header_url !== undefined) {
+        const norm = normalizeTemplateBrandingImageUrl(body.document_header_url)
+        if (!norm.ok) return norm.response
+        fields.push('document_header_url = ?')
+        vals.push(norm.value)
+      }
+      if (method === 'PUT' || body.document_header_enabled !== undefined) {
+        fields.push('document_header_enabled = ?')
+        vals.push(body.document_header_enabled ? 1 : 0)
+      }
+      if (method === 'PUT' || body.document_header_opacity !== undefined) {
+        fields.push('document_header_opacity = ?')
+        vals.push(clampLhU(body.document_header_opacity, 1))
+      }
+      if (method === 'PUT' || body.document_footer_url !== undefined) {
+        const norm = normalizeTemplateBrandingImageUrl(body.document_footer_url)
+        if (!norm.ok) return norm.response
+        fields.push('document_footer_url = ?')
+        vals.push(norm.value)
+      }
+      if (method === 'PUT' || body.document_footer_enabled !== undefined) {
+        fields.push('document_footer_enabled = ?')
+        vals.push(body.document_footer_enabled ? 1 : 0)
+      }
+      if (method === 'PUT' || body.document_footer_opacity !== undefined) {
+        fields.push('document_footer_opacity = ?')
+        vals.push(clampLhU(body.document_footer_opacity, 1))
+      }
       if (fields.length === 0) {
         const row = await c.env.DB.prepare('SELECT * FROM contract_templates WHERE id = ?').bind(id).first()
         return c.json(row)
@@ -969,6 +1060,58 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const publicUrl = `/api/attachments/view/${key}`
     return c.json({ success: true, url: publicUrl, filename: key })
   })
+
+  async function uploadTemplateBrandingImage(c: any, keyPart: string): Promise<Response> {
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
+    if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
+    if (info.roleId === 4 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+    const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
+    if (!attachments) {
+      return c.json({ error: 'storage_not_configured', detail: 'Attachment storage (R2) not configured' }, 500)
+    }
+    let formData: FormData
+    try {
+      formData = await c.req.formData()
+    } catch {
+      return c.json({ error: 'invalid_form', detail: 'Expected multipart/form-data' }, 400)
+    }
+    const fileEntry = formData.get('file')
+    if (!fileEntry || !(fileEntry instanceof File)) {
+      return c.json({ error: 'no_file', detail: 'No file provided' }, 400)
+    }
+    const file = fileEntry
+    if (file.size > 2 * 1024 * 1024) {
+      return c.json({ error: 'file_too_large', detail: 'الحد الأقصى 2 ميجابايت' }, 400)
+    }
+    const mime = (file.type || '').toLowerCase()
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(mime)) {
+      return c.json({ error: 'invalid_type', detail: 'يُسمح بصور PNG أو JPEG أو GIF أو WebP فقط' }, 400)
+    }
+    const tidFromForm = formData.get('tenant_id')
+    const body: Record<string, unknown> = {}
+    if (tidFromForm != null && String(tidFromForm).trim() !== '') body.tenant_id = tidFromForm
+    const { tenantId, error: te } = resolveWriteTenantId(info, body, c)
+    if (te) return te
+    if (tenantId == null) return c.json({ error: 'missing_tenant', detail: 'Missing tenant' }, 400)
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    const rawExt = (file.name.split('.').pop() || 'png').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'png'
+    const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(rawExt) ? rawExt : 'png'
+    const key = `contracts/${tenantId}/template_${keyPart}_${timestamp}_${random}.${ext}`
+    const arrayBuffer = await file.arrayBuffer()
+    await attachments.put(key, arrayBuffer, {
+      httpMetadata: { contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}` }
+    })
+    const publicUrl = `/api/attachments/view/${key}`
+    return c.json({ success: true, url: publicUrl, filename: key })
+  }
+
+  app.post('/api/contracts/template-watermark-upload', (c) => uploadTemplateBrandingImage(c, 'watermark'))
+  app.post('/api/contracts/template-header-upload', (c) => uploadTemplateBrandingImage(c, 'header'))
+  app.post('/api/contracts/template-footer-upload', (c) => uploadTemplateBrandingImage(c, 'footer'))
 
   /**
    * Per-template first-party stamp (ختم). Stored on contract_templates.stamp_url.

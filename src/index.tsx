@@ -65,6 +65,8 @@ import {
   canUserAccessCustomerWorkflow,
   canUserAccessRequestWorkflow,
   canCreateFinancingRequest,
+  canAccessMyFollowupTasksPage,
+  canAccessMarketingModule,
   resolveWorkflowCrossPartyNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
   validateStaffRoleChange,
@@ -3377,7 +3379,7 @@ function employeeFilterTenantBinds(tenantId: number): [number, number, number] {
 
 /** Staff eligible for contact/follow-up task assignment (normalized roles 4/5/6 + bank-scoped agents). */
 const FOLLOWUP_STAFF_SQL = `
-  SELECT u.id, u.full_name, u.role_id
+  SELECT u.id, u.full_name, u.role_id, u.assigned_location_id
   FROM users u
   WHERE u.is_active = 1
     AND (
@@ -3409,19 +3411,19 @@ function isFollowupAssignableRole(roleId: unknown): boolean {
 async function listFollowupAssignableStaff(
   db: D1Database,
   tenantId: number
-): Promise<{ id: number; full_name: string; role_id: number }[]> {
+): Promise<{ id: number; full_name: string; role_id: number; assigned_location_id?: number | null }[]> {
   const { results } = await db
     .prepare(FOLLOWUP_STAFF_SQL)
     .bind(...followupStaffTenantBinds(tenantId))
-    .all<{ id: number; full_name: string; role_id: number }>()
+    .all<{ id: number; full_name: string; role_id: number; assigned_location_id?: number | null }>()
   const seen = new Set<number>()
-  const out: { id: number; full_name: string; role_id: number }[] = []
-  for (const row of (results || []) as { id: number; full_name: string; role_id: number }[]) {
+  const out: { id: number; full_name: string; role_id: number; assigned_location_id?: number | null }[] = []
+  for (const row of (results || []) as { id: number; full_name: string; role_id: number; assigned_location_id?: number | null }[]) {
     if (seen.has(row.id)) continue
     const normalized = normalizeRoleId(row.role_id)
     if (!isFollowupAssignableRole(normalized)) continue
     seen.add(row.id)
-    out.push({ id: row.id, full_name: row.full_name, role_id: normalized as number })
+    out.push({ id: row.id, full_name: row.full_name, role_id: normalized as number, assigned_location_id: row.assigned_location_id ?? null })
   }
   return out
 }
@@ -3885,6 +3887,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/company-settings',
     '/admin/company-settings/locations',
     '/admin/chat',
+    '/admin/my-archived-tasks',
   ],
   '3': [
     '/admin/customers',
@@ -3916,6 +3919,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/new',
     '/admin/contracts/templates',
     '/admin/my-tasks',
+    '/admin/my-archived-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -3924,7 +3928,8 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/',
     '/admin/chat',
   ],
-  // Role 5: bank agent — keep in sync with /admin/* RBAC + full-admin-panel allowedLinks['5']. No marketing (/admin/follow-ups).
+  // Role 5: bank agent — keep in sync with /admin/* RBAC + full-admin-panel allowedLinks['5'].
+  // No marketing module (/admin/follow-ups, contact-affiliates, link-stats). My Tasks is separate.
   '5': [
     '/admin/panel',
     '/admin/customers',
@@ -3932,11 +3937,11 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
-    '/admin/contact-affiliates',
     '/admin/contracts',
     '/admin/contracts/list',
     '/admin/contracts/view',
     '/admin/my-tasks',
+    '/admin/my-archived-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -3946,6 +3951,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/chat',
   ],
   // Role 6: dual agent — union of role 4 (employee) + role 5 (bank agent) access.
+  // No marketing module. My Tasks is a standalone nav item.
   '6': [
     '/admin/panel',
     '/admin/customers',
@@ -3953,13 +3959,13 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/customers/archived',
     '/admin/requests',
     '/admin/requests/completed',
-    '/admin/contact-affiliates',
     '/admin/contracts',
     '/admin/contracts/list',
     '/admin/contracts/new',
     '/admin/contracts/view',
     '/admin/contracts/templates',
     '/admin/my-tasks',
+    '/admin/my-archived-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -4165,6 +4171,15 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     border: 0;
     border-top: 1px dashed #e2e8f0;
   }
+  /* Staff roles 4/5/6: never show marketing module (collapsible + duplicate main link). Role 2 keeps it. */
+  #global-persistent-sidebar[data-hide-marketing="1"] [data-followups-collapsible],
+  #global-persistent-sidebar[data-hide-marketing="1"] [data-followups-main-link] {
+    display: none !important;
+  }
+  /* Roles without /admin/reports: hide whole reports block so its chevron doesn't sit under مهامي. */
+  #global-persistent-sidebar[data-hide-reports="1"] [data-reports-collapsible] {
+    display: none !important;
+  }
   #global-persistent-sidebar .gps-count-badge {
     margin-inline-start: auto;
     background: #e2e8f0;
@@ -4202,12 +4217,12 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
   <nav class="gps-nav">
     <a href="/admin/panel"><i class="fas fa-home"></i>الصفحة الرئيسية</a>
     <a href="/admin/dashboard"><i class="fas fa-tachometer-alt"></i>ملخص العملاء</a>
-    <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>العملاء</a>
+    <a href="/admin/customers" data-customers-main-link><i class="fas fa-users"></i>متابعة العملاء</a>
     <div class="gps-collapsible gps-open" data-customers-collapsible>
       <div class="gps-collapsible-row">
         <a href="/admin/customers?ratingFilter=all&amp;requestsFilter=all" class="gps-collapsible-main">
         <i class="fas fa-users"></i>
-        <span>العملاء</span>
+        <span>متابعة العملاء</span>
         </a>
         <button type="button" class="gps-collapsible-arrow" data-customers-toggle aria-label="توسيع أو طي قائمة تقييم العملاء">
           <i class="fas fa-chevron-down gps-chevron"></i>
@@ -4256,7 +4271,8 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/requests/completed" data-completed-requests-link><i class="fas fa-check-double"></i>المكتملة</a>
       </div>
     </div>
-    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>الإعلانات</a>
+    <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>${(effectiveRoleId === 4 || effectiveRoleId === 5 || effectiveRoleId === 6) ? 'الإعلانات' : 'مهامي'}</a>
+    <a href="/admin/my-archived-tasks"><i class="fas fa-archive"></i>ارشيف الإعلانات</a>
     <div class="gps-collapsible" data-reports-collapsible>
       <div class="gps-collapsible-row">
         <a href="/admin/reports" class="gps-collapsible-main">
@@ -4280,14 +4296,14 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/reports/tenants" data-superadmin-only="true"><i class="fas fa-globe"></i>تقرير الشركات</a>
       </div>
     </div>
-    <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>التسويق</a>
+    <a href="/admin/follow-ups" data-followups-main-link><i class="fas fa-bullhorn"></i>الإعلانات</a>
     <div class="gps-collapsible" data-followups-collapsible>
       <div class="gps-collapsible-row">
         <a href="/admin/follow-ups" class="gps-collapsible-main">
         <i class="fas fa-bullhorn"></i>
-        <span>التسويق</span>
+        <span>الإعلانات</span>
         </a>
-        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة التسويق">
+        <button type="button" class="gps-collapsible-arrow" data-followups-toggle aria-label="توسيع أو طي قائمة الإعلانات">
           <i class="fas fa-chevron-down gps-chevron"></i>
         </button>
       </div>
@@ -4347,13 +4363,30 @@ ${isAdminPanelRail ? `
       }
 
       var userAllowed = ALLOWED[String(ROLE_ID)] || ALLOWED['4'];
-      var canAccessFollowups = userAllowed.indexOf('/admin/follow-ups') !== -1;
+      // Marketing module is admin/supervisor only (roles 1–3). Staff (4/5/6) use standalone /admin/my-tasks.
+      var hideMarketingModule = ROLE_ID === 4 || ROLE_ID === 5 || ROLE_ID === 6 ||
+        userAllowed.indexOf('/admin/follow-ups') === -1;
+      // Hide reports collapsible entirely when role can't open /admin/reports — otherwise the
+      // chevron stays visible next to مهامي after the reports label is hidden.
+      var hideReportsModule = userAllowed.indexOf('/admin/reports') === -1;
       var customersMainLink = sidebar.querySelector('[data-customers-main-link]');
       var customersCollapsible = sidebar.querySelector('[data-customers-collapsible]');
       var requestsMainLink = sidebar.querySelector('[data-requests-main-link]');
       var requestsCollapsible = sidebar.querySelector('[data-requests-collapsible]');
       var followupsMainLink = sidebar.querySelector('[data-followups-main-link]');
       var followupsCollapsible = sidebar.querySelector('[data-followups-collapsible]');
+      var reportsCollapsible = sidebar.querySelector('[data-reports-collapsible]');
+
+      if (hideMarketingModule) {
+        sidebar.setAttribute('data-hide-marketing', '1');
+      } else {
+        sidebar.removeAttribute('data-hide-marketing');
+      }
+      if (hideReportsModule) {
+        sidebar.setAttribute('data-hide-reports', '1');
+      } else {
+        sidebar.removeAttribute('data-hide-reports');
+      }
 
       if (customersMainLink && customersCollapsible) {
         customersMainLink.style.display = 'none';
@@ -4381,15 +4414,22 @@ ${isAdminPanelRail ? `
         requestsCollapsible.classList.remove('gps-open');
       }
       if (followupsMainLink && followupsCollapsible) {
-        // Follow-ups is a manager-facing module. If the user can't access '/admin/follow-ups',
-        // hide the entire collapsible to avoid a broken row (arrow misalignment + empty submenu).
-        if (!canAccessFollowups) {
+        // Never show marketing collapsible for staff roles 4/5/6 (role 2 keeps full marketing).
+        if (hideMarketingModule) {
           followupsMainLink.style.display = 'none';
           followupsCollapsible.style.display = 'none';
         } else {
           followupsMainLink.style.display = 'none';
           followupsCollapsible.style.display = 'block';
           followupsCollapsible.classList.remove('gps-open');
+        }
+      }
+      if (reportsCollapsible) {
+        if (hideReportsModule) {
+          reportsCollapsible.style.display = 'none';
+        } else {
+          reportsCollapsible.style.display = 'block';
+          reportsCollapsible.classList.remove('gps-open');
         }
       }
 
@@ -4822,21 +4862,20 @@ app.use('/admin/*', async (c, next) => {
   if (isRequestsFollowupReportAdminPath(pathname) && !canAccessRequestsFollowupReport(rid)) {
     return c.redirect(getAdminAccessDeniedRedirect(info.roleId))
   }
-  if (rid === 5) {
-    // Bank agent: same app surface as role 4.
+  if (rid === 5 || rid === 6) {
+    // Bank agent / dual agent: same staff app surface (no marketing module pages).
     const ok =
       pathname === '/admin' ||
       pathname === '/admin/panel' ||
       pathname.startsWith('/admin/customers') ||
       pathname.startsWith('/admin/requests') ||
-      pathname.startsWith('/admin/follow-ups') ||
       pathname === '/admin/my-tasks' ||
+      pathname === '/admin/my-archived-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
       pathname === '/admin/my-hr' ||
       pathname === '/admin/my-profile' ||
       pathname.startsWith('/admin/contracts') ||
-      pathname === '/admin/contact-affiliates' ||
       pathname === '/admin/chat' ||
       pathname === '/calculator' ||
       pathname === '/'
@@ -5694,44 +5733,50 @@ app.get('/api/tenant/document-watermark', async (c) => {
     if (!tenantId) {
       return c.json({ success: true, data: empty })
     }
-    const row = await c.env.DB.prepare(`
-      SELECT document_watermark_url, document_watermark_enabled, document_watermark_opacity, logo_url,
-             document_header_url, document_header_enabled, document_header_opacity,
-             document_footer_url, document_footer_enabled, document_footer_opacity
-      FROM tenants WHERE id = ? LIMIT 1
-    `).bind(tenantId).first<{
+    const templateIdQ = c.req.query('template_id')
+    const templateId = templateIdQ && /^\d+$/.test(templateIdQ) ? parseInt(templateIdQ, 10) : null
+    type BrandingRow = {
       document_watermark_url: string | null
       document_watermark_enabled: number | null
       document_watermark_opacity: number | null
-      logo_url: string | null
       document_header_url: string | null
       document_header_enabled: number | null
       document_header_opacity: number | null
       document_footer_url: string | null
       document_footer_enabled: number | null
       document_footer_opacity: number | null
-    }>()
-    const wmUrl = row?.document_watermark_url ? normalizeTenantLogoUrl(row.document_watermark_url) : null
-    const logoUrl = row?.logo_url ? normalizeTenantLogoUrl(row.logo_url) : null
-    const url = wmUrl || logoUrl
-    const enabled = Number(row?.document_watermark_enabled) === 1 && !!url
-    const headerUrl = row?.document_header_url ? normalizeTenantLogoUrl(row.document_header_url) : null
-    const footerUrl = row?.document_footer_url ? normalizeTenantLogoUrl(row.document_footer_url) : null
+    }
+    let row: BrandingRow | null = null
+    if (templateId) {
+      row = await c.env.DB.prepare(`
+        SELECT document_watermark_url, document_watermark_enabled, document_watermark_opacity,
+               document_header_url, document_header_enabled, document_header_opacity,
+               document_footer_url, document_footer_enabled, document_footer_opacity
+        FROM contract_templates WHERE id = ? AND tenant_id = ? LIMIT 1
+      `).bind(templateId, tenantId).first<BrandingRow>()
+    }
+    if (!row) {
+      return c.json({ success: true, data: empty })
+    }
+    const wmUrl = row.document_watermark_url ? normalizeTenantLogoUrl(row.document_watermark_url) : null
+    const enabled = Number(row.document_watermark_enabled) === 1 && !!wmUrl
+    const headerUrl = row.document_header_url ? normalizeTenantLogoUrl(row.document_header_url) : null
+    const footerUrl = row.document_footer_url ? normalizeTenantLogoUrl(row.document_footer_url) : null
     return c.json({
       success: true,
       data: {
         enabled,
-        url: enabled ? url : null,
-        opacity: clampWatermarkOpacity(row?.document_watermark_opacity, 0.12),
+        url: enabled ? wmUrl : null,
+        opacity: clampWatermarkOpacity(row.document_watermark_opacity, 0.12),
         header: {
-          enabled: Number(row?.document_header_enabled) === 1 && !!headerUrl,
-          url: Number(row?.document_header_enabled) === 1 && headerUrl ? headerUrl : null,
-          opacity: clampLetterheadOpacity(row?.document_header_opacity, 1)
+          enabled: Number(row.document_header_enabled) === 1 && !!headerUrl,
+          url: Number(row.document_header_enabled) === 1 && headerUrl ? headerUrl : null,
+          opacity: clampLetterheadOpacity(row.document_header_opacity, 1)
         },
         footer: {
-          enabled: Number(row?.document_footer_enabled) === 1 && !!footerUrl,
-          url: Number(row?.document_footer_enabled) === 1 && footerUrl ? footerUrl : null,
-          opacity: clampLetterheadOpacity(row?.document_footer_opacity, 1)
+          enabled: Number(row.document_footer_enabled) === 1 && !!footerUrl,
+          url: Number(row.document_footer_enabled) === 1 && footerUrl ? footerUrl : null,
+          opacity: clampLetterheadOpacity(row.document_footer_opacity, 1)
         }
       }
     })
@@ -8476,6 +8521,7 @@ app.get('/api/customers/export-csv', async (c) => {
     const ratingFilterQ = String(c.req.query('ratingFilter') ?? 'all')
     const employeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
     const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
+    const sourceFilterQ = String(c.req.query('sourceFilter') ?? 'all')
 
     let query = `
       SELECT customers.id, customers.tenant_customer_number, customers.full_name, customers.phone, customers.email,
@@ -8593,6 +8639,16 @@ app.get('/api/customers/export-csv', async (c) => {
       )`
       queryParams.push(bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ)
     }
+    if (sourceFilterQ !== 'all') {
+      const FIXED_SOURCES = ['calculator', 'csv', 'manual', 'affiliate']
+      if (FIXED_SOURCES.includes(sourceFilterQ)) {
+        query += ' AND customers.enrollment_source = ?'
+        queryParams.push(sourceFilterQ)
+      } else if (sourceFilterQ.startsWith('label:')) {
+        query += ' AND customers.enrollment_source_label = ?'
+        queryParams.push(sourceFilterQ.slice(6))
+      }
+    }
 
     query += ' ORDER BY customers.created_at DESC LIMIT 10000'
     const rows = await c.env.DB.prepare(query).bind(...queryParams).all()
@@ -8604,8 +8660,9 @@ app.get('/api/customers/export-csv', async (c) => {
       const src =
         customer.enrollment_source === 'calculator' ? 'الحاسبة'
           : customer.enrollment_source === 'affiliate' ? (customer.enrollment_source_label || 'affiliate')
-            : customer.enrollment_source === 'manual' ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
-              : String(customer.enrollment_source_label || '').trim()
+            : customer.enrollment_source === 'csv' ? String(customer.enrollment_source_label || '').trim() || 'CSV'
+              : customer.enrollment_source === 'manual' ? String(customer.enrollment_source_label || '').trim() || 'يدوي'
+                : String(customer.enrollment_source_label || '').trim()
       return [
         String(customer.tenant_customer_number ?? ''),
         String(customer.full_name || '-'),
@@ -8644,6 +8701,9 @@ app.post('/api/customers/import-csv', async (c) => {
     }
     const autoDistributeEmployees = body?.auto_distribute_employees === true
     const autoDistributeBankAgents = body?.auto_distribute_bank_agents === true
+    const enrollmentSourceLabel = body?.enrollment_source_label
+      ? String(body.enrollment_source_label).trim().slice(0, 200) || null
+      : null
 
     // Resolve tenant scope
     let tenant_id: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
@@ -8701,9 +8761,9 @@ app.post('/api/customers/import-csv', async (c) => {
           updated++
         } else {
           const insertRes = await c.env.DB.prepare(
-            `INSERT INTO customers (full_name, phone, email, national_id, monthly_salary, tenant_id)
-             VALUES (?, ?, ?, ?, ?, ?)`
-          ).bind(full_name, phone, email, national_id, monthly_salary, tenant_id).run() as { meta?: { last_row_id?: number } }
+            `INSERT INTO customers (full_name, phone, email, national_id, monthly_salary, enrollment_source, enrollment_source_label, tenant_id)
+             VALUES (?, ?, ?, ?, ?, 'csv', ?, ?)`
+          ).bind(full_name, phone, email, national_id, monthly_salary, enrollmentSourceLabel, tenant_id).run() as { meta?: { last_row_id?: number } }
 
           const createdCustomerId = Number(insertRes?.meta?.last_row_id || 0)
           if (createdCustomerId) {
@@ -8715,7 +8775,12 @@ app.post('/api/customers/import-csv', async (c) => {
                 .bind(userInfo.userId, createdCustomerId).run()
             } catch (_) { /* column may not exist in older DBs */ }
           }
-          if (createdCustomerId) newCustomerIds.push(createdCustomerId)
+          if (createdCustomerId) {
+            newCustomerIds.push(createdCustomerId)
+            try {
+              await allocateTenantCustomerNumber(c.env.DB, createdCustomerId, tenant_id)
+            } catch (_) { /* best-effort */ }
+          }
           created++
         }
       } catch (e: any) {
@@ -17162,7 +17227,7 @@ app.get('/admin/customers/completed', async (c) => {
           <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
             ${(customers.results as any[]).map((c: any) => `
               <tr class="hover:bg-gray-50" data-name="${c.full_name || ''}" data-phone="${c.phone || ''}">
-                <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.id}</td>
+                <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.tenant_customer_number != null ? c.tenant_customer_number : '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-700">${c.full_name || '-'}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.phone || '-'}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.email || '-'}</td>
@@ -17312,7 +17377,7 @@ app.get('/admin/customers/archived', async (c) => {
                 <tbody class="bg-white divide-y divide-gray-100" id="tableBody">
                   ${customers.results.map((c: any) => `
                     <tr class="hover:bg-gray-50" data-name="${c.full_name || ''}" data-phone="${c.phone || ''}">
-                      <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.id}</td>
+                      <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-500">${c.tenant_customer_number != null ? c.tenant_customer_number : '—'}</td>
                       <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-700">${c.full_name || '-'}</td>
                       <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.phone || '-'}</td>
                       <td class="px-6 py-4 whitespace-nowrap text-gray-600">${c.email || '-'}</td>
@@ -18498,7 +18563,7 @@ app.get('/admin/customer-assignment', async (c) => {
             </a>
             <a href="/admin/follow-ups" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-bullhorn text-amber-700 group-hover:scale-110 transition-transform"></i>
-              <span>التسويق</span>
+              <span>الإعلانات</span>
             </a>
           </div>
 
@@ -18509,7 +18574,7 @@ app.get('/admin/customer-assignment', async (c) => {
             <div class="text-xs font-bold text-gray-500 px-4 py-2 uppercase">العملاء والطلبات</div>
             <a href="/admin/customers" class="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-blue-50 rounded-lg transition-all group">
               <i class="fas fa-users text-blue-600 group-hover:scale-110 transition-transform"></i>
-              <span>العملاء</span>
+              <span>متابعة العملاء</span>
             </a>
             <a href="/admin/customer-assignment?tenant_id=${tenantId}" class="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg">
               <i class="fas fa-users-cog text-blue-600"></i>
@@ -20534,11 +20599,323 @@ app.get('/admin/rates/edit/:id', async (c) => {
   return c.html(generateEditRatePage(tenantId, rate, banks.results, financingTypes.results));
 });
 
+// Full-page customer importer (CSV / XLSX / XLS) with in-page preview & submit.
+app.get('/admin/customers/import', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId || !userInfo.roleId) {
+    return c.redirect('/login')
+  }
+  if (normalizeRoleId(userInfo.roleId) === 3) {
+    return c.html('<html dir="rtl"><body style="font-family:sans-serif;padding:2rem;text-align:center">غير مصرح</body></html>', 403)
+  }
+  const queryTenantId = String(c.req.query('tenant_id') ?? '').trim()
+  const backHref = '/admin/customers' + (queryTenantId ? ('?tenant_id=' + encodeURIComponent(queryTenantId)) : '')
+  const sampleHref = '/api/customers/sample-csv' + (queryTenantId ? ('?tenant_id=' + encodeURIComponent(queryTenantId)) : '')
+
+  return c.html(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>استيراد العملاء</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-6xl mx-auto p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">
+        <i class="fas fa-file-import text-indigo-600 ml-2"></i>
+        استيراد العملاء
+      </h1>
+      <a href="${backHref}" class="text-sm text-gray-600 hover:text-gray-900">
+        <i class="fas fa-arrow-right ml-1"></i> العودة لقائمة العملاء
+      </a>
+    </div>
+
+    <!-- Step 1: File picker -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">١. اختر الملف</h2>
+          <p class="text-sm text-gray-500 mt-1">CSV أو Excel (.csv, .xlsx, .xls)</p>
+        </div>
+        <a href="${sampleHref}" class="text-sm text-indigo-600 hover:text-indigo-800">
+          <i class="fas fa-download ml-1"></i> تنزيل نموذج CSV
+        </a>
+      </div>
+      <label for="importFile" id="dropZone" class="block border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-all">
+        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+        <p class="text-gray-700 font-bold mb-1">اسحب الملف هنا أو انقر لاختياره</p>
+        <p class="text-xs text-gray-500">الأعمدة المطلوبة: الاسم، الهاتف. اختياري: البريد، الرقم الوطني، الراتب</p>
+        <input type="file" id="importFile" accept=".csv,.xlsx,.xls" class="hidden">
+      </label>
+      <div id="fileInfo" class="hidden mt-3 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm">
+        <div><i class="fas fa-file text-gray-500 ml-2"></i><span id="fileName" class="font-medium text-gray-800"></span> <span id="fileSize" class="text-gray-500 mr-2"></span></div>
+        <button type="button" onclick="clearFile()" class="text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+
+    <!-- Step 2: Preview + submit (revealed after parse) -->
+    <div id="previewSection" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-800">٢. معاينة البيانات (<span id="rowCount">0</span> صف)</h2>
+          <span id="previewNote" class="text-xs text-gray-500"></span>
+        </div>
+        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-3 py-2 text-right text-gray-700">#</th>
+                <th class="px-3 py-2 text-right text-gray-700">الاسم</th>
+                <th class="px-3 py-2 text-right text-gray-700">الهاتف</th>
+                <th class="px-3 py-2 text-right text-gray-700">البريد</th>
+                <th class="px-3 py-2 text-right text-gray-700">الرقم الوطني</th>
+                <th class="px-3 py-2 text-right text-gray-700">الراتب الشهري</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <p id="previewMore" class="text-xs text-gray-500 mt-2"></p>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">٣. خيارات الاستيراد</h2>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">مصدر العملاء <span class="text-red-500">*</span></label>
+          <input type="text" id="sourceLabel" placeholder="مثال: حملة يوليو" maxlength="100"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none">
+        </div>
+        <div class="space-y-3">
+          <label class="flex items-center justify-between p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+            <div>
+              <span class="font-medium text-gray-800">توزيع تلقائي على الموظفين</span>
+              <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) وفق إعدادات الشركة</p>
+            </div>
+            <input type="checkbox" id="assignEmployee" class="w-4 h-4 text-indigo-600 rounded">
+          </label>
+          <label class="flex items-center justify-between p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+            <div>
+              <span class="font-medium text-gray-800">توزيع تلقائي على موظفي البنك</span>
+              <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) على موظفي التمويل النشطين</p>
+            </div>
+            <input type="checkbox" id="assignBankAgent" class="w-4 h-4 text-indigo-600 rounded">
+          </label>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button id="submitBtn" onclick="submitImport()" class="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition-colors">
+          <i class="fas fa-upload ml-1"></i> استيراد <span id="submitCount">0</span> عميل
+        </button>
+        <a href="${backHref}" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let parsedCustomers = []
+
+    function normalizeCsvCell(v) {
+      return String(v == null ? '' : v).replace(/^\\uFEFF/, '').replace(/\\u200F/g, '').trim()
+    }
+    function normalizeHeader(v) { return normalizeCsvCell(v).toLowerCase() }
+
+    function parseCsvText(text) {
+      const s = String(text || '').replace(/^\\uFEFF/, '').replace(/^sep=(?:,|;|\\t)(?:\\r\\n|\\n|\\r)/, '')
+      const rows = []; let row = []; let cur = ''; let inQ = false
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i], nx = s[i+1]
+        if (ch === '"') { if (inQ && nx === '"') { cur += '"'; i++; continue } inQ = !inQ; continue }
+        if (!inQ && ch === ',') { row.push(cur); cur = ''; continue }
+        if (!inQ && (ch === '\\n' || ch === '\\r')) {
+          if (ch === '\\r' && nx === '\\n') i++
+          row.push(cur); cur = ''
+          if (row.some(c => String(c || '').trim() !== '')) rows.push(row)
+          row = []; continue
+        }
+        cur += ch
+      }
+      row.push(cur)
+      if (row.some(c => String(c || '').trim() !== '')) rows.push(row)
+      return rows
+    }
+
+    async function handleImportFile(file) {
+      if (!file) return
+      if (!/\\.(csv|xlsx|xls)$/i.test(file.name)) {
+        alert('نوع الملف غير مدعوم. الرجاء اختيار CSV أو Excel')
+        return
+      }
+      try {
+        let rows
+        if (/\\.(xlsx|xls)$/i.test(file.name)) {
+          if (typeof XLSX === 'undefined') { alert('مكتبة Excel غير محملة. حدث الصفحة.'); return }
+          const buf = await file.arrayBuffer()
+          const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+          const sh = wb.Sheets[wb.SheetNames[0]]
+          const arr = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '', raw: false })
+          rows = (arr || []).filter(r => Array.isArray(r) && r.some(c => String(c || '').trim() !== ''))
+        } else {
+          rows = parseCsvText(await file.text())
+        }
+        if (!rows || rows.length < 2) { alert('الملف فارغ أو غير صالح'); return }
+
+        const header = rows[0].map(normalizeHeader)
+        const findIdx = (keys) => header.findIndex(h => keys.indexOf(h) !== -1)
+        const iName = findIdx(['full_name', 'name', 'الاسم'])
+        const iPhone = findIdx(['phone', 'الهاتف', 'الجوال'])
+        const iEmail = findIdx(['email', 'البريد الإلكتروني', 'البريد'])
+        const iNat = findIdx(['national_id', 'nationalid', 'الرقم الوطني'])
+        const iSalary = findIdx(['monthly_salary', 'salary', 'الراتب', 'الراتب الشهري'])
+
+        if (iName < 0 || iPhone < 0) {
+          alert('يجب أن يحتوي الملف على أعمدة "الاسم" و "الهاتف"')
+          return
+        }
+
+        const customers = []
+        for (let r = 1; r < rows.length; r++) {
+          const cols = rows[r]
+          const full_name = normalizeCsvCell(cols[iName])
+          const phone = normalizeCsvCell(cols[iPhone])
+          const email = iEmail >= 0 ? normalizeCsvCell(cols[iEmail]) : ''
+          const national_id = iNat >= 0 ? normalizeCsvCell(cols[iNat]) : ''
+          const monthly_salary = iSalary >= 0 ? normalizeCsvCell(cols[iSalary]) : ''
+          if (!full_name && !phone) continue
+          customers.push({ full_name, phone, email, national_id, monthly_salary })
+        }
+        if (customers.length === 0) { alert('لم يتم العثور على صفوف صالحة'); return }
+
+        parsedCustomers = customers
+        document.getElementById('fileName').textContent = file.name
+        document.getElementById('fileSize').textContent = (file.size > 1024*1024 ? (file.size/1048576).toFixed(2)+' MB' : (file.size/1024).toFixed(2)+' KB')
+        document.getElementById('fileInfo').classList.remove('hidden')
+        renderPreview(customers)
+        document.getElementById('previewSection').classList.remove('hidden')
+        document.getElementById('sourceLabel').focus()
+      } catch (e) {
+        console.error(e)
+        alert('حدث خطأ أثناء قراءة الملف')
+      }
+    }
+
+    document.getElementById('importFile').addEventListener('change', (evt) => {
+      const file = evt.target.files && evt.target.files[0]
+      handleImportFile(file)
+    })
+
+    ;(function setupDragAndDrop() {
+      const zone = document.getElementById('dropZone')
+      if (!zone) return
+      const activeClasses = ['border-indigo-500', 'bg-indigo-50']
+      const setActive = (on) => {
+        if (on) zone.classList.add(...activeClasses)
+        else zone.classList.remove(...activeClasses)
+      }
+      ;['dragenter', 'dragover'].forEach(evName => {
+        zone.addEventListener(evName, (e) => {
+          e.preventDefault(); e.stopPropagation(); setActive(true)
+        })
+      })
+      ;['dragleave', 'dragend'].forEach(evName => {
+        zone.addEventListener(evName, (e) => {
+          e.preventDefault(); e.stopPropagation(); setActive(false)
+        })
+      })
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation(); setActive(false)
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]
+        if (file) handleImportFile(file)
+      })
+      ;['dragover', 'drop'].forEach(evName => {
+        window.addEventListener(evName, (e) => { e.preventDefault() })
+      })
+    })()
+
+    function renderPreview(customers) {
+      const MAX = 50
+      const tbody = document.getElementById('previewBody')
+      const slice = customers.slice(0, MAX)
+      tbody.innerHTML = slice.map((c, i) => (
+        '<tr class="hover:bg-gray-50">' +
+          '<td class="px-3 py-2 text-gray-500">' + (i+1) + '</td>' +
+          '<td class="px-3 py-2">' + escapeHtml(c.full_name) + '</td>' +
+          '<td class="px-3 py-2">' + escapeHtml(c.phone) + '</td>' +
+          '<td class="px-3 py-2 text-gray-600">' + escapeHtml(c.email) + '</td>' +
+          '<td class="px-3 py-2 text-gray-600">' + escapeHtml(c.national_id) + '</td>' +
+          '<td class="px-3 py-2 text-gray-600">' + escapeHtml(c.monthly_salary) + '</td>' +
+        '</tr>'
+      )).join('')
+      document.getElementById('rowCount').textContent = customers.length
+      document.getElementById('submitCount').textContent = customers.length
+      document.getElementById('previewMore').textContent = customers.length > MAX ? ('... و ' + (customers.length - MAX) + ' صف إضافي غير معروض') : ''
+    }
+
+    function escapeHtml(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))
+    }
+
+    window.clearFile = function() {
+      parsedCustomers = []
+      const inp = document.getElementById('importFile'); if (inp) inp.value = ''
+      document.getElementById('fileInfo').classList.add('hidden')
+      document.getElementById('previewSection').classList.add('hidden')
+    }
+
+    window.submitImport = async function() {
+      if (!parsedCustomers.length) { alert('لا توجد بيانات للاستيراد'); return }
+      const sourceLabel = document.getElementById('sourceLabel').value.trim()
+      if (!sourceLabel) {
+        alert('يرجى إدخال مصدر العملاء')
+        document.getElementById('sourceLabel').focus()
+        return
+      }
+      const btn = document.getElementById('submitBtn')
+      const orig = btn.innerHTML
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جارٍ الاستيراد...'
+      try {
+        const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
+        const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+        const headers = { 'Content-Type': 'application/json' }
+        if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+        const body = {
+          customers: parsedCustomers,
+          enrollment_source_label: sourceLabel,
+          auto_distribute_employees: document.getElementById('assignEmployee').checked,
+          auto_distribute_bank_agents: document.getElementById('assignBankAgent').checked,
+        }
+        if (tenantId) body.tenant_id = tenantId
+        const resp = await fetch('/api/customers/import-csv', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(body) })
+        const data = await resp.json().catch(() => ({}))
+        if (!resp.ok || !data.success) {
+          alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
+          btn.disabled = false; btn.innerHTML = orig
+          return
+        }
+        const errCount = Array.isArray(data.errors) ? data.errors.length : 0
+        alert((data.message || 'تم الاستيراد بنجاح') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
+        window.location.href = ${JSON.stringify(backHref)}
+      } catch (e) {
+        console.error(e)
+        alert('حدث خطأ أثناء الاستيراد')
+        btn.disabled = false; btn.innerHTML = orig
+      }
+    }
+  </script>
+</body>
+</html>`)
+})
+
 app.get('/admin/customers', async (c) => {
   try {
     // Get user info (userId, tenantId, roleId)
     const userInfo = await getUserInfo(c);
-    
+
     console.log('🔍 Customer Page - User Info:', {
       userId: userInfo.userId,
       tenantId: userInfo.tenantId,
@@ -20609,6 +20986,7 @@ app.get('/admin/customers', async (c) => {
     const ratingFilterQ = String(c.req.query('ratingFilter') ?? 'all')
     const employeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
     const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
+    const sourceFilterQ = String(c.req.query('sourceFilter') ?? 'all')
 
     // Build query based on role — always exclude archived and completed customers
     let query = `
@@ -20795,6 +21173,16 @@ app.get('/admin/customers', async (c) => {
         queryParams.push(bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ, bankAgentFilterQ)
       }
     }
+    if (sourceFilterQ !== 'all') {
+      const FIXED_SOURCES = ['calculator', 'csv', 'manual', 'affiliate']
+      if (FIXED_SOURCES.includes(sourceFilterQ)) {
+        query += ' AND customers.enrollment_source = ?'
+        queryParams.push(sourceFilterQ)
+      } else if (sourceFilterQ.startsWith('label:')) {
+        query += ' AND customers.enrollment_source_label = ?'
+        queryParams.push(sourceFilterQ.slice(6))
+      }
+    }
 
     // Count before ORDER/LIMIT for server-side pagination
     const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _customers_page`
@@ -20900,6 +21288,7 @@ app.get('/admin/customers', async (c) => {
       ratingFilter: ratingFilterQ,
       employeeFilter: employeeFilterQ,
       bankAgentFilter: bankAgentFilterQ,
+      sourceFilter: sourceFilterQ,
       page: customersServerPage,
       pageSize: customersServerPageSize,
     }).replace(/</g, '\\u003c')
@@ -20926,6 +21315,7 @@ app.get('/admin/customers', async (c) => {
 
     let filterEmployees: Array<{ id: number; full_name: string | null; username: string }> = []
     let filterBankAgents: Array<{ id: number; full_name: string | null; username: string }> = []
+    let filterSourceLabels: string[] = []
     if (userInfo.tenantId) {
       const filterTid = Number(userInfo.tenantId)
       const empFilterRes = await c.env.DB
@@ -20938,6 +21328,17 @@ app.get('/admin/customers', async (c) => {
         .bind(...bankAgentTenantBinds(filterTid))
         .all()
       filterBankAgents = (agentFilterRes.results || []) as typeof filterBankAgents
+      try {
+        const labelsRes = await c.env.DB.prepare(
+          `SELECT DISTINCT enrollment_source_label FROM customers
+           WHERE tenant_id = ? AND enrollment_source_label IS NOT NULL AND TRIM(enrollment_source_label) != ''
+             AND enrollment_source_label NOT IN ('الحاسبة', 'يدوي', 'CSV', 'affiliate', 'وسيط')
+           ORDER BY enrollment_source_label ASC LIMIT 100`
+        ).bind(filterTid).all<{ enrollment_source_label: string }>()
+        filterSourceLabels = ((labelsRes.results || []) as any[])
+          .map((r: any) => String(r.enrollment_source_label || '').trim())
+          .filter(Boolean)
+      } catch (_) { /* column may not exist on older DBs */ }
     }
     const filterEmployeeNamesJson = JSON.stringify(
       filterEmployees
@@ -20950,6 +21351,7 @@ app.get('/admin/customers', async (c) => {
         return name ? `${name} #${u.id}` : `#${u.id}`
       })
     ).replace(/</g, '\\u003c')
+    const filterSourceLabelsJson = JSON.stringify(filterSourceLabels).replace(/</g, '\\u003c')
 
     const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
@@ -20959,7 +21361,7 @@ app.get('/admin/customers', async (c) => {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>العملاء</title>
+            <title>متابعة العملاء</title>
         <link rel="stylesheet" href="/tailwind.css">
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <style>
@@ -21013,7 +21415,7 @@ app.get('/admin/customers', async (c) => {
             <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
               <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-users text-green-600 ml-2"></i>
-                العملاء (<span id="totalCount">${customersListTotal}</span>)
+                متابعة العملاء (<span id="totalCount">${customersListTotal}</span>)
               </h1>
               <div class="flex gap-3 flex-wrap">
                 <a href="/admin/customers/completed"
@@ -21060,12 +21462,11 @@ app.get('/admin/customers', async (c) => {
                       <i class="fas fa-download w-4"></i> نموذج CSV
                     </button>
                     <button onclick="triggerCustomersCSVImport(); toggleCustomersCsvDropdown()" class="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 text-right">
-                      <i class="fas fa-file-upload w-4"></i> استيراد CSV
+                      <i class="fas fa-file-upload w-4"></i> استيراد CSV / Excel
                     </button>
                     ` : ''}
                   </div>
                 </div>
-                ${canEdit ? `<input type="file" id="customersCsvInput" accept=".csv" class="hidden" onchange="handleCustomersCSVFile(event)">` : ''}
                 ${canEdit ? `
                 <a href="/admin/customers/add" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
                   <i class="fas fa-plus ml-2"></i>
@@ -21135,6 +21536,16 @@ app.get('/admin/customers', async (c) => {
                       <option value="all">موظف البنك: الكل</option>
                     </select>
 
+                    <select id="sourceFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">المصدر: الكل</option>
+                      <optgroup label="نوع المصدر">
+                        <option value="calculator">الحاسبة</option>
+                        <option value="manual">يدوي</option>
+                        <option value="csv">CSV</option>
+                        <option value="affiliate">وسيط</option>
+                      </optgroup>
+                    </select>
+
                     <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
                       <i class="fas fa-redo"></i> إعادة تعيين
                     </button>
@@ -21198,11 +21609,13 @@ app.get('/admin/customers', async (c) => {
                   const enrollmentSourceSearch =
                     enrollmentSource === 'calculator'
                       ? 'الحاسبة'
-                      : enrollmentSource === 'affiliate'
-                        ? enrollmentSourceLabel || 'affiliate'
-                        : enrollmentSource === 'manual'
-                          ? enrollmentSourceLabel || 'يدوي'
-                          : enrollmentSourceLabel
+                      : enrollmentSource === 'csv'
+                        ? enrollmentSourceLabel || 'CSV'
+                        : enrollmentSource === 'affiliate'
+                          ? enrollmentSourceLabel || 'affiliate'
+                          : enrollmentSource === 'manual'
+                            ? enrollmentSourceLabel || 'يدوي'
+                            : enrollmentSourceLabel
                   const enrollmentSourceDataEsc = String(enrollmentSourceSearch || '').replace(/"/g, '&quot;')
                   return `
                   <tr class="hover:bg-gray-50" data-customer-id="${customer.id}" data-unread-alarms="${Number(customer.unread_alarm_count) || 0}" data-customer-name="${(customer.full_name || '').replace(/"/g, '&quot;')}" data-name="${customer.full_name || ''}" data-phone="${customerPhoneInputValue(customer.phone) || ''}" data-email="${customer.email || ''}" data-source="${enrollmentSourceDataEsc}" data-assigned="${(customer.assigned_employee_name || '').replace(/"/g, '&quot;')}" data-bank-agent="${bankAgentDataEsc}" data-created-at="${customer.created_at || ''}" data-has-request="${hasFr ? '1' : '0'}" data-rating="0" data-attachments="${customerAttachmentsDataAttr(customer as Record<string, unknown>)}">
@@ -21254,7 +21667,7 @@ app.get('/admin/customers', async (c) => {
                         ` : ''}
                       </div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${_customerIdx + 1}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.tenant_customer_number != null ? customer.tenant_customer_number : '—'}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium"><span class="inline-flex items-center gap-2"><span class="customer-alarm-slot" data-customer-id="${customer.id}"></span><span>${customer.full_name || '-'}</span></span></td>
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div class="inline-flex items-center gap-2">
@@ -21490,6 +21903,7 @@ app.get('/admin/customers', async (c) => {
           const DEFAULT_REQUESTS_FILTER = ${JSON.stringify(defaultRequestsFilterValue)};
           const TENANT_EMPLOYEE_FILTER_NAMES = ${filterEmployeeNamesJson};
           const TENANT_BANK_AGENT_FILTER_LABELS = ${filterBankAgentLabelsJson};
+          const TENANT_SOURCE_LABELS = ${filterSourceLabelsJson};
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
           const presetRequestsFilter = pageParams.get('requestsFilter');
@@ -21509,7 +21923,8 @@ app.get('/admin/customers', async (c) => {
               requestsFilter: (document.getElementById('requestsFilter') || { value: DEFAULT_REQUESTS_FILTER }).value,
               ratingFilter: (document.getElementById('ratingFilter') || { value: 'all' }).value,
               employeeFilter: (document.getElementById('employeeFilter') || { value: 'all' }).value,
-              bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value
+              bankAgentFilter: (document.getElementById('bankAgentFilter') || { value: 'all' }).value,
+              sourceFilter: (document.getElementById('sourceFilter') || { value: 'all' }).value
             };
           }
 
@@ -21537,7 +21952,7 @@ app.get('/admin/customers', async (c) => {
           function urlHasExplicitCustomersFilters() {
             const params = new URLSearchParams(window.location.search);
             if (params.has('search') || params.has('filterField') || params.has('dateRangeFilter')) return true;
-            if (params.has('employeeFilter') || params.has('bankAgentFilter')) return true;
+            if (params.has('employeeFilter') || params.has('bankAgentFilter') || params.has('sourceFilter')) return true;
             if (params.has('ratingFilter')) return true;
             // Role 4/6 always get requestsFilter=0 via redirect; that alone is not an explicit user filter.
             if (params.has('requestsFilter')) {
@@ -21569,6 +21984,8 @@ app.get('/admin/customers', async (c) => {
             if (requestsFilterEl && filters.requestsFilter && allowedReq.indexOf(String(filters.requestsFilter)) !== -1) requestsFilterEl.value = String(filters.requestsFilter);
             if (empEl && filters.employeeFilter) empEl.value = String(filters.employeeFilter);
             if (agentEl && filters.bankAgentFilter) agentEl.value = String(filters.bankAgentFilter);
+            const srcEl = document.getElementById('sourceFilter');
+            if (srcEl && filters.sourceFilter) srcEl.value = String(filters.sourceFilter);
           }
 
           function setCustomersFiltersInUrl() {
@@ -21584,6 +22001,7 @@ app.get('/admin/customers', async (c) => {
             setUrlParamOrDelete(params, 'ratingFilter', filters.ratingFilter, 'all');
             setUrlParamOrDelete(params, 'employeeFilter', filters.employeeFilter, 'all');
             setUrlParamOrDelete(params, 'bankAgentFilter', filters.bankAgentFilter, 'all');
+            setUrlParamOrDelete(params, 'sourceFilter', filters.sourceFilter, 'all');
 
             const qs = params.toString();
             const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '');
@@ -22013,7 +22431,7 @@ app.get('/admin/customers', async (c) => {
           function buildCustomersListUrl(overrides) {
             const params = new URLSearchParams(window.location.search)
             const next = Object.assign({}, CUSTOMERS_FILTER_STATE, overrides || {})
-            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','page','pageSize']
+            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','sourceFilter','page','pageSize']
             keys.forEach((k) => {
               const v = next[k]
               if (v == null || v === '' || v === 'all' || (k === 'page' && Number(v) === 1) || (k === 'pageSize' && Number(v) === 15)) {
@@ -22032,6 +22450,7 @@ app.get('/admin/customers', async (c) => {
             if (next.ratingFilter && next.ratingFilter !== 'all') params.set('ratingFilter', String(next.ratingFilter))
             if (next.employeeFilter && next.employeeFilter !== 'all') params.set('employeeFilter', String(next.employeeFilter))
             if (next.bankAgentFilter && next.bankAgentFilter !== 'all') params.set('bankAgentFilter', String(next.bankAgentFilter))
+            if (next.sourceFilter && next.sourceFilter !== 'all') params.set('sourceFilter', String(next.sourceFilter)); else params.delete('sourceFilter')
             if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
             if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
             const qs = params.toString()
@@ -22257,6 +22676,33 @@ app.get('/admin/customers', async (c) => {
             if (icon) icon.style.transform = opening ? '' : 'rotate(-90deg)';
           }
 
+          function hydrateSourceFilter() {
+            const el = document.getElementById('sourceFilter');
+            if (!el) return;
+            const labels = Array.isArray(TENANT_SOURCE_LABELS) ? TENANT_SOURCE_LABELS : [];
+            const existing = new Set(Array.from(el.options).map((o) => o.value));
+            if (labels.length > 0) {
+              let group = el.querySelector('optgroup[label="التصنيفات المخصصة"]');
+              if (!group) {
+                group = document.createElement('optgroup');
+                group.setAttribute('label', 'التصنيفات المخصصة');
+                el.appendChild(group);
+              }
+              labels.forEach((lbl) => {
+                const val = 'label:' + lbl;
+                if (!existing.has(val)) {
+                  const opt = document.createElement('option');
+                  opt.value = val;
+                  opt.textContent = lbl;
+                  group.appendChild(opt);
+                  existing.add(val);
+                }
+              });
+            }
+            const current = CUSTOMERS_FILTER_STATE.sourceFilter || 'all';
+            el.value = current;
+          }
+
           function hydrateCustomersRoleFilters() {
             const empEl = document.getElementById('employeeFilter');
             const agentEl = document.getElementById('bankAgentFilter');
@@ -22294,6 +22740,7 @@ app.get('/admin/customers', async (c) => {
             const ratingFilter = document.getElementById('ratingFilter').value;
             const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value;
             const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value;
+            const sourceFilter = (document.getElementById('sourceFilter') || {value: 'all'}).value;
             navigateCustomersList({
               q: searchInput,
               filterField,
@@ -22302,6 +22749,7 @@ app.get('/admin/customers', async (c) => {
               ratingFilter,
               employeeFilter,
               bankAgentFilter,
+              sourceFilter,
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -22321,6 +22769,7 @@ app.get('/admin/customers', async (c) => {
             setVal('dateRangeFilter', s.dateRange || 'all');
             setVal('requestsFilter', s.requestsFilter || 'all');
             setVal('ratingFilter', s.ratingFilter || 'all');
+            setVal('sourceFilter', s.sourceFilter || 'all');
           }
 
           function applyPresetFiltersFromUrl() {
@@ -22338,6 +22787,7 @@ app.get('/admin/customers', async (c) => {
               ratingFilter: 'all',
               employeeFilter: 'all',
               bankAgentFilter: 'all',
+              sourceFilter: 'all',
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -22366,150 +22816,9 @@ app.get('/admin/customers', async (c) => {
           }
 
           window.triggerCustomersCSVImport = function() {
-            const el = document.getElementById('customersCsvInput')
-            if (el) el.click()
-          }
-
-          function normalizeCsvHeaderCell(v) {
-            return String(v || '')
-              .replace(/^\uFEFF/, '')
-              .replace(/\u200F/g, '')
-              .trim()
-              .toLowerCase()
-          }
-
-          function parseCsvText(text) {
-            const s = String(text || '')
-              .replace(/^\uFEFF/, '')
-              .replace(/^sep=(?:,|;|\\t)(?:\\r\\n|\\n|\\r)/, '')
-            const rows = []
-            let row = []
-            let cur = ''
-            let inQuotes = false
-            for (let i = 0; i < s.length; i++) {
-              const ch = s[i]
-              const next = s[i + 1]
-              if (ch === '"') {
-                if (inQuotes && next === '"') { cur += '"'; i++; continue }
-                inQuotes = !inQuotes
-                continue
-              }
-              if (!inQuotes && (ch === ',')) { row.push(cur); cur = ''; continue }
-              if (!inQuotes && (ch === '\\n' || ch === '\\r')) {
-                if (ch === '\\r' && next === '\\n') i++
-                row.push(cur); cur = ''
-                if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
-                row = []
-                continue
-              }
-              cur += ch
-            }
-            row.push(cur)
-            if (row.some((c) => String(c || '').trim() !== '')) rows.push(row)
-            return rows
-          }
-
-          let _csvImportPending = null
-
-          window.handleCustomersCSVFile = async function(evt) {
-            try {
-              const file = evt?.target?.files?.[0]
-              if (!file) return
-              const text = await file.text()
-              const rows = parseCsvText(text)
-              if (!rows || rows.length < 2) {
-                alert('ملف CSV فارغ أو غير صالح')
-                return
-              }
-              const header = rows[0].map(normalizeCsvHeaderCell)
-              const idx = (keys) => header.findIndex((h) => keys.indexOf(h) !== -1)
-              const iName = idx(['full_name', 'name', 'الاسم'])
-              const iPhone = idx(['phone', 'الهاتف', 'الجوال'])
-              const iEmail = idx(['email', 'البريد الإلكتروني', 'البريد'])
-              const iNat = idx(['national_id', 'nationalid', 'الرقم الوطني'])
-              const iSalary = idx(['monthly_salary', 'salary', 'الراتب', 'الراتب الشهري'])
-
-              const customers = []
-              for (let r = 1; r < rows.length; r++) {
-                const cols = rows[r]
-                const full_name = iName >= 0 ? String(cols[iName] || '').trim() : ''
-                const phone = iPhone >= 0 ? String(cols[iPhone] || '').trim() : ''
-                const email = iEmail >= 0 ? String(cols[iEmail] || '').trim() : ''
-                const national_id = iNat >= 0 ? String(cols[iNat] || '').trim() : ''
-                const monthly_salary = iSalary >= 0 ? String(cols[iSalary] || '').trim() : ''
-                if (!full_name && !phone) continue
-                customers.push({ full_name, phone, email, national_id, monthly_salary })
-              }
-
-              if (customers.length === 0) {
-                alert('لم يتم العثور على صفوف صالحة')
-                return
-              }
-
-              _csvImportPending = customers
-              openCsvImportAssignModal(customers.length)
-            } catch (e) {
-              alert('حدث خطأ أثناء قراءة الملف')
-              console.error(e)
-            } finally {
-              const el = document.getElementById('customersCsvInput')
-              if (el) el.value = ''
-            }
-          }
-
-          function openCsvImportAssignModal(count) {
-            const modal = document.getElementById('csvImportAssignModal')
-            if (!modal) return
-            document.getElementById('csvImportCount').textContent = count
-            document.getElementById('csvAssignEmployeeCheck').checked = false
-            document.getElementById('csvAssignBankAgentCheck').checked = false
-            document.getElementById('csvImportAssignBtn').disabled = false
-            modal.style.display = 'flex'
-          }
-
-          window.cancelCsvImportAssign = function() {
-            _csvImportPending = null
-            const modal = document.getElementById('csvImportAssignModal')
-            if (modal) modal.style.display = 'none'
-          }
-
-          window.confirmCsvImportAssign = async function() {
-            const customers = _csvImportPending
-            if (!customers || customers.length === 0) return
-            const btn = document.getElementById('csvImportAssignBtn')
-            if (btn) btn.disabled = true
-
-            const doEmployee = document.getElementById('csvAssignEmployeeCheck').checked
-            const doBankAgent = document.getElementById('csvAssignBankAgentCheck').checked
-
-            try {
-              const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
-              const headers = { 'Content-Type': 'application/json' }
-              if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
-
-              const resp = await fetch('/api/customers/import-csv', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers,
-                body: JSON.stringify({ customers, auto_distribute_employees: doEmployee, auto_distribute_bank_agents: doBankAgent })
-              })
-              const data = await resp.json().catch(() => ({}))
-              if (!resp.ok || !data.success) {
-                alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
-                if (btn) btn.disabled = false
-                return
-              }
-
-              const errCount = Array.isArray(data.errors) ? data.errors.length : 0
-              alert((data.message || 'تم الاستيراد') + (errCount ? ('\\nأخطاء: ' + errCount) : ''))
-              _csvImportPending = null
-              document.getElementById('csvImportAssignModal').style.display = 'none'
-              window.location.reload()
-            } catch (e) {
-              alert('حدث خطأ أثناء الاستيراد')
-              console.error(e)
-              if (btn) btn.disabled = false
-            }
+            const urlParams = new URLSearchParams(window.location.search)
+            const tenantId = urlParams.get('tenant_id')
+            window.location.href = '/admin/customers/import' + (tenantId ? ('?tenant_id=' + encodeURIComponent(tenantId)) : '')
           }
 
           ${role2InlineAssign ? `
@@ -22580,6 +22889,7 @@ app.get('/admin/customers', async (c) => {
           // Restore URL filters; pagination is server-side — do NOT call filterTable() on load
           // (filterTable navigates and was causing perpetual reloads).
           hydrateCustomersRoleFilters();
+          hydrateSourceFilter();
           applyPresetFiltersFromUrl();
           applyCustomersPagination();
           loadCustomerRatings();
@@ -22601,41 +22911,6 @@ app.get('/admin/customers', async (c) => {
         </div>
         ` : ''}
 
-        <!-- ===== CSV IMPORT AUTO-ASSIGN MODAL ===== -->
-        <div id="csvImportAssignModal" style="display:none;" class="fixed inset-0 z-[9998] flex items-center justify-center">
-          <div class="absolute inset-0 bg-black/50" onclick="cancelCsvImportAssign()"></div>
-          <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4" dir="rtl">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-bold text-gray-800">
-                <i class="fas fa-file-import text-indigo-500 ml-2"></i>
-                استيراد <span id="csvImportCount">0</span> عميل
-              </h3>
-              <button onclick="cancelCsvImportAssign()" class="text-gray-400 hover:text-gray-600 p-1"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="space-y-3 mb-6">
-              <label class="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                <div>
-                  <span class="font-medium text-gray-800">توزيع تلقائي على الموظفين</span>
-                  <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) وفق إعدادات الشركة</p>
-                </div>
-                <input type="checkbox" id="csvAssignEmployeeCheck" class="w-4 h-4 text-indigo-600 rounded">
-              </label>
-              <label class="flex items-center justify-between p-4 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                <div>
-                  <span class="font-medium text-gray-800">توزيع تلقائي على موظفي البنك</span>
-                  <p class="text-xs text-gray-400 mt-0.5">توزيع عادل (round-robin) على موظفي التمويل النشطين</p>
-                </div>
-                <input type="checkbox" id="csvAssignBankAgentCheck" class="w-4 h-4 text-indigo-600 rounded">
-              </label>
-            </div>
-            <div class="flex gap-3">
-              <button id="csvImportAssignBtn" onclick="confirmCsvImportAssign()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
-                <i class="fas fa-upload ml-1"></i> استيراد
-              </button>
-              <button onclick="cancelCsvImportAssign()" class="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</button>
-            </div>
-          </div>
-        </div>
 
         <!-- ===== CUSTOMER ALARM GLOW — popup modal + painter script (live on /admin/customers) ===== -->
         <style>
@@ -35595,6 +35870,20 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
     }
 
+    const existingFollowup = await c.env.DB.prepare(
+      `SELECT 1 FROM company_contact_followups WHERE tenant_id = ? AND customer_phone = ? LIMIT 1`
+    ).bind(tenant.id, customerPhone).first<{ 1: number }>()
+    if (existingFollowup) {
+      return c.json({ success: false, error: 'رقم الجوال مسجّل مسبقاً كطلب تواصل' }, 409)
+    }
+
+    const existingCustomer = await c.env.DB.prepare(
+      `SELECT 1 FROM customers WHERE tenant_id = ? AND phone = ? LIMIT 1`
+    ).bind(tenant.id, customerPhone).first<{ 1: number }>()
+    if (existingCustomer) {
+      return c.json({ success: false, error: 'رقم الجوال مسجّل مسبقاً كعميل' }, 409)
+    }
+
     let affiliatePathSegment: string | null = null
     let affiliateLabel: string | null = null
     let affiliateLinkId: number | null = null
@@ -36759,16 +37048,185 @@ app.get('/api/tenant-contact-affiliates/:id/unassigned-customers', async (c) => 
   }
 })
 
-// Follow-up module data (roles 1,2,3 — not employees (4) or bank agents (5))
+// Assignable staff list for follow-up rows view (employees + bank agents)
+app.get('/api/follow-ups/assignable-staff', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    let tenantId = userInfo.tenantId
+    if (userInfo.roleId === 1) {
+      const qTenant = c.req.query('tenant_id')
+      if (qTenant && /^\d+$/.test(String(qTenant))) tenantId = parseInt(String(qTenant), 10)
+    }
+    if (!tenantId) return c.json({ success: true, data: [] })
+
+    const staff = await listFollowupAssignableStaff(c.env.DB, tenantId)
+    return c.json({ success: true, data: staff })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Update the assigned_user_id on the most recent task for a follow-up (upsert task if none exists).
+app.patch('/api/follow-ups/:id/assign-user', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const body = await c.req.json().catch(() => ({}))
+    const assignedUserId: number | null = body.assigned_user_id != null && String(body.assigned_user_id).trim() !== ''
+      ? parseInt(String(body.assigned_user_id), 10)
+      : null
+
+    const followup = await c.env.DB.prepare(
+      `SELECT id, tenant_id, customer_name FROM company_contact_followups WHERE id = ? LIMIT 1`
+    ).bind(followupId).first<{ id: number; tenant_id: number; customer_name?: string | null }>()
+
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+    if (userInfo.roleId !== 1 && followup.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    if (assignedUserId !== null) {
+      const staff = await listFollowupAssignableStaff(c.env.DB, Number(followup.tenant_id))
+      if (!staff.some((s) => s.id === assignedUserId)) {
+        return c.json({ success: false, error: 'Staff member not found or not assignable' }, 400)
+      }
+    }
+
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM company_contact_followup_tasks WHERE followup_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1`
+    ).bind(followupId, followup.tenant_id).first<{ id: number }>()
+
+    if (existing?.id) {
+      await c.env.DB.prepare(
+        `UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?`
+      ).bind(assignedUserId, existing.id, followup.tenant_id).run()
+    } else {
+      await c.env.DB.prepare(`
+        INSERT INTO company_contact_followup_tasks
+          (followup_id, tenant_id, task_title, scheduled_at_gregorian, assigned_user_id, priority, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(followupId, followup.tenant_id, 'متابعة', new Date().toISOString(), assignedUserId, 'regular', userInfo.userId).run()
+    }
+
+    if (assignedUserId != null) {
+      const notifMsg = followup.customer_name ? `متابعة: ${followup.customer_name}` : 'متابعة'
+      await c.env.DB.prepare(
+        `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+         VALUES (?, ?, ?, ?, 'info', 'followup_task', 0)`
+      ).bind(assignedUserId, followup.tenant_id, 'مهمة متابعة جديدة', notifMsg).run()
+    }
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Bulk assign follow-ups — updates assigned_user_id on each follow-up's most recent task.
+app.post('/api/follow-ups/bulk-assign', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const body = await c.req.json().catch(() => ({}))
+    const followupIds: number[] = Array.isArray(body.followup_ids)
+      ? body.followup_ids.map((x: unknown) => parseInt(String(x), 10)).filter((n: number) => Number.isFinite(n) && n > 0)
+      : []
+    const assignedUserId: number | null = body.assigned_user_id != null && String(body.assigned_user_id).trim() !== ''
+      ? parseInt(String(body.assigned_user_id), 10)
+      : null
+
+    if (!followupIds.length) return c.json({ success: false, error: 'No follow-up ids provided' }, 400)
+
+    const tenantId = userInfo.roleId === 1 && body.tenant_id
+      ? parseInt(String(body.tenant_id), 10)
+      : userInfo.tenantId
+
+    if (!tenantId) return c.json({ success: false, error: 'Tenant not found' }, 400)
+
+    if (assignedUserId !== null) {
+      const staff = await listFollowupAssignableStaff(c.env.DB, tenantId)
+      if (!staff.some((s) => s.id === assignedUserId)) {
+        return c.json({ success: false, error: 'Staff member not found or not assignable' }, 400)
+      }
+    }
+
+    let assignedCount = 0
+    for (const fid of followupIds) {
+      const followup = await c.env.DB.prepare(
+        `SELECT id, customer_name FROM company_contact_followups WHERE id = ? AND tenant_id = ? LIMIT 1`
+      ).bind(fid, tenantId).first<{ id: number; customer_name?: string | null }>()
+      if (!followup?.id) continue
+
+      const existing = await c.env.DB.prepare(
+        `SELECT id FROM company_contact_followup_tasks WHERE followup_id = ? AND tenant_id = ? ORDER BY id DESC LIMIT 1`
+      ).bind(fid, tenantId).first<{ id: number }>()
+
+      if (existing?.id) {
+        await c.env.DB.prepare(
+          `UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?`
+        ).bind(assignedUserId, existing.id, tenantId).run()
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO company_contact_followup_tasks
+            (followup_id, tenant_id, task_title, scheduled_at_gregorian, assigned_user_id, priority, created_by_user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).bind(fid, tenantId, 'متابعة', new Date().toISOString(), assignedUserId, 'regular', userInfo.userId).run()
+      }
+
+      if (assignedUserId != null) {
+        const notifMsg = followup.customer_name ? `متابعة: ${followup.customer_name}` : 'متابعة'
+        await c.env.DB.prepare(
+          `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+           VALUES (?, ?, ?, ?, 'info', 'followup_task', 0)`
+        ).bind(assignedUserId, tenantId, 'مهمة متابعة جديدة', notifMsg).run()
+      }
+
+      assignedCount++
+    }
+
+    return c.json({ success: true, assigned_count: assignedCount })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Follow-up module data (roles 1,2,3 — not employees / bank / dual agents (4/5/6))
 app.get('/api/follow-ups', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
-    const linkFilterRaw = String(c.req.query('followupLinkFilter') ?? '').trim().toLowerCase()
-    const linkFilter = linkFilterRaw === 'company' || linkFilterRaw === 'affiliate' ? linkFilterRaw : 'all'
+    const linkFilterRaw = String(c.req.query('followupLinkFilter') ?? '').trim()
+    const linkFilterLower = linkFilterRaw.toLowerCase()
+    let linkFilter: 'all' | 'company' | 'affiliate' | 'imports' | 'affiliate-path' | 'import-label' = 'all'
+    let linkBindVal: string | null = null
+    if (linkFilterLower === 'company') linkFilter = 'company'
+    else if (linkFilterLower === 'affiliate') linkFilter = 'affiliate'
+    else if (linkFilterLower === 'imports') linkFilter = 'imports'
+    else if (linkFilterLower.startsWith('affiliate:')) {
+      linkFilter = 'affiliate-path'
+      linkBindVal = linkFilterRaw.slice('affiliate:'.length).trim()
+    } else if (linkFilterLower.startsWith('import-label:')) {
+      linkFilter = 'import-label'
+      linkBindVal = linkFilterRaw.slice('import-label:'.length).trim()
+    }
 
     const priorityFilterRaw = String(c.req.query('followupPriorityFilter') ?? '').trim().toLowerCase()
     const priorityFilter =
@@ -36776,10 +37234,16 @@ app.get('/api/follow-ups', async (c) => {
 
     const linkClause =
       linkFilter === 'company'
-        ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') `
+        ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') AND COALESCE(f.source_slug, '') <> 'csv' `
         : linkFilter === 'affiliate'
           ? ` AND (f.affiliate_path_segment IS NOT NULL AND TRIM(f.affiliate_path_segment) <> '') `
-          : ''
+          : linkFilter === 'imports'
+            ? ` AND COALESCE(f.source_slug, '') = 'csv' `
+            : linkFilter === 'affiliate-path'
+              ? ` AND f.affiliate_path_segment = ? `
+              : linkFilter === 'import-label'
+                ? ` AND COALESCE(f.source_slug, '') = 'csv' AND f.affiliate_label = ? `
+                : ''
 
     const priorityClause =
       priorityFilter === 'important' || priorityFilter === 'regular'
@@ -36791,17 +37255,21 @@ app.get('/api/follow-ups', async (c) => {
       const tenantFilter = c.req.query('tenant_id')
       if (tenantFilter && /^\d+$/.test(String(tenantFilter))) {
         const stmt = c.env.DB.prepare(`
-          SELECT f.*, t.company_name, tl.slug AS location_slug
+          SELECT f.*, t.company_name, tl.slug AS location_slug,
+            (SELECT tk.assigned_user_id FROM company_contact_followup_tasks tk
+             WHERE tk.followup_id = f.id ORDER BY tk.created_at DESC LIMIT 1) AS task_assigned_user_id
           FROM company_contact_followups f
           LEFT JOIN tenants t ON t.id = f.tenant_id
           LEFT JOIN tenant_locations tl ON tl.id = f.location_id
           WHERE f.tenant_id = ?
+          AND COALESCE(f.is_archived, 0) = 0
           ${linkClause}
           ${priorityClause}
           ORDER BY f.created_at DESC
           LIMIT 300
         `)
         const binds: any[] = [parseInt(String(tenantFilter), 10)]
+        if (linkBindVal) binds.push(linkBindVal)
         if (priorityClause) binds.push(priorityFilter)
         const { results } = await (stmt as any).bind(...binds).all()
         const data = (results || []).map((row: Record<string, unknown>) =>
@@ -36811,17 +37279,20 @@ app.get('/api/follow-ups', async (c) => {
       }
 
       const stmt = c.env.DB.prepare(`
-        SELECT f.*, t.company_name, tl.slug AS location_slug
+        SELECT f.*, t.company_name, tl.slug AS location_slug,
+          (SELECT tk.assigned_user_id FROM company_contact_followup_tasks tk
+           WHERE tk.followup_id = f.id ORDER BY tk.created_at DESC LIMIT 1) AS task_assigned_user_id
         FROM company_contact_followups f
         LEFT JOIN tenants t ON t.id = f.tenant_id
         LEFT JOIN tenant_locations tl ON tl.id = f.location_id
-        WHERE 1=1
+        WHERE COALESCE(f.is_archived, 0) = 0
         ${linkClause}
         ${priorityClause}
         ORDER BY f.created_at DESC
         LIMIT 300
       `)
       const binds: any[] = []
+      if (linkBindVal) binds.push(linkBindVal)
       if (priorityClause) binds.push(priorityFilter)
       const { results } = await (binds.length ? (stmt as any).bind(...binds) : stmt).all()
       const data = (results || []).map((row: Record<string, unknown>) =>
@@ -36835,17 +37306,21 @@ app.get('/api/follow-ups', async (c) => {
     }
 
     const stmt = c.env.DB.prepare(`
-      SELECT f.*, t.company_name, tl.slug AS location_slug
+      SELECT f.*, t.company_name, tl.slug AS location_slug,
+        (SELECT tk.assigned_user_id FROM company_contact_followup_tasks tk
+         WHERE tk.followup_id = f.id ORDER BY tk.created_at DESC LIMIT 1) AS task_assigned_user_id
       FROM company_contact_followups f
       LEFT JOIN tenants t ON t.id = f.tenant_id
       LEFT JOIN tenant_locations tl ON tl.id = f.location_id
       WHERE f.tenant_id = ?
+      AND COALESCE(f.is_archived, 0) = 0
       ${linkClause}
       ${priorityClause}
       ORDER BY f.created_at DESC
       LIMIT 300
     `)
     const binds: any[] = [userInfo.tenantId]
+    if (linkBindVal) binds.push(linkBindVal)
     if (priorityClause) binds.push(priorityFilter)
     const { results } = await (stmt as any).bind(...binds).all()
 
@@ -36863,7 +37338,7 @@ app.get('/api/follow-ups/:id/notes', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -36905,7 +37380,7 @@ app.get('/api/follow-ups/:id/task-notes', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -36941,7 +37416,7 @@ app.post('/api/follow-ups/:id/notes', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -36986,7 +37461,7 @@ app.get('/api/follow-ups/:id/staff', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -37015,7 +37490,7 @@ app.get('/api/follow-ups/:id/tasks', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -37056,7 +37531,7 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const fuRole = normalizeRoleId(userInfo.roleId)
-    if (fuRole === 4 || fuRole === 5) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const followupId = parseInt(c.req.param('id'), 10)
     if (!Number.isFinite(followupId) || followupId <= 0) {
@@ -37163,6 +37638,291 @@ app.post('/api/follow-ups/:id/tasks', async (c) => {
   }
 })
 
+app.get('/api/follow-ups/sample-csv', async (c) => {
+  try {
+    const header = ['الاسم', 'الهاتف', 'عنوان المهمة', 'الأولوية', 'موعد المهمة']
+    const rows = [
+      ['محمد أحمد', '512345678', 'اتصال أول', 'regular', '2026-08-01 10:00'],
+      ['سارة علي', '501234567', '', '', ''],
+      ['', '555555555', 'مراجعة عرض', 'important', '2026-08-05 14:30'],
+    ]
+    const xml = buildSpreadsheetML([header, ...rows], 'متابعات')
+    return spreadsheetMLAttachmentResponse(xml, 'follow_ups_sample.xls')
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+/** Bulk create follow-ups (and optional tasks) from a parsed CSV/XLSX payload. */
+app.get('/api/follow-ups/import/assign-options', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (!canAccessMarketingModule(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    let tenantId: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
+    if (!tenantId && userInfo.roleId === 1) {
+      const tidFromQuery = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
+      if (!Number.isNaN(tidFromQuery) && tidFromQuery > 0) tenantId = tidFromQuery
+    }
+    if (!tenantId) {
+      const defaultTenant = await c.env.DB.prepare(
+        `SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1`
+      ).first<{ id: number }>()
+      if (defaultTenant?.id) tenantId = defaultTenant.id
+    }
+    if (!tenantId) return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+
+    const available_staff = await listFollowupAssignableStaff(c.env.DB, tenantId)
+    const { results: branches } = await c.env.DB.prepare(
+      `SELECT id, name FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY name`
+    ).bind(tenantId).all<{ id: number; name: string }>()
+
+    return c.json({ success: true, available_staff, branches: branches || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/follow-ups/import-csv', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (!canAccessMarketingModule(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const body = await c.req.json().catch(() => null) as any
+    const incoming = body?.rows
+    if (!Array.isArray(incoming) || incoming.length === 0) {
+      return c.json({ success: false, error: 'لا توجد بيانات للرفع' }, 400)
+    }
+    const rawMode = String(body?.assign_mode ?? '').trim()
+    const allowedModes = ['auto', 'custom', 'branch', 'custom_excl', 'branch_excl']
+    const assignMode = allowedModes.includes(rawMode) ? rawMode : (body?.auto_assign === true ? 'auto' : 'none')
+    const autoAssign = assignMode !== 'none'
+    const requestedBranchId = (() => {
+      const raw = parseInt(String(body?.assign_branch_id ?? ''), 10)
+      return Number.isFinite(raw) && raw > 0 ? raw : null
+    })()
+    const requestedStaffIds: number[] = Array.isArray(body?.assign_staff_ids)
+      ? Array.from(new Set(
+          (body.assign_staff_ids as unknown[])
+            .map((v) => parseInt(String(v ?? ''), 10))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        ))
+      : []
+    const sourceLabel = body?.source_label
+      ? String(body.source_label).trim().slice(0, 200)
+      : ''
+    if (!sourceLabel) {
+      return c.json({ success: false, error: 'يرجى إدخال مصدر المتابعات' }, 400)
+    }
+
+    // Resolve tenant scope (mirrors customers import)
+    let tenant_id: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
+    if (!tenant_id && userInfo.roleId === 1) {
+      const tidFromBody = Number.parseInt(String(body?.tenant_id ?? ''), 10)
+      if (!Number.isNaN(tidFromBody) && tidFromBody > 0) tenant_id = tidFromBody
+    }
+    if (!tenant_id) {
+      const defaultTenant = await c.env.DB.prepare(
+        `SELECT id FROM tenants WHERE status = 'active' ORDER BY id LIMIT 1`
+      ).first<{ id: number }>()
+      if (defaultTenant?.id) tenant_id = defaultTenant.id
+    }
+    if (!tenant_id) {
+      return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+    }
+
+    // Pre-compute round-robin staff + cursor once so we don't refetch per row.
+    let staffIds: number[] = []
+    let lastAssignedUserId: number | null = null
+    if (autoAssign) {
+      let staff = await listFollowupAssignableStaff(c.env.DB, tenant_id)
+
+      // Branch filter — only staff assigned to the given branch (or all-but for excl).
+      if ((assignMode === 'branch' || assignMode === 'branch_excl') && requestedBranchId != null && staff.length) {
+        const placeholders = staff.map(() => '?').join(',')
+        const { results: branchStaff } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE id IN (${placeholders}) AND assigned_location_id = ?`
+        ).bind(...staff.map((u) => u.id), requestedBranchId).all<{ id: number }>()
+        const branchIds = new Set(((branchStaff || []) as { id: number }[]).map((r) => r.id))
+        staff = assignMode === 'branch'
+          ? staff.filter((u) => branchIds.has(u.id))
+          : staff.filter((u) => !branchIds.has(u.id))
+      }
+
+      // Custom inclusion — only the users the caller listed.
+      if (assignMode === 'custom' && requestedStaffIds.length && staff.length) {
+        const allowed = new Set(requestedStaffIds)
+        staff = staff.filter((u) => allowed.has(u.id))
+      }
+
+      // Custom exclusion — every eligible user except the listed ones.
+      if (assignMode === 'custom_excl' && requestedStaffIds.length && staff.length) {
+        const excluded = new Set(requestedStaffIds)
+        staff = staff.filter((u) => !excluded.has(u.id))
+      }
+
+      staffIds = staff.map((u) => u.id)
+      if (staffIds.length) {
+        const stateRow = await c.env.DB.prepare(`
+          SELECT last_auto_assigned_user_id
+          FROM tenant_followup_auto_assign_state
+          WHERE tenant_id = ?
+          LIMIT 1
+        `).bind(tenant_id).first<{ last_auto_assigned_user_id: number | null }>()
+        lastAssignedUserId = stateRow?.last_auto_assigned_user_id ?? null
+      }
+    }
+    function pickNextUserId(last: number | null): number | null {
+      if (!staffIds.length) return null
+      if (last == null) return staffIds[0]
+      const idx = staffIds.indexOf(last)
+      if (idx === -1) return staffIds[0]
+      return staffIds[(idx + 1) % staffIds.length]
+    }
+
+    let followupsCreated = 0
+    let tasksCreated = 0
+    let tasksAssigned = 0
+    let skippedExistingCustomer = 0
+    let skippedExistingFollowup = 0
+    let skippedDuplicateInFile = 0
+    const errors: { row: number; phone: string; reason: string }[] = []
+    const skipped: { row: number; phone: string; reason: 'existing_customer' | 'existing_followup' | 'duplicate_in_file' }[] = []
+    const seenPhonesInBatch = new Set<string>()
+
+    for (let i = 0; i < incoming.length; i++) {
+      const row = incoming[i] || {}
+      const rowNum = i + 1
+      try {
+        const rawPhone = String(row.phone ?? '').trim()
+        if (!rawPhone) {
+          errors.push({ row: rowNum, phone: '', reason: 'phone is required' })
+          continue
+        }
+        const normalizedPhoneResult = normalizeCustomerPhoneForStorage(rawPhone)
+        if (!normalizedPhoneResult.normalized) {
+          errors.push({ row: rowNum, phone: rawPhone, reason: normalizedPhoneResult.error || 'phone invalid' })
+          continue
+        }
+        const phone = normalizedPhoneResult.normalized
+
+        if (seenPhonesInBatch.has(phone)) {
+          skippedDuplicateInFile++
+          skipped.push({ row: rowNum, phone, reason: 'duplicate_in_file' })
+          continue
+        }
+        const existingCustomer = await c.env.DB.prepare(
+          `SELECT 1 FROM customers WHERE phone = ? AND tenant_id = ? LIMIT 1`
+        ).bind(phone, tenant_id).first<{ 1: number }>()
+        if (existingCustomer) {
+          skippedExistingCustomer++
+          skipped.push({ row: rowNum, phone, reason: 'existing_customer' })
+          continue
+        }
+        const existingFollowup = await c.env.DB.prepare(
+          `SELECT 1 FROM company_contact_followups WHERE customer_phone = ? AND tenant_id = ? LIMIT 1`
+        ).bind(phone, tenant_id).first<{ 1: number }>()
+        if (existingFollowup) {
+          skippedExistingFollowup++
+          skipped.push({ row: rowNum, phone, reason: 'existing_followup' })
+          continue
+        }
+        seenPhonesInBatch.add(phone)
+
+        const name = String(row.name ?? '').trim().slice(0, 200)
+        const rawTaskTitle = String(row.task_title ?? '').trim().slice(0, 500)
+        const taskTitle = rawTaskTitle || 'متابعة العروض'
+        const scheduledAt = String(row.scheduled_at ?? '').trim()
+        const priorityRaw = String(row.priority ?? '').trim().toLowerCase()
+        const priority = priorityRaw === 'important' || priorityRaw === 'مهم'
+          ? 'important'
+          : 'regular'
+
+        // Keep source label as the contact message when the file had no custom title.
+        const customerMessage = rawTaskTitle || sourceLabel
+
+        const followupResult = await c.env.DB.prepare(`
+          INSERT INTO company_contact_followups (
+            tenant_id, customer_name, customer_phone, customer_message, source_slug,
+            affiliate_path_segment, affiliate_label, location_id, custom_fields_data
+          ) VALUES (?, ?, ?, ?, 'csv', NULL, ?, NULL, NULL)
+        `).bind(
+          tenant_id,
+          name || 'غير مسمى',
+          phone,
+          customerMessage,
+          sourceLabel,
+        ).run() as { meta?: { last_row_id?: number } }
+
+        const followupId = Number(followupResult?.meta?.last_row_id || 0)
+        if (!followupId) {
+          errors.push({ row: rowNum, phone, reason: 'failed to create follow-up' })
+          continue
+        }
+        followupsCreated++
+
+        // Always create a task (default title above). Missing/unreadable schedule → now.
+        const effectiveSchedule =
+          scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime())
+            ? scheduledAt
+            : new Date().toISOString()
+
+        let assignedUserId: number | null = null
+        if (autoAssign && staffIds.length) {
+          assignedUserId = pickNextUserId(lastAssignedUserId)
+          if (assignedUserId != null) lastAssignedUserId = assignedUserId
+        }
+
+        await c.env.DB.prepare(`
+          INSERT INTO company_contact_followup_tasks
+            (followup_id, tenant_id, task_title, scheduled_at_gregorian, scheduled_at_hijri,
+             assigned_user_id, priority, created_by_user_id)
+          VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+        `).bind(
+          followupId,
+          tenant_id,
+          taskTitle,
+          effectiveSchedule,
+          assignedUserId,
+          priority,
+          userInfo.userId,
+        ).run()
+        tasksCreated++
+        if (assignedUserId != null) tasksAssigned++
+      } catch (e: any) {
+        errors.push({ row: rowNum, phone: String(row?.phone ?? ''), reason: e?.message || String(e) })
+      }
+    }
+
+    if (autoAssign && tasksAssigned > 0 && lastAssignedUserId != null) {
+      await c.env.DB.prepare(`
+        INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(tenant_id, lastAssignedUserId).run()
+    }
+
+    return c.json({
+      success: true,
+      followups_created: followupsCreated,
+      tasks_created: tasksCreated,
+      tasks_assigned: tasksAssigned,
+      skipped_existing_customer: skippedExistingCustomer,
+      skipped_existing_followup: skippedExistingFollowup,
+      skipped_duplicate_in_file: skippedDuplicateInFile,
+      skipped_total: skippedExistingCustomer + skippedExistingFollowup + skippedDuplicateInFile,
+      skipped: skipped.length ? skipped : undefined,
+      errors: errors.length ? errors : undefined,
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 /** Company admin (role 2): assign unassigned pending follow-up tasks round-robin among roles 4/5/6. */
 app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
   try {
@@ -37247,14 +38007,103 @@ app.post('/api/follow-ups/auto-assign-unassigned-tasks', async (c) => {
   }
 })
 
-// Follow-up tasks assigned to the logged-in user (company employees or bank staff; role 4/5)
+app.patch('/api/follow-ups/:id/archive', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const followupId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(followupId) || followupId <= 0) {
+      return c.json({ success: false, error: 'Invalid follow-up id' }, 400)
+    }
+
+    const followup = await c.env.DB.prepare(`
+      SELECT id, tenant_id FROM company_contact_followups WHERE id = ? LIMIT 1
+    `).bind(followupId).first<{ id: number; tenant_id: number }>()
+
+    if (!followup?.id) return c.json({ success: false, error: 'Follow-up not found' }, 404)
+
+    if (fuRole !== 1 && userInfo.tenantId !== followup.tenant_id) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const restore = payload?.restore === true
+    const reason = !restore && payload?.reason ? String(payload.reason).trim().slice(0, 500) : null
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followups
+      SET is_archived = ?, archive_reason = ?
+      WHERE id = ?
+    `).bind(restore ? 0 : 1, restore ? null : reason, followupId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/follow-ups-archived', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const fuRole = normalizeRoleId(userInfo.roleId)
+    if (!canAccessMarketingModule(fuRole)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    if (fuRole === 1) {
+      const { results } = await c.env.DB.prepare(`
+        SELECT f.*, t.company_name, tl.slug AS location_slug
+        FROM company_contact_followups f
+        LEFT JOIN tenants t ON t.id = f.tenant_id
+        LEFT JOIN tenant_locations tl ON tl.id = f.location_id
+        WHERE COALESCE(f.is_archived, 0) = 1
+        ORDER BY f.created_at DESC
+        LIMIT 300
+      `).all()
+      const data = (results || []).map((row: Record<string, unknown>) =>
+        normalizeContactFollowupRowForApi(row)
+      )
+      return c.json({ success: true, data })
+    }
+
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const { results } = await c.env.DB.prepare(`
+      SELECT f.*, t.company_name, tl.slug AS location_slug
+      FROM company_contact_followups f
+      LEFT JOIN tenants t ON t.id = f.tenant_id
+      LEFT JOIN tenant_locations tl ON tl.id = f.location_id
+      WHERE f.tenant_id = ?
+      AND COALESCE(f.is_archived, 0) = 1
+      ORDER BY f.created_at DESC
+      LIMIT 300
+    `).bind(userInfo.tenantId).all()
+
+    const data = (results || []).map((row: Record<string, unknown>) =>
+      normalizeContactFollowupRowForApi(row)
+    )
+    return c.json({ success: true, data })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Follow-up tasks: role 2 sees all tenant tasks; roles 4/5/6 see only their assigned tasks.
 app.get('/api/my-followup-tasks', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const rid = normalizeRoleId(userInfo.roleId)
+    const isAdminView = rid === 2
+
+    const archived = c.req.query('archived') === '1'
+    const archivedClause = archived
+      ? ' AND COALESCE(f.is_archived, 0) = 1'
+      : ' AND COALESCE(f.is_archived, 0) = 0'
 
     const filter = String(c.req.query('status') ?? '').trim().toLowerCase()
     const statusClause =
@@ -37277,27 +38126,41 @@ app.get('/api/my-followup-tasks', async (c) => {
       sort === 'priority'      ? "CASE WHEN t.priority = 'important' THEN 0 ELSE 1 END ASC, t.id DESC" :
                                  't.created_at DESC, t.id DESC'
 
+    const assignedUserJoin = isAdminView ? 'LEFT JOIN users au ON au.id = t.assigned_user_id' : ''
+    const assignedUserSelect = isAdminView ? ', au.full_name AS assigned_user_name' : ''
+    const whereClause = isAdminView
+      ? 'WHERE t.tenant_id = ?'
+      : 'WHERE t.assigned_user_id = ? AND t.tenant_id = ?'
+
     const { results } = await c.env.DB.prepare(`
       SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
              t.priority, t.status, t.created_at,
              t.employee_note_text, t.employee_note_updated_at,
              f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
              f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
+             f.archive_reason,
              tn.company_name,
              pr_out.id AS outgoing_pass_request_id,
              pr_out.to_user_id AS outgoing_pass_to_user_id,
              tu_out.full_name AS outgoing_pass_to_name
+             ${assignedUserSelect}
       FROM company_contact_followup_tasks t
       INNER JOIN company_contact_followups f ON f.id = t.followup_id
       LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      ${assignedUserJoin}
       LEFT JOIN company_contact_followup_task_pass_requests pr_out
         ON pr_out.task_id = t.id AND pr_out.status = 'pending' AND pr_out.from_user_id = ?
       LEFT JOIN users tu_out ON tu_out.id = pr_out.to_user_id
-      WHERE t.assigned_user_id = ? AND t.tenant_id = ?
+      ${whereClause}
+      ${archivedClause}
       ${statusClause}
       ORDER BY ${completedLastClause} ${innerSort}
       LIMIT 300
-    `).bind(userInfo.userId, userInfo.userId, userInfo.tenantId).all()
+    `).bind(
+      ...(isAdminView
+        ? [userInfo.userId, userInfo.tenantId]
+        : [userInfo.userId, userInfo.userId, userInfo.tenantId])
+    ).all()
 
     const data = (results || []).map((row: Record<string, unknown>) =>
       normalizeContactFollowupRowForApi(row)
@@ -37308,12 +38171,46 @@ app.get('/api/my-followup-tasks', async (c) => {
   }
 })
 
+// Allows roles 4/5/6 to archive a follow-up they're assigned to.
+app.patch('/api/my-followup-tasks/:id/archive', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const task = await c.env.DB.prepare(`
+      SELECT t.id, t.followup_id, t.tenant_id, t.assigned_user_id
+      FROM company_contact_followup_tasks t
+      WHERE t.id = ? AND t.tenant_id = ? AND t.assigned_user_id = ?
+      LIMIT 1
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number; followup_id: number; tenant_id: number; assigned_user_id: number }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found or not assigned to you' }, 404)
+
+    const payload = await c.req.json().catch(() => ({}))
+    const reason = payload?.reason ? String(payload.reason).trim().slice(0, 500) : null
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followups SET is_archived = 1, archive_reason = ? WHERE id = ? AND tenant_id = ?
+    `).bind(reason, task.followup_id, userInfo.tenantId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 app.patch('/api/my-followup-tasks/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('id'), 10)
@@ -37398,8 +38295,7 @@ app.get('/api/my-followup-tasks/:id/notes', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const taskId = parseInt(c.req.param('id'), 10)
@@ -37432,8 +38328,7 @@ app.get('/api/my-tenant-followup-staff', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const staff = await listFollowupAssignableStaff(c.env.DB, userInfo.tenantId)
@@ -37450,8 +38345,7 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const taskId = parseInt(c.req.param('taskId'), 10)
@@ -37537,8 +38431,7 @@ app.get('/api/my-followup-task-passes/incoming', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: true, data: [] })
 
     const { results } = await c.env.DB.prepare(`
@@ -37567,8 +38460,7 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
     if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const rid = normalizeRoleId(userInfo.roleId)
-    if (rid !== 4 && rid !== 5 && rid !== 6) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
     if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
 
     const passId = parseInt(c.req.param('id'), 10)
@@ -37672,19 +38564,20 @@ app.get('/my-tasks', (c) => c.redirect('/admin/my-tasks'))
 app.get('/admin/my-tasks', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId) return c.redirect('/login')
-  const rid = normalizeRoleId(userInfo.roleId)
-  if (rid !== 4 && rid !== 5) return c.redirect('/admin/panel')
-  if (!userInfo.tenantId) {
-    return c.html('<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>خطأ</title></head><body class="p-6"><p>لم يُعرّف حسابك على شركة.</p><a href="/admin/panel">العودة</a></body></html>', 400 as any)
-  }
+  if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.redirect('/admin/panel')
 
+  const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
+  const tasksRoleId = normalizeRoleId(userInfo.roleId)
+  const tasksPageTitle = (tasksRoleId === 4 || tasksRoleId === 5 || tasksRoleId === 6) ? 'الإعلانات' : 'مهامي'
+
+  // Inject auth header helper so API calls work even if the auth cookie is missing (localStorage token only).
   return c.html(`
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>الإعلانات</title>
+      <title>${tasksPageTitle}</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
@@ -37693,16 +38586,21 @@ app.get('/admin/my-tasks', async (c) => {
       <div class="max-w-5xl mx-auto p-6">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>الإعلانات</h1>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>${tasksPageTitle}</h1>
             <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
           </div>
-          <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
-            <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
-          </a>
+          <div class="flex gap-2 flex-wrap">
+            <a href="/admin/my-archived-tasks" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-archive ml-2"></i>المؤرشفة
+            </a>
+            <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+            </a>
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-2 mb-4 border-b border-gray-200 pb-3">
-          <button type="button" data-page-tab="tasks" id="tabTasks" class="page-tab px-4 py-2 rounded-lg text-sm font-medium border bg-indigo-600 text-white border-indigo-600">مهامي</button>
+          <button type="button" data-page-tab="tasks" id="tabTasks" class="page-tab px-4 py-2 rounded-lg text-sm font-medium border bg-indigo-600 text-white border-indigo-600">${tasksPageTitle}</button>
           <button type="button" data-page-tab="passes" id="tabPasses" class="page-tab hidden px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">
             <i class="fas fa-share ml-1 text-violet-600"></i>التمريرات الواردة
             <span id="passesBadge" class="mr-1 inline-flex min-w-[1.25rem] justify-center rounded-full bg-violet-600 px-1.5 py-0.5 text-xs text-white hidden">0</span>
@@ -37766,6 +38664,13 @@ app.get('/admin/my-tasks', async (c) => {
       </div>
 
       <script>
+        (function setupAuth() {
+          var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+          if (token && window.axios) {
+            axios.defaults.headers.common['Authorization'] = 'Bearer ' + token;
+          }
+        })();
+
         let activeFilter = 'all';
         let activeSort = 'newest';
         let activePageTab = 'tasks';
@@ -37780,6 +38685,53 @@ app.get('/admin/my-tasks', async (c) => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
+        }
+
+        function normalizePhoneDigits(phoneValue) {
+          const raw = String(phoneValue || '').trim();
+          const westernDigits = raw
+            .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+            .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+          return westernDigits.replace(/[^\\d]/g, '');
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+          let digits = normalizePhoneDigits(phoneValue);
+          if (!digits) return '';
+          if (digits.startsWith('00966')) digits = digits.slice(2);
+          if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+          if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+          if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+          return '';
+        }
+
+        ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+
+        function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
+          const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+          if (!normalizedPhone) {
+            alert('لا يوجد رقم واتساب صالح لهذا العميل');
+            return;
+          }
+          let url = 'https://wa.me/' + normalizedPhone;
+          const msg = applyWaGreetingTemplate(customerName || '');
+          if (msg) url += '?text=' + encodeURIComponent(msg);
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function whatsappBtnHtml(phone, name) {
+          return '<button type="button" class="wa-btn inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors shrink-0" data-wa-phone="' +
+            escapeHtml(phone || '') + '" data-wa-name="' + escapeHtml(name || '') +
+            '" title="فتح واتساب"><i class="fab fa-whatsapp"></i><span>واتساب</span></button>';
+        }
+
+        function bindWhatsAppButtons(root) {
+          if (!root) return;
+          root.querySelectorAll('.wa-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              openCustomerWhatsApp(btn.getAttribute('data-wa-phone'), '', btn.getAttribute('data-wa-name'));
+            });
+          });
         }
 
         const CONTACT_COMPANY_LINK_SOURCE_LABEL = 'رابط الشركة';
@@ -38028,13 +38980,16 @@ app.get('/admin/my-tasks', async (c) => {
                   (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
               }
             }
+            var archiveBtn = '<button type="button" data-archive="' + task.id + '" class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-archive ml-1"></i>أرشفة</button>';
             const actionBtn = done
               ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
                 enrollCustomerBtn +
-                '<button type="button" data-reopen="' + task.id + '" class="text-sm text-indigo-700 hover:underline font-medium py-2 sm:py-0">إعادة إلى قيد التنفيذ</button></div>'
+                '<button type="button" data-reopen="' + task.id + '" class="text-sm text-indigo-700 hover:underline font-medium py-2 sm:py-0">إعادة إلى قيد التنفيذ</button>' +
+                archiveBtn + '</div>'
               : '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
                 enrollCustomerBtn +
-                '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button></div>';
+                '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button>' +
+                archiveBtn + '</div>';
             return (
               '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">' +
                 '<div class="flex flex-wrap items-start justify-between gap-2">' +
@@ -38047,7 +39002,7 @@ app.get('/admin/my-tasks', async (c) => {
                 '</div>' +
                 '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
                   '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
-                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — ' + escapeHtml(task.customer_phone || '-') + '</div>' +
+                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
                   '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message || '') + '</span></div>' +
                   '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
                     (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
@@ -38060,6 +39015,8 @@ app.get('/admin/my-tasks', async (c) => {
               '</div>'
             );
           }).join('');
+
+          bindWhatsAppButtons(root);
 
           root.querySelectorAll('[data-complete]').forEach(function (btn) {
             btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-complete'), 'completed'); });
@@ -38094,6 +39051,28 @@ app.get('/admin/my-tasks', async (c) => {
           });
           root.querySelectorAll('[data-pass-cancel]').forEach(function (btn) {
             btn.addEventListener('click', function () { patchPass(btn.getAttribute('data-pass-cancel'), 'cancel'); });
+          });
+          root.querySelectorAll('[data-archive]').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+              var tid = btn.getAttribute('data-archive');
+              var reason = await openNoteModal({
+                title: 'أرشفة طلب المتابعة',
+                hint: 'سيتم أرشفة طلب المتابعة المرتبط بهذه المهمة. يمكنك إضافة سبب اختياري.',
+                placeholder: 'سبب الأرشفة (اختياري)...',
+                initialValue: '',
+                required: false
+              });
+              if (reason === null) return;
+              try {
+                btn.disabled = true;
+                var res = await axios.patch('/api/my-followup-tasks/' + tid + '/archive', { reason: reason || null });
+                if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذرت الأرشفة');
+                await loadTasks();
+              } catch (e) {
+                alert(e?.response?.data?.error || e?.message || 'حدث خطأ أثناء الأرشفة');
+                btn.disabled = false;
+              }
+            });
           });
           root.querySelectorAll('[data-history]').forEach(function (btn) {
             var loaded = false;
@@ -38137,7 +39116,7 @@ app.get('/admin/my-tasks', async (c) => {
                 '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
                   '<div><i class="fas fa-user ml-1 text-violet-500"></i>من: <strong>' + escapeHtml(row.from_user_name || '') + '</strong></div>' +
                   '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(row.company_name || '-') + '</div>' +
-                  '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(row.customer_name || '-') + ' — ' + escapeHtml(row.customer_phone || '-') + '</div>' +
+                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(row.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(row.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(row.customer_phone, row.customer_name) + '</div>' +
                   '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(row.customer_message || '') + '</span></div>' +
                   '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(row.scheduled_at_gregorian || '-') + '</div>' +
                   '<div class="text-gray-400">' + formatDate(row.pass_created_at) + '</div>' +
@@ -38149,6 +39128,7 @@ app.get('/admin/my-tasks', async (c) => {
                 '</div></div>'
             );
           }).join('');
+          bindWhatsAppButtons(root);
           root.querySelectorAll('[data-pass-action]').forEach(function (btn) {
             btn.addEventListener('click', function () {
               patchPass(btn.getAttribute('data-pass-id'), btn.getAttribute('data-pass-action'));
@@ -38378,6 +39358,243 @@ app.get('/admin/my-tasks', async (c) => {
   `)
 })
 
+app.get('/admin/my-archived-tasks', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.redirect('/admin/panel')
+
+  const rid = normalizeRoleId(userInfo.roleId)
+  const isAdminView = rid === 2
+  const pageTitle = 'ارشيف الإعلانات'
+  const pageDesc = isAdminView
+    ? 'جميع طلبات المتابعة المؤرشفة في الشركة'
+    : 'طلبات المتابعة المعيّنة لك والتي تمت أرشفتها'
+  const emptyMsg = isAdminView ? 'لا توجد مهام مؤرشفة في الشركة.' : 'لا توجد مهام مؤرشفة معيّنة لك.'
+  const myTasksLabel = (rid === 4 || rid === 5 || rid === 6) ? 'الإعلانات' : 'مهامي'
+  const myTasksLink = isAdminView ? '' : `
+            <a href="/admin/my-tasks" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-tasks ml-2"></i>${myTasksLabel}
+            </a>`
+  const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${pageTitle}</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-5xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-archive ml-2 text-amber-600"></i>${pageTitle}</h1>
+            <p class="text-gray-600 mt-2 text-sm">${pageDesc}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            ${myTasksLink}
+            <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+            </a>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2 mb-4">
+          <div class="relative flex-1">
+            <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+            <input type="text" id="archivedSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+          </div>
+        </div>
+        <div id="archivedListStatus" class="text-sm text-gray-600 mb-3"></div>
+        <div id="archivedCards" class="space-y-3"></div>
+      </div>
+
+      <script>
+        var IS_ADMIN_VIEW = ${isAdminView ? 'true' : 'false'};
+        var EMPTY_MSG = ${JSON.stringify(emptyMsg)};
+
+        (function setupAuth() {
+          var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+          if (token && window.axios) {
+            axios.defaults.headers.common['Authorization'] = 'Bearer ' + token;
+          }
+        })();
+
+        var allArchivedTasks = [];
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function normalizePhoneDigits(phoneValue) {
+          const raw = String(phoneValue || '').trim();
+          const westernDigits = raw
+            .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+            .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+          return westernDigits.replace(/[^\\d]/g, '');
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+          let digits = normalizePhoneDigits(phoneValue);
+          if (!digits) return '';
+          if (digits.startsWith('00966')) digits = digits.slice(2);
+          if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+          if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+          if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+          return '';
+        }
+
+        ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+
+        function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
+          const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+          if (!normalizedPhone) {
+            alert('لا يوجد رقم واتساب صالح لهذا العميل');
+            return;
+          }
+          let url = 'https://wa.me/' + normalizedPhone;
+          const msg = applyWaGreetingTemplate(customerName || '');
+          if (msg) url += '?text=' + encodeURIComponent(msg);
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function whatsappBtnHtml(phone, name) {
+          return '<button type="button" class="wa-btn inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors shrink-0" data-wa-phone="' +
+            escapeHtml(phone || '') + '" data-wa-name="' + escapeHtml(name || '') +
+            '" title="فتح واتساب"><i class="fab fa-whatsapp"></i><span>واتساب</span></button>';
+        }
+
+        function bindWhatsAppButtons(root) {
+          if (!root) return;
+          root.querySelectorAll('.wa-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              openCustomerWhatsApp(btn.getAttribute('data-wa-phone'), '', btn.getAttribute('data-wa-name'));
+            });
+          });
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA', {
+            timeZone: 'Asia/Riyadh',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function setStatus(msg, type) {
+          var el = document.getElementById('archivedListStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function renderCards(tasks) {
+          var root = document.getElementById('archivedCards');
+          if (!tasks.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">' + EMPTY_MSG + '</div>';
+            setStatus('');
+            return;
+          }
+          setStatus(tasks.length + ' مهمة مؤرشفة');
+          root.innerHTML = tasks.map(function (task) {
+            var archiveBlock = task.archive_reason
+              ? '<div class="mt-3 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">' +
+                '<i class="fas fa-archive mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(task.archive_reason) + '</span></div>'
+              : '<div class="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">' +
+                '<i class="fas fa-archive ml-1"></i>تم أرشفة هذا الطلب</div>';
+            var noteBlock = task.employee_note_text
+              ? '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                '<div class="text-xs font-medium text-gray-700 mb-1"><i class="fas fa-note-sticky ml-1 text-amber-600"></i>ملاحظة الموظف</div>' +
+                '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
+                (task.employee_note_updated_at ? '<div class="mt-1 text-xs text-gray-400">' + formatDate(task.employee_note_updated_at) + '</div>' : '') +
+                '</div>'
+              : '';
+            var assignedUserBlock = IS_ADMIN_VIEW && task.assigned_user_name
+              ? '<div><i class="fas fa-user-tie ml-1 text-indigo-400"></i>مُعيَّن لـ: ' + escapeHtml(task.assigned_user_name) + '</div>'
+              : '';
+            return (
+              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm opacity-90">' +
+                '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                  '<div class="min-w-0 flex-1">' +
+                    '<div class="text-base font-semibold text-gray-700">' + escapeHtml(task.task_title || '') + '</div>' +
+                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
+                    '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-archive ml-1"></i>مؤرشفة</span>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                  assignedUserBlock +
+                  (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+                '</div>' +
+                archiveBlock +
+                noteBlock +
+              '</div>'
+            );
+          }).join('');
+          bindWhatsAppButtons(root);
+        }
+
+        function applySearch() {
+          var q = (document.getElementById('archivedSearchInput').value || '').trim().toLowerCase();
+          if (!q) { renderCards(allArchivedTasks); return; }
+          renderCards(allArchivedTasks.filter(function (t) {
+            return (
+              String(t.task_title || '').toLowerCase().includes(q) ||
+              String(t.customer_name || '').toLowerCase().includes(q) ||
+              String(t.customer_phone || '').toLowerCase().includes(q) ||
+              (IS_ADMIN_VIEW && String(t.assigned_user_name || '').toLowerCase().includes(q))
+            );
+          }));
+        }
+
+        async function loadArchivedTasks() {
+          setStatus('جاري التحميل...');
+          document.getElementById('archivedCards').innerHTML = '';
+          try {
+            var res = await axios.get('/api/my-followup-tasks?archived=1');
+            allArchivedTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            applySearch();
+          } catch (e) {
+            setStatus('تعذر تحميل المهام المؤرشفة', 'error');
+          }
+        }
+
+        (function () {
+          var t;
+          document.getElementById('archivedSearchInput').addEventListener('input', function () {
+            clearTimeout(t);
+            t = setTimeout(applySearch, 200);
+          });
+        })();
+
+        loadArchivedTasks();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
 app.get('/api/link-stats', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -38531,6 +39748,7 @@ app.get('/api/link-stats', async (c) => {
 
       const followupRows = await c.env.DB.prepare(`
         SELECT f.id, f.customer_name, f.customer_phone, f.created_at,
+          f.is_archived, f.archive_reason, f.affiliate_path_segment,
           MAX(t.id) AS task_id,
           MAX(t.assigned_user_id) AS assigned_user_id,
           MAX(u.full_name) AS assigned_user_name,
@@ -38591,9 +39809,38 @@ app.get('/api/link-stats', async (c) => {
       }
     }
 
+    if (link === 'all-followups') {
+      const [_afResult, _afStaff] = await Promise.all([
+        c.env.DB.prepare(`
+          SELECT f.id, f.customer_name, f.customer_phone, f.created_at,
+            f.is_archived, f.archive_reason, f.affiliate_path_segment,
+            MAX(t.id) AS task_id,
+            MAX(t.assigned_user_id) AS assigned_user_id,
+            MAX(u.full_name) AS assigned_user_name,
+            MAX(t.task_title) AS task_title,
+            MAX(t.scheduled_at_gregorian) AS scheduled_at_gregorian,
+            MAX(t.scheduled_at_hijri) AS scheduled_at_hijri,
+            MAX(t.priority) AS priority,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM customers customer
+              WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+            ) THEN 1 ELSE 0 END AS is_enrolled
+          FROM company_contact_followups f
+          LEFT JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+          LEFT JOIN users u ON u.id = t.assigned_user_id
+          WHERE f.tenant_id = ?${dateClause}
+          GROUP BY f.id
+          ORDER BY f.created_at DESC LIMIT 500
+        `).bind(tenantId, ...dateParams).all().catch(() => ({ results: [] as any[] })),
+        listFollowupAssignableStaff(c.env.DB, tenantId),
+      ])
+      return c.json({ success: true, links, all_followups: true, customers: _afResult.results || [], followup_staff: _afStaff })
+    }
+
     if (link === 'all') {
       // Batched overview: avoid N× sequential D1 round-trips per affiliate link.
       // Fall back to per-link stats if the aggregate query fails (D1/SQLite quirks).
+      let overview: any[] = []
       try {
         let visitDateClause = ''
         const visitParams: any[] = [tenantId]
@@ -38660,7 +39907,7 @@ app.get('/api/link-stats', async (c) => {
           })
         }
 
-        const overview = links.map((item) => {
+        overview = links.map((item) => {
           const visits = visitsById.get(item.id) || 0
           const initiations = initiationsById.get(item.id) || 0
           const subs = subsById.get(item.id) || { submissions: 0, enrolled: 0 }
@@ -38678,14 +39925,42 @@ app.get('/api/link-stats', async (c) => {
             unassigned: Number(item.unassigned_limit_count || 0),
           }
         })
-        return c.json({ success: true, links, overview })
       } catch {
-        const overview = []
         for (const item of links) {
           overview.push(await buildLinkStats(item, false))
         }
-        return c.json({ success: true, links, overview })
       }
+      const [_allFupResult, _allStaff] = await Promise.all([
+        c.env.DB.prepare(`
+          SELECT f.id, f.customer_name, f.customer_phone, f.created_at,
+            f.is_archived, f.archive_reason, f.affiliate_path_segment,
+            MAX(t.id) AS task_id,
+            MAX(t.assigned_user_id) AS assigned_user_id,
+            MAX(u.full_name) AS assigned_user_name,
+            MAX(t.task_title) AS task_title,
+            MAX(t.scheduled_at_gregorian) AS scheduled_at_gregorian,
+            MAX(t.scheduled_at_hijri) AS scheduled_at_hijri,
+            MAX(t.priority) AS priority,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM customers customer
+              WHERE customer.tenant_id = f.tenant_id AND customer.phone = f.customer_phone
+            ) THEN 1 ELSE 0 END AS is_enrolled
+          FROM company_contact_followups f
+          LEFT JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+          LEFT JOIN users u ON u.id = t.assigned_user_id
+          WHERE f.tenant_id = ?${dateClause}
+            AND (
+              TRIM(COALESCE(f.affiliate_path_segment, '')) = ''
+              OR f.affiliate_path_segment IN (
+                SELECT path_segment FROM tenant_contact_affiliate_links WHERE tenant_id = ?
+              )
+            )
+          GROUP BY f.id
+          ORDER BY f.created_at DESC LIMIT 500
+        `).bind(tenantId, ...dateParams, tenantId).all().catch(() => ({ results: [] as any[] })),
+        listFollowupAssignableStaff(c.env.DB, tenantId),
+      ])
+      return c.json({ success: true, links, overview, customers: _allFupResult.results || [], followup_staff: _allStaff })
     }
     const linkId = link === 'company' ? 0 : parseInt(link, 10)
     const target = links.find((item) => item.id === linkId)
@@ -38701,6 +39976,7 @@ app.get('/admin/link-stats', async (c) => {
   if (!userInfo.userId) return c.redirect('/login')
   if (userInfo.roleId !== 1 && userInfo.roleId !== 2) return c.redirect('/admin/panel')
   const isSuper = userInfo.roleId === 1
+  const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
   return c.html(`<!doctype html>
   <html lang="ar" dir="rtl"><head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -38730,7 +40006,7 @@ app.get('/admin/link-stats', async (c) => {
     <main class="max-w-7xl mx-auto px-4 sm:px-6 py-7">
       <div class="bg-white border border-slate-200 rounded-2xl p-4 metric-glow flex flex-col md:flex-row gap-3 md:items-center">
         <div class="${isSuper ? '' : 'hidden'} flex-1"><label class="text-xs font-bold text-slate-500">الشركة</label><select id="tenant" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"></select></div>
-        <div class="flex-[2]"><label class="text-xs font-bold text-slate-500">الرابط</label><select id="link" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"><option value="all">كل الروابط</option></select></div>
+        <div class="flex-[2]"><label class="text-xs font-bold text-slate-500">الرابط</label><select id="link" class="mt-1 w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5"><option value="all-followups">كل المتابعات</option><option value="all">كل الروابط</option></select></div>
         <div class="pt-5"><button id="share" class="w-full bg-slate-100 hover:bg-slate-200 px-4 py-2.5 rounded-xl text-sm font-bold"><i class="fas fa-link ml-1"></i>نسخ الرابط</button></div>
       </div>
       ${_linkStatsFilterBar('#0f766e')}
@@ -38752,28 +40028,63 @@ app.get('/admin/link-stats', async (c) => {
             </div>
             <div id="fieldFills" class="p-5 space-y-4"></div>
           </section>
-          <div class="grid lg:grid-cols-5 gap-5 mt-6">
-            <section class="lg:col-span-2 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">توزيع الفريق</h2><p class="text-xs text-slate-500 mt-1">مهام المتابعة لكل مستخدم</p></div><div id="users" class="divide-y divide-slate-100"></div></section>
-            <section class="lg:col-span-3 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة الطلبات</h2><p class="text-xs text-slate-500 mt-1">طلبات الرابط خلال الفترة المحددة</p></div><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div><div class="px-5 pt-4 flex gap-2"><button data-tab="assigned" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">معيّن <span id="assignedCount"></span></button><button data-tab="unassigned" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير معيّن <span id="unassignedCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div></section>
-          </div>
+          <section class="mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">توزيع الفريق</h2><p class="text-xs text-slate-500 mt-1">مهام المتابعة لكل مستخدم</p></div><div id="users" class="divide-y divide-slate-100"></div></section>
         </section>
         <section id="overview" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b"><h2 class="font-black">مقارنة أداء الروابط</h2><p class="text-xs text-slate-500 mt-1">اختر أي صف للانتقال إلى تفاصيل الرابط.</p></div><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50 text-slate-500"><tr><th class="p-4 text-right">الرابط</th><th class="p-4">الزيارات</th><th class="p-4">بدء التعبئة</th><th class="p-4">الطلبات</th><th class="p-4">المسجّلون</th><th class="p-4">التحويل</th><th class="p-4">غير معيّن</th><th></th></tr></thead><tbody id="overviewRows"></tbody></table></div></section>
+        <section id="ordersSection" class="hidden mt-6 bg-white border border-slate-200 rounded-2xl overflow-hidden metric-glow"><div class="p-5 border-b flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"><div><h2 class="font-black">حالة الطلبات</h2><p class="text-xs text-slate-500 mt-1">الطلبات خلال الفترة المحددة</p></div><div class="flex flex-col sm:flex-row gap-2 sm:items-center"><select id="employeeFilter" class="rounded-xl border-slate-200 px-3 py-2 text-sm bg-white min-w-[10rem]"><option value="all">الموظف: الكل</option></select><input id="search" placeholder="بحث بالاسم أو الجوال..." class="rounded-xl border-slate-200 px-3 py-2 text-sm"></div></div><div class="px-5 pt-4 flex flex-wrap gap-2"><button data-tab="assigned" class="customer-tab tab-active px-3 py-1.5 border rounded-lg text-sm">معيّن <span id="assignedCount"></span></button><button data-tab="unassigned" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">غير معيّن <span id="unassignedCount"></span></button><button data-tab="archived" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">أرشيف <span id="archivedCount"></span></button><button data-tab="converted" class="customer-tab px-3 py-1.5 border rounded-lg text-sm">محوّل <span id="convertedCount"></span></button></div><div class="overflow-x-auto p-5"><table class="w-full text-sm"><thead class="text-xs text-slate-400 border-b"><tr><th class="text-right pb-3">العميل</th><th class="text-right pb-3">الجوال</th><th id="sourceColHead" class="hidden text-right pb-3">المصدر</th><th class="text-right pb-3">الموظف المسؤول</th><th class="text-right pb-3">التاريخ</th></tr></thead><tbody id="customers"></tbody></table></div><div id="customersPager"></div></section>
       </div>
     </main>
     <script>
       ${_linkStatsDateFilterJs}
-      const IS_SUPER=${isSuper ? 'true' : 'false'}; let chart, data, customerTab='assigned';
+      const IS_SUPER=${isSuper ? 'true' : 'false'}; let chart, data, customerTab='assigned', customerPage=1, CUST_PAGE_SIZE=25;
       const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+      function normalizePhoneDigits(phoneValue){const raw=String(phoneValue||'').trim();const westernDigits=raw.replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632)).replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776));return westernDigits.replace(/[^\\d]/g,'')}
+      function toSaudiWaNumber(phoneValue){let digits=normalizePhoneDigits(phoneValue);if(!digits)return'';if(digits.startsWith('00966'))digits=digits.slice(2);if(digits.startsWith('966'))return/^9665\\d{8}$/.test(digits)?digits:'';if(digits.startsWith('05')&&digits.length===10)digits=digits.slice(1);if(/^5\\d{8}$/.test(digits))return'966'+digits;return''}
+      ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+      function openCustomerWhatsApp(primaryPhone,fallbackPhone,customerName){const normalizedPhone=toSaudiWaNumber(primaryPhone)||toSaudiWaNumber(fallbackPhone);if(!normalizedPhone){alert('لا يوجد رقم واتساب صالح لهذا العميل');return}let url='https://wa.me/'+normalizedPhone;const msg=applyWaGreetingTemplate(customerName||'');if(msg)url+='?text='+encodeURIComponent(msg);window.open(url,'_blank','noopener,noreferrer')}
+      function bindWhatsAppButtons(root){if(!root)return;root.querySelectorAll('.wa-btn').forEach(btn=>btn.addEventListener('click',()=>openCustomerWhatsApp(btn.getAttribute('data-wa-phone'),'',btn.getAttribute('data-wa-name'))))}
       function kpi(label,value,icon,color,sub=''){return '<div class="stat-card border border-slate-200 rounded-2xl p-4 metric-glow"><div class="flex justify-between"><span class="w-10 h-10 rounded-xl flex items-center justify-center '+color+'"><i class="fas '+icon+'"></i></span><span class="text-xs text-slate-400">'+sub+'</span></div><div class="mt-5 text-2xl font-black">'+value+'</div><div class="text-xs font-bold text-slate-500 mt-1">'+label+'</div></div>'}
-      function renderCustomers(){
-        if(!data?.stats)return;
+      function getFollowupStaff(){return data.stats?(data.stats.followup_staff||[]):(data.followup_staff||[])}
+      function populateEmployeeFilter(){
+        const el=$('employeeFilter');if(!el)return;
+        const prev=el.value||'all';
+        const staff=getFollowupStaff();
+        el.innerHTML='<option value="all">الموظف: الكل</option>'+staff.map(u=>'<option value="'+u.id+'">'+esc(u.full_name)+(Number(u.role_id)===6?' (مزدوج)':Number(u.role_id)===5?' (وكيل)':'')+'</option>').join('');
+        el.value=(prev!=='all'&&staff.some(u=>String(u.id)===String(prev)))?prev:'all';
+      }
+      function renderCustomers(resetPage){
+        if(resetPage!==false) customerPage=1;
+        let allCust=data.stats?data.stats.customers:(data.customers||[]);
+        const staff=getFollowupStaff();
+        const empId=($('employeeFilter')&&$('employeeFilter').value)||'all';
+        if(empId!=='all') allCust=allCust.filter(x=>Number(x.assigned_user_id)===Number(empId));
+        $('assignedCount').textContent='('+allCust.filter(x=>!x.is_archived&&x.assigned_user_id).length+')';
+        $('unassignedCount').textContent='('+allCust.filter(x=>!x.is_archived&&!x.assigned_user_id).length+')';
+        $('archivedCount').textContent='('+allCust.filter(x=>x.is_archived).length+')';
+        $('convertedCount').textContent='('+allCust.filter(x=>x.is_enrolled&&!x.is_archived).length+')';
+        const isAllLinks=!data.stats;
+        const readOnly=customerTab==='archived'||customerTab==='converted';
         const term=($('search').value||'').toLowerCase();
-        const rows=data.stats.customers.filter(x=>(customerTab==='assigned')===Boolean(x.assigned_user_id)).filter(x=>(x.customer_name+' '+x.customer_phone).toLowerCase().includes(term));
-        const staff=data.stats.followup_staff||[];
+        let rows;
+        if(customerTab==='archived')rows=allCust.filter(x=>x.is_archived);
+        else if(customerTab==='converted')rows=allCust.filter(x=>x.is_enrolled&&!x.is_archived);
+        else if(customerTab==='assigned')rows=allCust.filter(x=>!x.is_archived&&x.assigned_user_id);
+        else rows=allCust.filter(x=>!x.is_archived&&!x.assigned_user_id);
+        rows=rows.filter(x=>(x.customer_name+' '+x.customer_phone).toLowerCase().includes(term));
+        const totalRows=rows.length;const totalPages=Math.max(1,Math.ceil(totalRows/CUST_PAGE_SIZE));if(customerPage>totalPages)customerPage=totalPages;
+        rows=rows.slice((customerPage-1)*CUST_PAGE_SIZE,customerPage*CUST_PAGE_SIZE);
+        const colCount=isAllLinks?5:4;
+        const linkMap={};
+        if(isAllLinks)(data.links||[]).forEach(l=>{linkMap[l.id===0?'':String(l.path_segment||'').trim()]=l.label});
+        function getLinkLabel(seg){const k=String(seg||'').trim();return linkMap[k]||(k?k:'الرابط الرئيسي')}
         function selectOptions(items,current){return '<option value="">غير معيّن</option>'+items.map(u=>'<option value="'+u.id+'" '+(Number(current)===Number(u.id)?'selected':'')+'>'+esc(u.full_name)+(Number(u.role_id)===6?' (مزدوج)':Number(u.role_id)===5?' (وكيل)':'')+'</option>').join('')}
         $('customers').innerHTML=rows.length?rows.map(x=>{
-          return '<tr class="border-b last:border-0 '+(x.assigned_user_id?'':'bg-amber-50/50')+'"><td class="py-3 font-bold">'+esc(x.customer_name)+(x.is_enrolled?' <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">عميل</span>':'')+'</td><td class="py-3 text-right" dir="rtl">'+esc(x.customer_phone)+'</td><td class="py-3"><select data-followup-assignment data-followup-id="'+x.id+'" data-task-title="'+esc(x.task_title||'')+'" data-task-schedule="'+esc(x.scheduled_at_gregorian||'')+'" data-task-hijri="'+esc(x.scheduled_at_hijri||'')+'" data-task-priority="'+esc(x.priority||'regular')+'" class="min-w-[9rem] rounded-lg border-slate-200 text-xs px-2 py-1.5 bg-white">'+selectOptions(staff,x.assigned_user_id)+'</select></td><td class="py-3 text-slate-400">'+new Date(x.created_at).toLocaleDateString('ar-SA')+'</td></tr>'
-        }).join(''):'<tr><td colspan="4" class="py-10 text-center text-slate-400">لا توجد نتائج</td></tr>';
+          const srcCell=isAllLinks?'<td class="py-3 text-xs text-slate-500">'+esc(getLinkLabel(x.affiliate_path_segment))+'</td>':'';
+          const assignCell=readOnly?'<td class="py-3 text-slate-500">'+esc(x.assigned_user_name||'—')+'</td>':'<td class="py-3"><select data-followup-assignment data-followup-id="'+x.id+'" data-task-title="'+esc(x.task_title||'')+'" data-task-schedule="'+esc(x.scheduled_at_gregorian||'')+'" data-task-hijri="'+esc(x.scheduled_at_hijri||'')+'" data-task-priority="'+esc(x.priority||'regular')+'" class="min-w-[9rem] rounded-lg border-slate-200 text-xs px-2 py-1.5 bg-white">'+selectOptions(staff,x.assigned_user_id)+'</select></td>';
+          return '<tr class="border-b last:border-0 '+(x.is_archived?'bg-slate-50 opacity-75':x.assigned_user_id?'':'bg-amber-50/50')+'"><td class="py-3 font-bold">'+esc(x.customer_name)+(x.is_enrolled?' <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">عميل</span>':'')+(x.is_archived?' <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">أرشيف</span>':'')+'</td><td class="py-3"><div class="inline-flex items-center gap-2 justify-end w-full"><span dir="ltr">'+esc(x.customer_phone||'-')+'</span><button type="button" class="wa-btn inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors shrink-0" data-wa-phone="'+esc(x.customer_phone||'')+'" data-wa-name="'+esc(x.customer_name||'')+'" title="فتح واتساب"><i class="fab fa-whatsapp"></i><span>واتساب</span></button></div></td>'+srcCell+assignCell+'<td class="py-3 text-slate-400">'+new Date(x.created_at).toLocaleDateString('ar-SA')+'</td></tr>'
+        }).join(''):'<tr><td colspan="'+colCount+'" class="py-10 text-center text-slate-400">لا توجد نتائج</td></tr>';
+        bindWhatsAppButtons($('customers'));
+        $('customersPager').innerHTML=totalRows>0?'<div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 text-sm text-slate-500"><div class="flex items-center gap-2"><span class="text-xs">عدد الصفوف:</span><select onchange="CUST_PAGE_SIZE=+this.value;customerPage=1;renderCustomers(false)" class="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white"><option value="10" '+(CUST_PAGE_SIZE===10?'selected':'')+'>10</option><option value="25" '+(CUST_PAGE_SIZE===25?'selected':'')+'>25</option><option value="50" '+(CUST_PAGE_SIZE===50?'selected':'')+'>50</option><option value="100" '+(CUST_PAGE_SIZE===100?'selected':'')+'>100</option></select></div><span>صفحة '+customerPage+' من '+totalPages+' · '+totalRows+' نتيجة</span><div class="flex gap-2"><button onclick="customerPage--;renderCustomers(false)" '+(customerPage<=1?'disabled':'')+' class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">السابق</button><button onclick="customerPage++;renderCustomers(false)" '+(customerPage>=totalPages?'disabled':'')+' class="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">التالي</button></div></div>':'';
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>el.onchange=async function(){
           const previous=el.dataset.previousValue||'';
           el.disabled=true;
@@ -38787,12 +40098,13 @@ app.get('/admin/link-stats', async (c) => {
             });
             if(!r.data.success)throw new Error(r.data.error);
             el.dataset.previousValue=el.value;
-            const row=data.stats.customers.find(c=>Number(c.id)===Number(el.dataset.followupId));
+            const row=allCust.find(c=>Number(c.id)===Number(el.dataset.followupId));
             if(row){
               row.assigned_user_id=el.value?Number(el.value):null;
               const staffUser=staff.find(u=>Number(u.id)===Number(el.value));
               row.assigned_user_name=staffUser?staffUser.full_name:null;
             }
+            renderCustomers(false);
           }catch(e){
             el.value=previous;
             alert((e.response&&e.response.data&&e.response.data.error)||e.message||'تعذر حفظ التعيين');
@@ -38800,27 +40112,27 @@ app.get('/admin/link-stats', async (c) => {
         });
         document.querySelectorAll('[data-followup-assignment]').forEach(el=>{el.dataset.previousValue=el.value});
       }
-      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');$('kpis').innerHTML='';$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+(r.initiations||0)+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',s.initiations||0,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['بدء التعبئة',s.initiations||0],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');const abandonTotal=Number(s.abandons||0);$('abandonTotal').textContent=abandonTotal?('مغادرات مسجّلة: '+abandonTotal):'';$('fieldFills').innerHTML=(abandonTotal&&s.abandon_fields&&s.abandon_fields.length)?s.abandon_fields.map(f=>{const pct=Number(f.rate||0);const count=Number(f.count||0);return '<div><div class="flex justify-between text-sm gap-3"><span class="font-bold text-slate-800">'+esc(f.label)+'</span><span class="text-slate-500 shrink-0">'+count+' · '+pct+'%</span></div><div class="h-2.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-2.5 rounded-full bg-amber-500" style="width:'+Math.max(count?4:0,Math.min(100,pct))+'%"></div></div></div>'}).join(''):'<p class="text-center text-slate-400 py-6">لا توجد مغادرات مسجّلة في هذه الفترة بعد.</p>';$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; const assigned=s.customers.filter(x=>x.assigned_user_id).length;$('assignedCount').textContent='('+assigned+')';$('unassignedCount').textContent='('+ (s.customers.length-assigned)+')';renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.initiation_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),init=new Map((s.initiation_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'بدء التعبئة',data:dates.map(d=>init.get(d)||0),borderColor:'#d97706',backgroundColor:'#d97706',tension:.35,pointRadius:3},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
+      function render(){ $('loading').classList.add('hidden');$('content').classList.remove('hidden');const s=data.stats;if(data.all_followups){$('detail').classList.add('hidden');$('overview').classList.add('hidden');const _fc=data.customers||[];const _ftotS=_fc.length;const _ftotE=_fc.filter(x=>x.is_enrolled).length;const _ftotNE=_ftotS-_ftotE;const _ftotConv=_ftotS?Math.round((_ftotE/_ftotS)*1000)/10:0;$('kpis').innerHTML=kpi('إجمالي المتابعات',_ftotS,'fa-inbox','bg-violet-50 text-violet-600','جميع المصادر')+kpi('بانتظار التسجيل',_ftotNE,'fa-user-plus',_ftotNE?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',_ftotE,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',_ftotConv+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل');$('ordersSection').classList.remove('hidden');$('sourceColHead').classList.remove('hidden');populateEmployeeFilter();renderCustomers();return}if(!s){$('detail').classList.add('hidden');$('overview').classList.remove('hidden');const _ov=data.overview||[];const _totV=_ov.reduce((a,r)=>a+(r.visits||0),0);const _totI=_ov.reduce((a,r)=>a+(r.initiations||0),0);const _totS=_ov.reduce((a,r)=>a+(r.submissions||0),0);const _totE=_ov.reduce((a,r)=>a+(r.enrolled||0),0);const _totNE=_totS-_totE;const _totU=_ov.reduce((a,r)=>a+(r.unassigned||0),0);const _totConv=_totS?Math.round((_totE/_totS)*1000)/10:0;$('kpis').innerHTML=kpi('الزيارات',_totV,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',_totI,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',_totS,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',_totNE,'fa-user-plus',_totNE?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',_totE,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',_totConv+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',_totU,'fa-user-clock',_totU?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('overviewRows').innerHTML=data.overview.map(r=>'<tr class="border-b hover:bg-teal-50 cursor-pointer" data-link="'+r.id+'"><td class="p-4 font-bold">'+esc(r.label)+'</td><td class="p-4 text-center">'+r.visits+'</td><td class="p-4 text-center">'+(r.initiations||0)+'</td><td class="p-4 text-center">'+r.submissions+'</td><td class="p-4 text-center">'+r.enrolled+'</td><td class="p-4 text-center"><span class="bg-teal-50 text-teal-700 font-bold px-2 py-1 rounded">'+r.conversion+'%</span></td><td class="p-4 text-center">'+r.unassigned+'</td><td><i class="fas fa-chevron-left text-slate-400"></i></td></tr>').join('');document.querySelectorAll('[data-link]').forEach(r=>r.onclick=()=>{$('link').value=r.dataset.link;load()});$('ordersSection').classList.remove('hidden');$('sourceColHead').classList.remove('hidden');populateEmployeeFilter();renderCustomers();return} $('overview').classList.add('hidden');$('detail').classList.remove('hidden');$('kpis').innerHTML=kpi('الزيارات',s.visits,'fa-eye','bg-blue-50 text-blue-600','فتح الصفحة')+kpi('بدء التعبئة',s.initiations||0,'fa-keyboard','bg-amber-50 text-amber-600','كتابة في حقل')+kpi('الطلبات',s.submissions,'fa-inbox','bg-violet-50 text-violet-600','إرسال النموذج')+kpi('بانتظار التسجيل',s.not_enrolled??(s.submissions-s.enrolled),'fa-user-plus',(s.not_enrolled??0)?'bg-amber-50 text-amber-600':'bg-slate-100 text-slate-500','لم يُسجّل كعميل')+kpi('المسجّلون',s.enrolled,'fa-user-check','bg-emerald-50 text-emerald-600','في جدول العملاء')+kpi('التحويل',s.conversion+'%','fa-chart-line','bg-teal-50 text-teal-600','طلب ← عميل')+kpi('بدون تعيين',s.unassigned,'fa-user-clock',s.unassigned?'bg-rose-50 text-rose-600':'bg-slate-100 text-slate-500','حد مكتمل');$('linkBadge').textContent=s.label;$('funnel').innerHTML=[['الزيارات',s.visits],['بدء التعبئة',s.initiations||0],['الطلبات',s.submissions],['المسجّلون',s.enrolled]].map((x,i)=>'<div><div class="flex justify-between text-sm"><span>'+x[0]+'</span><b>'+x[1]+'</b></div><div class="h-2 bg-white/20 rounded-full mt-2"><div class="h-2 bg-white rounded-full" style="width:'+Math.max(5,Math.min(100,s.visits?x[1]/s.visits*100:0))+'%"></div></div></div>').join('');const abandonTotal=Number(s.abandons||0);$('abandonTotal').textContent=abandonTotal?('مغادرات مسجّلة: '+abandonTotal):'';$('fieldFills').innerHTML=(abandonTotal&&s.abandon_fields&&s.abandon_fields.length)?s.abandon_fields.map(f=>{const pct=Number(f.rate||0);const count=Number(f.count||0);return '<div><div class="flex justify-between text-sm gap-3"><span class="font-bold text-slate-800">'+esc(f.label)+'</span><span class="text-slate-500 shrink-0">'+count+' · '+pct+'%</span></div><div class="h-2.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-2.5 rounded-full bg-amber-500" style="width:'+Math.max(count?4:0,Math.min(100,pct))+'%"></div></div></div>'}).join(''):'<p class="text-center text-slate-400 py-6">لا توجد مغادرات مسجّلة في هذه الفترة بعد.</p>';$('users').innerHTML=s.users.length?s.users.map(u=>'<div class="p-4 flex items-center gap-3"><div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-black">'+esc((u.full_name||'?')[0])+'</div><div class="flex-1 min-w-0"><div class="font-bold truncate">'+esc(u.full_name)+'</div><div class="text-xs text-slate-500">'+u.tasks_received+' مهمة من الرابط · '+(u.open_tasks||0)+' مهمة مفتوحة</div></div><div class="text-left"><div class="font-black text-teal-700">'+u.enrolled_count+'</div><div class="text-xs text-slate-400">مسجّل</div></div></div>').join(''):'<p class="p-10 text-center text-slate-400">لا توجد مهام معيّنة بعد.</p>'; $('ordersSection').classList.remove('hidden');$('sourceColHead').classList.add('hidden');populateEmployeeFilter();renderCustomers();const dates=[...new Set([...(s.visit_days||[]).map(x=>x.date),...(s.initiation_days||[]).map(x=>x.date),...(s.submission_days||[]).map(x=>x.date)])].sort();const visit=new Map((s.visit_days||[]).map(x=>[x.date,x.count])),init=new Map((s.initiation_days||[]).map(x=>[x.date,x.count])),sub=new Map((s.submission_days||[]).map(x=>[x.date,x.count]));if(chart)chart.destroy();chart=new Chart($('trend'),{data:{labels:dates,datasets:[{type:'bar',label:'الزيارات',data:dates.map(d=>visit.get(d)||0),backgroundColor:'rgba(20,184,166,.25)',borderRadius:8},{type:'line',label:'بدء التعبئة',data:dates.map(d=>init.get(d)||0),borderColor:'#d97706',backgroundColor:'#d97706',tension:.35,pointRadius:3},{type:'line',label:'الطلبات',data:dates.map(d=>sub.get(d)||0),borderColor:'#7c3aed',backgroundColor:'#7c3aed',tension:.35,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}})}
       async function load(){
         const tenant=IS_SUPER?$('tenant').value:'';
         if(IS_SUPER&&!tenant)return;
         $('loading').classList.remove('hidden');$('content').classList.add('hidden');
         $('loading').innerHTML='<i class="fas fa-circle-notch fa-spin text-3xl text-teal-500"></i><p class="mt-3">جاري تجهيز الصورة الكاملة...</p>';
-        const q=new URLSearchParams({link:$('link').value||'all',...dateRange()});if(tenant)q.set('tenant_id',tenant);
+        const q=new URLSearchParams({link:$('link').value||'all-followups',...dateRange()});if(tenant)q.set('tenant_id',tenant);
         try {
           const res=await axios.get('/api/link-stats?'+q);
           data=res.data;
           if(!data.success)throw new Error(data.error||'تعذر تحميل الإحصائيات');
-          const rawPrev=$('link').value||new URLSearchParams(location.search).get('link')||'all';
+          const rawPrev=$('link').value||new URLSearchParams(location.search).get('link')||'all-followups';
           const prev=rawPrev==='0'?'company':rawPrev;
-          $('link').innerHTML='<option value="all">كل الروابط</option>'+data.links.map(x=>'<option value="'+(x.id===0?'company':x.id)+'">'+esc(x.label)+'</option>').join('');
+          $('link').innerHTML='<option value="all-followups">كل المتابعات</option><option value="all">كل الروابط</option>'+data.links.map(x=>'<option value="'+(x.id===0?'company':x.id)+'">'+esc(x.label)+'</option>').join('');
           $('link').value=prev;
           const back=$('statsBack');
           if(back){
             const backUrl=new URL('/admin/link-stats',location.origin);
             if(tenant)backUrl.searchParams.set('tenant_id',tenant);
             Object.entries(dateRange()).forEach(([key,value])=>backUrl.searchParams.set(key,value));
-            if(prev!=='all'){back.href=backUrl.pathname+(backUrl.search||'');back.querySelector('span').textContent='كل الروابط'}
+            if(prev!=='all'&&prev!=='all-followups'){back.href=backUrl.pathname+(backUrl.search||'');back.querySelector('span').textContent='كل الروابط'}
             else {back.href='/admin/contact-affiliates';back.querySelector('span').textContent='روابط التواصل'}
           }
           render();history.replaceState(null,'','?'+q);
@@ -38839,7 +40151,7 @@ app.get('/admin/link-stats', async (c) => {
       if(requestedInitialLink&&!Array.from($('link').options).some(option=>option.value===requestedInitialLink)){
         $('link').append(new Option('',requestedInitialLink));
       }
-      if(initialStatsParams.get('link')&&initialStatsParams.get('link')!=='all'&&!history.state?.linkStatsDetail){
+      if(initialStatsParams.get('link')&&initialStatsParams.get('link')!=='all'&&initialStatsParams.get('link')!=='all-followups'&&!history.state?.linkStatsDetail){
         const selectedUrl=location.href;
         const overviewUrl=new URL(location.href);
         overviewUrl.searchParams.delete('link');
@@ -38854,7 +40166,7 @@ app.get('/admin/link-stats', async (c) => {
         const q=new URLSearchParams(location.search);q.set('link','company');
         history.pushState({linkStatsDetail:true},'', '?'+q);load();
       },true);
-      $('link').onchange=load;$('tenant').onchange=load;document.querySelectorAll('.customer-tab').forEach(b=>b.onclick=()=>{customerTab=b.dataset.tab;document.querySelectorAll('.customer-tab').forEach(x=>x.classList.toggle('tab-active',x===b));renderCustomers()});$('search').oninput=renderCustomers;$('share').onclick=async()=>{await navigator.clipboard.writeText(location.href);$('share').innerHTML='<i class="fas fa-check ml-1"></i>تم النسخ';setTimeout(()=>$('share').innerHTML='<i class="fas fa-link ml-1"></i>نسخ الرابط',1500)};document.addEventListener('click',function(event){const row=event.target.closest('[data-link]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();$('link').value=row.dataset.link;const q=new URLSearchParams(location.search);q.set('link',row.dataset.link);history.pushState(null,'','?'+q);load()},true);window.addEventListener('popstate',function(){const q=new URLSearchParams(location.search);$('link').value=q.get('link')||'all';if(IS_SUPER&&q.get('tenant_id'))$('tenant').value=q.get('tenant_id');initDateRangeFromUrl();load()});initDatePicker();initDateRangeFromUrl();(async()=>{const link=new URLSearchParams(location.search).get('link');if(link)$('link').value=link;if(IS_SUPER){const r=await axios.get('/api/tenants');$('tenant').innerHTML='<option value="">اختر الشركة</option>'+(r.data.data||[]).map(t=>'<option value="'+t.id+'">'+esc(t.company_name||t.slug)+'</option>').join('');const tenantId=new URLSearchParams(location.search).get('tenant_id');if(tenantId){$('tenant').value=tenantId;await load()}}else await load()})();
+      $('link').onchange=load;$('tenant').onchange=load;document.querySelectorAll('.customer-tab').forEach(b=>b.onclick=()=>{customerTab=b.dataset.tab;document.querySelectorAll('.customer-tab').forEach(x=>x.classList.toggle('tab-active',x===b));renderCustomers()});$('search').oninput=()=>renderCustomers();$('employeeFilter').onchange=()=>renderCustomers();$('share').onclick=async()=>{await navigator.clipboard.writeText(location.href);$('share').innerHTML='<i class="fas fa-check ml-1"></i>تم النسخ';setTimeout(()=>$('share').innerHTML='<i class="fas fa-link ml-1"></i>نسخ الرابط',1500)};document.addEventListener('click',function(event){const row=event.target.closest('[data-link]');if(!row)return;event.preventDefault();event.stopImmediatePropagation();$('link').value=row.dataset.link;const q=new URLSearchParams(location.search);q.set('link',row.dataset.link);history.pushState(null,'','?'+q);load()},true);window.addEventListener('popstate',function(){const q=new URLSearchParams(location.search);$('link').value=q.get('link')||'all-followups';if(IS_SUPER&&q.get('tenant_id'))$('tenant').value=q.get('tenant_id');initDateRangeFromUrl();load()});initDatePicker();initDateRangeFromUrl();(async()=>{const link=new URLSearchParams(location.search).get('link');if(link)$('link').value=link;if(IS_SUPER){const r=await axios.get('/api/tenants');$('tenant').innerHTML='<option value="">اختر الشركة</option>'+(r.data.data||[]).map(t=>'<option value="'+t.id+'">'+esc(t.company_name||t.slug)+'</option>').join('');const tenantId=new URLSearchParams(location.search).get('tenant_id');if(tenantId){$('tenant').value=tenantId;await load()}}else await load()})();
     </script></body></html>`)
 })
 
@@ -40821,16 +42133,1027 @@ app.get('/admin/contact-affiliates', async (c) => {
   `)
 })
 
+app.get('/admin/follow-ups/archived', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (!canAccessMarketingModule(userInfo.roleId)) return c.redirect('/admin/panel')
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>أرشيف طلبات التواصل</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="border-b border-slate-200/90 bg-slate-50/90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-1.5">
+          <a href="/admin/follow-ups" class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline underline-offset-2 decoration-blue-400/50">← العودة لمتابعة طلبات التواصل</a>
+        </div>
+      </div>
+      <div class="bg-gradient-to-r from-gray-600 via-slate-600 to-gray-700 text-white shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div class="flex items-center gap-3">
+            <div class="bg-white/15 p-2.5 rounded-xl border border-white/20">
+              <i class="fas fa-archive text-2xl"></i>
+            </div>
+            <div>
+              <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">أرشيف طلبات التواصل</h1>
+              <p class="text-white/70 text-sm mt-0.5">الطلبات المؤرشفة - يمكن استعادتها في أي وقت</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div id="archivedCards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Unarchive Confirm Modal -->
+      <div id="unarchiveModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true">
+          <div class="px-5 py-4 border-b">
+            <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-undo ml-2 text-emerald-600"></i>تأكيد الاستعادة</h2>
+          </div>
+          <div class="p-5">
+            <p class="text-sm text-gray-600 mb-4">هل تريد استعادة هذا الطلب وإعادته إلى القائمة الرئيسية؟</p>
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-user text-gray-400 w-4 text-center"></i>
+                <span class="font-medium text-gray-700" id="unarchiveModalName">-</span>
+              </div>
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-phone text-emerald-500 w-4 text-center"></i>
+                <span class="text-gray-700" id="unarchiveModalPhone">-</span>
+              </div>
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-tag text-blue-400 w-4 text-center"></i>
+                <span class="text-gray-700" id="unarchiveModalSource">-</span>
+              </div>
+            </div>
+            <div class="mt-5 flex items-center justify-end gap-3">
+              <button id="unarchiveCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button id="unarchiveConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white">
+                <i class="fas fa-undo ml-1.5"></i>استعادة
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        let pendingUnarchiveId = null;
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA', {
+            timeZone: 'Asia/Riyadh',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
+        }
+
+        function openUnarchiveModal(btn) {
+          const card = btn.closest('[data-followup-id]');
+          pendingUnarchiveId = parseInt(card.dataset.followupId);
+          document.getElementById('unarchiveModalName').textContent = card.dataset.customerName || '-';
+          document.getElementById('unarchiveModalPhone').textContent = card.dataset.customerPhone || '-';
+          document.getElementById('unarchiveModalSource').textContent = card.dataset.sourceLabel || '-';
+          const modal = document.getElementById('unarchiveModal');
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+
+        function closeUnarchiveModal() {
+          pendingUnarchiveId = null;
+          const modal = document.getElementById('unarchiveModal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+
+        document.getElementById('unarchiveCancelBtn').addEventListener('click', closeUnarchiveModal);
+        document.getElementById('unarchiveModal').addEventListener('click', function(e) {
+          if (e.target === this) closeUnarchiveModal();
+        });
+
+        document.getElementById('unarchiveConfirmBtn').addEventListener('click', async function() {
+          if (!pendingUnarchiveId) return;
+          const btn = this;
+          btn.disabled = true;
+          try {
+            await axios.patch('/api/follow-ups/' + pendingUnarchiveId + '/archive', { restore: true });
+            closeUnarchiveModal();
+            await loadArchivedFollowUps();
+          } catch(e) {
+            alert('حدث خطأ أثناء الاستعادة');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        async function loadArchivedFollowUps() {
+          const cards = document.getElementById('archivedCards');
+          cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+          try {
+            const res = await axios.get('/api/follow-ups-archived');
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            if (!rows.length) {
+              cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات مؤرشفة حالياً.</div>';
+              return;
+            }
+            cards.innerHTML = rows.map((row) => {
+              const sourceLabel = String((row.affiliate_label || '')).trim() || (row.affiliate_path_segment ? 'أفلييت' : 'رابط الشركة');
+              return \`
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 opacity-80"
+                  data-followup-id="\${Number(row.id)}"
+                  data-customer-name="\${escapeHtml(row.customer_name || '-')}"
+                  data-customer-phone="\${escapeHtml(row.customer_phone || '-')}"
+                  data-source-label="\${escapeHtml(sourceLabel)}">
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                        <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>
+                      </div>
+                      <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                    </div>
+                    <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                  </div>
+                  <div class="space-y-2">
+                    <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
+                    <p class="text-sm text-gray-700"><i class="fas fa-tag ml-2 text-blue-600"></i>\${escapeHtml(sourceLabel)}</p>
+                    <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                    \${row.archive_reason ? '<div class="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"><i class="fas fa-sticky-note mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(row.archive_reason) + '</span></div>' : ''}
+                    <div class="pt-2">
+                      <button onclick="openUnarchiveModal(this)" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                        <i class="fas fa-undo ml-2"></i>استعادة من الأرشيف
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              \`;
+            }).join('');
+          } catch(e) {
+            cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
+          }
+        }
+
+        loadArchivedFollowUps();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
+app.get('/admin/follow-ups/import', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (!canAccessMarketingModule(userInfo.roleId)) {
+    return c.html('<html dir="rtl"><body style="font-family:sans-serif;padding:2rem;text-align:center">غير مصرح</body></html>', 403)
+  }
+  const queryTenantId = String(c.req.query('tenant_id') ?? '').trim()
+  const backHref = '/admin/follow-ups'
+  const sampleHref = '/api/follow-ups/sample-csv'
+
+  return c.html(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>استيراد متابعات</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="max-w-6xl mx-auto p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold text-gray-800">
+        <i class="fas fa-file-import text-orange-600 ml-2"></i>
+        استيراد متابعات
+      </h1>
+      <a href="${backHref}" class="text-sm text-gray-600 hover:text-gray-900">
+        <i class="fas fa-arrow-right ml-1"></i> العودة لقائمة المتابعات
+      </a>
+    </div>
+
+    <!-- Step 1: File picker -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-gray-800">١. اختر الملف</h2>
+          <p class="text-sm text-gray-500 mt-1">CSV أو Excel (.csv, .xlsx, .xls)</p>
+        </div>
+        <a href="${sampleHref}" class="text-sm text-orange-600 hover:text-orange-800">
+          <i class="fas fa-download ml-1"></i> تنزيل نموذج
+        </a>
+      </div>
+      <label for="importFile" id="dropZone" class="block border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-all">
+        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+        <p class="text-gray-700 font-bold mb-1">اسحب الملف هنا أو انقر لاختياره</p>
+        <p class="text-xs text-gray-500">العمود المطلوب: الهاتف. اختياري: الاسم، عنوان المهمة، الأولوية، موعد المهمة</p>
+        <p class="text-xs text-gray-400 mt-1">عنوان المهمة الفارغ يُستبدل بـ «متابعة العروض». الموعد الفارغ أو غير الصالح يُجدول إلى الوقت الحالي</p>
+        <p class="text-xs text-gray-400 mt-1">سيتم تخطي الأرقام الموجودة مسبقاً كعملاء أو كمتابعات</p>
+        <input type="file" id="importFile" accept=".csv,.xlsx,.xls" class="hidden">
+      </label>
+      <div id="fileInfo" class="hidden mt-3 flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm">
+        <div><i class="fas fa-file text-gray-500 ml-2"></i><span id="fileName" class="font-medium text-gray-800"></span> <span id="fileSize" class="text-gray-500 mr-2"></span></div>
+        <button type="button" onclick="clearFile()" class="text-red-500 hover:text-red-700"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+
+    <!-- Step 2: Preview + submit (revealed after parse) -->
+    <div id="previewSection" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-800">٢. معاينة البيانات (<span id="rowCount">0</span> صف)</h2>
+          <div class="flex items-center gap-3">
+            <span id="previewNote" class="text-xs text-gray-500"></span>
+            <button onclick="downloadPreviewXlsx()" id="downloadPreviewBtn" class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
+              <i class="fas fa-download"></i> تنزيل XLSX
+            </button>
+          </div>
+        </div>
+        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+          <table class="min-w-full text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-3 py-2 text-right text-gray-700">#</th>
+                <th class="px-3 py-2 text-right text-gray-700">الاسم</th>
+                <th class="px-3 py-2 text-right text-gray-700">الهاتف</th>
+                <th class="px-3 py-2 text-right text-gray-700">عنوان المهمة</th>
+                <th class="px-3 py-2 text-right text-gray-700">الأولوية</th>
+                <th class="px-3 py-2 text-right text-gray-700">موعد المهمة</th>
+                <th class="px-3 py-2 text-right text-gray-700">الموظف المكلف <span class="text-amber-500 font-normal text-xs">(معاينة)</span></th>
+              </tr>
+            </thead>
+            <tbody id="previewBody" class="divide-y divide-gray-100"></tbody>
+          </table>
+        </div>
+        <p id="previewMore" class="text-xs text-gray-500 mt-2"></p>
+        <div id="schedulePreviewNote" class="hidden mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"></div>
+      </div>
+
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <h2 class="text-lg font-bold text-gray-800 mb-4">٣. خيارات الاستيراد</h2>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">مصدر المتابعات <span class="text-red-500">*</span></label>
+          <input type="text" id="sourceLabel" placeholder="مثال: حملة يوليو" maxlength="100"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-300 focus:border-orange-400 outline-none">
+        </div>
+
+        <div id="assignPanel" class="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+          <div class="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+            <i class="fas fa-users-cog text-amber-500 text-sm"></i>
+            <span class="text-sm font-bold text-gray-700">توزيع المهام</span>
+          </div>
+          <div class="p-4 space-y-4">
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="assignMode" value="auto" id="assignModeAuto" checked class="accent-amber-500" />
+                <span class="text-sm font-medium text-gray-700">تلقائي (الافتراضي)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="assignMode" value="custom" id="assignModeCustom" class="accent-amber-500" />
+                <span class="text-sm font-medium text-gray-700">مخصص</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="assignMode" value="branch" id="assignModeBranch" class="accent-amber-500" />
+                <span class="text-sm font-medium text-gray-700">حسب الفرع</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="assignMode" value="custom_excl" id="assignModeCustomExcl" class="accent-amber-500" />
+                <span class="text-sm font-medium text-gray-700">مخصص (استثناء)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="assignMode" value="branch_excl" id="assignModeBranchExcl" class="accent-amber-500" />
+                <span class="text-sm font-medium text-gray-700">حسب الفرع (استثناء)</span>
+              </label>
+            </div>
+
+            <div id="assignBranchSection" class="hidden space-y-2">
+              <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">الفرع</label>
+              <select id="assignBranchSelect" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50">
+                <option value="">— اختر الفرع —</option>
+              </select>
+              <p id="assignBranchHelp" class="text-xs text-gray-500">سيتم توزيع مهام هذا الاستيراد تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.</p>
+            </div>
+
+            <div id="assignCustomSection" class="hidden space-y-4">
+              <div class="rounded-lg border border-gray-200 p-3 space-y-2">
+                <div id="assignRosterTitle" class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">الموظفون</div>
+                <p id="assignRosterHelp" class="text-xs text-gray-500 mb-2"></p>
+                <select id="addStaffSelect" class="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50"><option value="">+ إضافة مستخدم</option></select>
+                <div id="staffRoster" class="space-y-2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="submitRow" class="flex gap-3">
+        <button id="submitBtn" onclick="submitImport()" class="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold transition-colors">
+          <i class="fas fa-upload ml-1"></i> استيراد <span id="submitCount">0</span> متابعة
+        </button>
+        <a href="${backHref}" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">إلغاء</a>
+      </div>
+    </div>
+
+    <!-- Result panel (revealed after submit) -->
+    <div id="resultSection" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-start gap-3 mb-4">
+          <div class="shrink-0 w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+            <i class="fas fa-check text-emerald-600"></i>
+          </div>
+          <div class="flex-1">
+            <h2 class="text-lg font-bold text-gray-800">اكتمل الاستيراد</h2>
+            <p id="resultSummary" class="text-sm text-gray-600 mt-1"></p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div class="border border-gray-200 rounded-lg p-3 text-center">
+            <div class="text-xs text-gray-500 mb-1">متابعات جديدة</div>
+            <div id="stat_followups" class="text-xl font-bold text-emerald-600">0</div>
+          </div>
+          <div class="border border-gray-200 rounded-lg p-3 text-center">
+            <div class="text-xs text-gray-500 mb-1">مهام مُنشأة</div>
+            <div id="stat_tasks" class="text-xl font-bold text-indigo-600">0</div>
+          </div>
+          <div class="border border-gray-200 rounded-lg p-3 text-center">
+            <div class="text-xs text-gray-500 mb-1">مُتخطى</div>
+            <div id="stat_skipped" class="text-xl font-bold text-amber-600">0</div>
+          </div>
+          <div class="border border-gray-200 rounded-lg p-3 text-center">
+            <div class="text-xs text-gray-500 mb-1">أخطاء</div>
+            <div id="stat_errors" class="text-xl font-bold text-red-600">0</div>
+          </div>
+        </div>
+
+        <details id="skippedBlock" class="hidden mb-3 border border-amber-200 rounded-lg bg-amber-50/50">
+          <summary class="cursor-pointer px-4 py-3 flex items-center justify-between text-sm font-medium text-amber-900">
+            <span><i class="fas fa-forward ml-2"></i> صفوف مُتخطاة (<span id="skippedCount">0</span>)</span>
+            <i class="fas fa-chevron-down text-xs"></i>
+          </summary>
+          <div class="max-h-72 overflow-y-auto border-t border-amber-200">
+            <table class="min-w-full text-sm">
+              <thead class="bg-amber-100 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2 text-right text-amber-900">#</th>
+                  <th class="px-3 py-2 text-right text-amber-900">الهاتف</th>
+                  <th class="px-3 py-2 text-right text-amber-900">السبب</th>
+                </tr>
+              </thead>
+              <tbody id="skippedBody" class="divide-y divide-amber-100"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <details id="errorsBlock" class="hidden mb-4 border border-red-200 rounded-lg bg-red-50/50">
+          <summary class="cursor-pointer px-4 py-3 flex items-center justify-between text-sm font-medium text-red-900">
+            <span><i class="fas fa-exclamation-triangle ml-2"></i> أخطاء (<span id="errorsCount">0</span>)</span>
+            <i class="fas fa-chevron-down text-xs"></i>
+          </summary>
+          <div class="max-h-72 overflow-y-auto border-t border-red-200">
+            <table class="min-w-full text-sm">
+              <thead class="bg-red-100 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2 text-right text-red-900">#</th>
+                  <th class="px-3 py-2 text-right text-red-900">الهاتف</th>
+                  <th class="px-3 py-2 text-right text-red-900">السبب</th>
+                </tr>
+              </thead>
+              <tbody id="errorsBody" class="divide-y divide-red-100"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="flex gap-3">
+          <a href="${backHref}" class="flex-1 text-center px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold transition-colors">
+            <i class="fas fa-check ml-1"></i> العودة للمتابعات
+          </a>
+          <button type="button" onclick="resetForAnother()" class="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">
+            استيراد ملف آخر
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let parsedRows = []
+    let previewRows = []
+
+    function normalizeCsvCell(v) {
+      return String(v == null ? '' : v).replace(/^\\uFEFF/, '').replace(/\\u200F/g, '').trim()
+    }
+    function normalizeHeader(v) { return normalizeCsvCell(v).toLowerCase() }
+
+    function isReadableSchedule(v) {
+      const s = String(v == null ? '' : v).trim()
+      if (!s) return false
+      return !Number.isNaN(new Date(s).getTime())
+    }
+
+    const DEFAULT_TASK_TITLE = 'متابعة العروض'
+
+    /** Empty or unreadable → null (server defaults to now when creating a task). */
+    function resolveImportSchedule(raw) {
+      const scheduled_at_raw = normalizeCsvCell(raw)
+      if (!scheduled_at_raw) {
+        return { scheduled_at: '', scheduled_at_raw: '', schedule_status: 'missing' }
+      }
+      if (isReadableSchedule(scheduled_at_raw)) {
+        return { scheduled_at: scheduled_at_raw, scheduled_at_raw, schedule_status: 'valid' }
+      }
+      return { scheduled_at: '', scheduled_at_raw, schedule_status: 'invalid' }
+    }
+
+    function parseCsvText(text) {
+      const s = String(text || '').replace(/^\\uFEFF/, '').replace(/^sep=(?:,|;|\\t)(?:\\r\\n|\\n|\\r)/, '')
+      const rows = []; let row = []; let cur = ''; let inQ = false
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i], nx = s[i+1]
+        if (ch === '"') { if (inQ && nx === '"') { cur += '"'; i++; continue } inQ = !inQ; continue }
+        if (!inQ && ch === ',') { row.push(cur); cur = ''; continue }
+        if (!inQ && (ch === '\\n' || ch === '\\r')) {
+          if (ch === '\\r' && nx === '\\n') i++
+          row.push(cur); cur = ''
+          if (row.some(c => String(c || '').trim() !== '')) rows.push(row)
+          row = []; continue
+        }
+        cur += ch
+      }
+      row.push(cur)
+      if (row.some(c => String(c || '').trim() !== '')) rows.push(row)
+      return rows
+    }
+
+    async function handleImportFile(file) {
+      if (!file) return
+      if (!/\\.(csv|xlsx|xls)$/i.test(file.name)) {
+        alert('نوع الملف غير مدعوم. الرجاء اختيار CSV أو Excel')
+        return
+      }
+      try {
+        let rows
+        if (/\\.(xlsx|xls)$/i.test(file.name)) {
+          if (typeof XLSX === 'undefined') { alert('مكتبة Excel غير محملة. حدث الصفحة.'); return }
+          const buf = await file.arrayBuffer()
+          const wb = XLSX.read(new Uint8Array(buf), { type: 'array' })
+          const sh = wb.Sheets[wb.SheetNames[0]]
+          const arr = XLSX.utils.sheet_to_json(sh, { header: 1, defval: '', raw: false })
+          rows = (arr || []).filter(r => Array.isArray(r) && r.some(c => String(c || '').trim() !== ''))
+        } else {
+          rows = parseCsvText(await file.text())
+        }
+        if (!rows || rows.length < 2) { alert('الملف فارغ أو غير صالح'); return }
+
+        const header = rows[0].map(normalizeHeader)
+        const findIdx = (keys) => header.findIndex(h => keys.indexOf(h) !== -1)
+        const iName = findIdx(['name', 'full_name', 'الاسم'])
+        const iPhone = findIdx(['phone', 'الهاتف', 'الجوال'])
+        const iTitle = findIdx(['task_title', 'title', 'عنوان المهمة', 'عنوان'])
+        const iPriority = findIdx(['priority', 'الأولوية'])
+        const iSchedule = findIdx(['scheduled_at', 'schedule', 'موعد المهمة', 'الموعد'])
+
+        if (iPhone < 0) {
+          alert('يجب أن يحتوي الملف على عمود "الهاتف"')
+          return
+        }
+
+        const out = []
+        for (let r = 1; r < rows.length; r++) {
+          const cols = rows[r]
+          const phone = normalizeCsvCell(cols[iPhone])
+          if (!phone) continue
+          const name = iName >= 0 ? normalizeCsvCell(cols[iName]) : ''
+          const task_title = iTitle >= 0 ? normalizeCsvCell(cols[iTitle]) : ''
+          const priority = iPriority >= 0 ? normalizeCsvCell(cols[iPriority]) : ''
+          const schedule = resolveImportSchedule(iSchedule >= 0 ? cols[iSchedule] : '')
+          out.push({ name, phone, task_title, priority, ...schedule })
+        }
+        if (out.length === 0) { alert('لم يتم العثور على صفوف صالحة'); return }
+
+        // API payload only needs the resolved (nullified) schedule — strip preview-only fields.
+        parsedRows = out.map(function(row) {
+          return {
+            name: row.name,
+            phone: row.phone,
+            task_title: row.task_title,
+            priority: row.priority,
+            scheduled_at: row.scheduled_at,
+          }
+        })
+        previewRows = out
+        document.getElementById('fileName').textContent = file.name
+        document.getElementById('fileSize').textContent = (file.size > 1024*1024 ? (file.size/1048576).toFixed(2)+' MB' : (file.size/1024).toFixed(2)+' KB')
+        document.getElementById('fileInfo').classList.remove('hidden')
+        renderPreview(out)
+        document.getElementById('previewSection').classList.remove('hidden')
+        document.getElementById('downloadPreviewBtn').classList.remove('hidden')
+        document.getElementById('sourceLabel').focus()
+      } catch (e) {
+        console.error(e)
+        alert('حدث خطأ أثناء قراءة الملف')
+      }
+    }
+
+    document.getElementById('importFile').addEventListener('change', (evt) => {
+      const file = evt.target.files && evt.target.files[0]
+      handleImportFile(file)
+    })
+
+    ;(function setupDragAndDrop() {
+      const zone = document.getElementById('dropZone')
+      if (!zone) return
+      const activeClasses = ['border-orange-500', 'bg-orange-50']
+      const setActive = (on) => {
+        if (on) zone.classList.add(...activeClasses)
+        else zone.classList.remove(...activeClasses)
+      }
+      ;['dragenter', 'dragover'].forEach(evName => {
+        zone.addEventListener(evName, (e) => {
+          e.preventDefault(); e.stopPropagation(); setActive(true)
+        })
+      })
+      ;['dragleave', 'dragend'].forEach(evName => {
+        zone.addEventListener(evName, (e) => {
+          e.preventDefault(); e.stopPropagation(); setActive(false)
+        })
+      })
+      zone.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation(); setActive(false)
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]
+        if (file) handleImportFile(file)
+      })
+      ;['dragover', 'drop'].forEach(evName => {
+        window.addEventListener(evName, (e) => { e.preventDefault() })
+      })
+    })()
+
+    function formatTitlePreviewCell(c) {
+      if (c.task_title) {
+        return '<span class="text-gray-600">' + escapeHtml(c.task_title) + '</span>'
+      }
+      return '<span class="text-amber-800 font-medium">' + escapeHtml(DEFAULT_TASK_TITLE) + ' <span class="text-xs font-normal">(افتراضي)</span></span>'
+    }
+
+    function formatSchedulePreviewCell(c) {
+      if (c.schedule_status === 'valid') {
+        return '<span class="text-gray-700">' + escapeHtml(c.scheduled_at) + '</span>'
+      }
+      if (c.schedule_status === 'invalid') {
+        return '<div class="text-amber-800">' +
+          '<div class="line-through text-gray-400 text-xs">' + escapeHtml(c.scheduled_at_raw) + '</div>' +
+          '<div class="font-medium">— (صيغة غير صالحة → الآن)</div>' +
+        '</div>'
+      }
+      return '<span class="text-amber-800 font-medium">الآن (افتراضي)</span>'
+    }
+
+    function computePreviewAssignments(rows) {
+      const mode = getSelectedMode()
+      let pool = []
+      if (mode === 'auto') {
+        pool = availableStaff.slice()
+      } else if (mode === 'custom') {
+        pool = availableStaff.filter(function(u) { return staffRosterIds.has(u.id) })
+      } else if (mode === 'custom_excl') {
+        pool = availableStaff.filter(function(u) { return !staffRosterIds.has(u.id) })
+      } else if (mode === 'branch' || mode === 'branch_excl') {
+        const sel = document.getElementById('assignBranchSelect')
+        const branchId = sel ? parseInt(sel.value, 10) : NaN
+        if (Number.isFinite(branchId) && branchId > 0) {
+          pool = mode === 'branch'
+            ? availableStaff.filter(function(u) { return u.assigned_location_id === branchId })
+            : availableStaff.filter(function(u) { return u.assigned_location_id !== branchId })
+        }
+      }
+      if (!pool.length) return rows.map(function() { return null })
+      return rows.map(function(_, i) { return pool[i % pool.length] })
+    }
+
+    function formatAssignmentPreviewCell(staff) {
+      if (!staff) return '<span class="text-gray-400 text-xs">—</span>'
+      return '<span class="text-blue-700 font-medium">' + escapeHtml(staff.full_name || ('#' + staff.id)) + '</span>'
+    }
+
+    function renderPreview(items) {
+      const MAX = 50
+      const tbody = document.getElementById('previewBody')
+      const slice = items.slice(0, MAX)
+      const assignments = computePreviewAssignments(items)
+      tbody.innerHTML = slice.map((c, i) => (
+        '<tr class="hover:bg-gray-50">' +
+          '<td class="px-3 py-2 text-gray-500">' + (i+1) + '</td>' +
+          '<td class="px-3 py-2">' + escapeHtml(c.name) + '</td>' +
+          '<td class="px-3 py-2">' + escapeHtml(c.phone) + '</td>' +
+          '<td class="px-3 py-2">' + formatTitlePreviewCell(c) + '</td>' +
+          '<td class="px-3 py-2 text-gray-600">' + escapeHtml(c.priority) + '</td>' +
+          '<td class="px-3 py-2">' + formatSchedulePreviewCell(c) + '</td>' +
+          '<td class="px-3 py-2">' + formatAssignmentPreviewCell(assignments[i]) + '</td>' +
+        '</tr>'
+      )).join('')
+      document.getElementById('rowCount').textContent = items.length
+      document.getElementById('submitCount').textContent = items.length
+      document.getElementById('previewMore').textContent = items.length > MAX ? ('... و ' + (items.length - MAX) + ' صف إضافي غير معروض') : ''
+
+      const invalidCount = items.filter(function(c) { return c.schedule_status === 'invalid' }).length
+      const missingSchedule = items.filter(function(c) { return c.schedule_status === 'missing' }).length
+      const missingTitle = items.filter(function(c) { return !c.task_title }).length
+      const noteEl = document.getElementById('schedulePreviewNote')
+      const parts = []
+      if (missingTitle) {
+        parts.push(missingTitle + ' صف بلا عنوان مهمة → سيُستخدم «' + DEFAULT_TASK_TITLE + '»')
+      }
+      if (invalidCount) {
+        parts.push(invalidCount + ' صف فيه موعد غير قابل للقراءة وسيُتجاهل (يُعامل كفارغ → يُجدول الآن)')
+      }
+      if (missingSchedule) {
+        parts.push(missingSchedule + ' صف بلا موعد → يُجدول تلقائياً إلى الوقت الحالي')
+      }
+      if (noteEl) {
+        if (parts.length) {
+          noteEl.innerHTML = '<i class="fas fa-info-circle ml-1"></i> ' + parts.map(escapeHtml).join(' · ')
+          noteEl.classList.remove('hidden')
+        } else {
+          noteEl.textContent = ''
+          noteEl.classList.add('hidden')
+        }
+      }
+    }
+
+    function escapeHtml(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))
+    }
+
+    window.downloadPreviewXlsx = function() {
+      if (!previewRows.length) return
+      if (typeof XLSX === 'undefined') { alert('مكتبة Excel غير محملة. حدث الصفحة.'); return }
+      const assignments = computePreviewAssignments(previewRows)
+      const header = ['#', 'الاسم', 'الهاتف', 'عنوان المهمة', 'الأولوية', 'موعد المهمة', 'الموظف المكلف (معاينة)']
+      const rows = previewRows.map(function(c, i) {
+        const staff = assignments[i]
+        return [
+          i + 1,
+          c.name,
+          c.phone,
+          c.task_title || DEFAULT_TASK_TITLE,
+          c.priority,
+          c.schedule_status === 'valid' ? c.scheduled_at : '',
+          staff ? (staff.full_name || ('#' + staff.id)) : '',
+        ]
+      })
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'معاينة الاستيراد')
+      XLSX.writeFile(wb, 'preview_import.xlsx')
+    }
+
+    window.clearFile = function() {
+      parsedRows = []
+      previewRows = []
+      const inp = document.getElementById('importFile'); if (inp) inp.value = ''
+      document.getElementById('fileInfo').classList.add('hidden')
+      document.getElementById('previewSection').classList.add('hidden')
+      document.getElementById('downloadPreviewBtn').classList.add('hidden')
+    }
+
+    const SKIP_REASON_LABEL = {
+      existing_customer: 'موجود مسبقاً كعميل',
+      existing_followup: 'موجود مسبقاً كمتابعة',
+      duplicate_in_file: 'مكرر داخل الملف',
+    }
+
+    function renderResultPanel(data) {
+      const followups = Number(data.followups_created || 0)
+      const tasks = Number(data.tasks_created || 0)
+      const skippedList = Array.isArray(data.skipped) ? data.skipped : []
+      const errorList = Array.isArray(data.errors) ? data.errors : []
+      const skippedTotal = Number(data.skipped_total || skippedList.length)
+
+      document.getElementById('stat_followups').textContent = followups
+      document.getElementById('stat_tasks').textContent = tasks
+      document.getElementById('stat_skipped').textContent = skippedTotal
+      document.getElementById('stat_errors').textContent = errorList.length
+
+      const skipParts = []
+      if (data.skipped_existing_customer) skipParts.push(data.skipped_existing_customer + ' عميل موجود')
+      if (data.skipped_existing_followup) skipParts.push(data.skipped_existing_followup + ' متابعة موجودة')
+      if (data.skipped_duplicate_in_file) skipParts.push(data.skipped_duplicate_in_file + ' مكرر في الملف')
+      const summary =
+        'تم إنشاء ' + followups + ' متابعة' +
+        (tasks ? ' و' + tasks + ' مهمة' : '') +
+        (skipParts.length ? ' — تم تخطي ' + skipParts.join('، ') : '') +
+        (errorList.length ? ' — ' + errorList.length + ' خطأ' : '')
+      document.getElementById('resultSummary').textContent = summary
+
+      const skippedBlock = document.getElementById('skippedBlock')
+      if (skippedList.length) {
+        document.getElementById('skippedCount').textContent = skippedList.length
+        document.getElementById('skippedBody').innerHTML = skippedList.map(function(s) {
+          return '<tr>' +
+            '<td class="px-3 py-2 text-gray-600">' + escapeHtml(s.row) + '</td>' +
+            '<td class="px-3 py-2 font-mono text-gray-800">' + escapeHtml(s.phone) + '</td>' +
+            '<td class="px-3 py-2 text-amber-900">' + escapeHtml(SKIP_REASON_LABEL[s.reason] || s.reason) + '</td>' +
+            '</tr>'
+        }).join('')
+        skippedBlock.classList.remove('hidden')
+      } else {
+        skippedBlock.classList.add('hidden')
+      }
+
+      const errorsBlock = document.getElementById('errorsBlock')
+      if (errorList.length) {
+        document.getElementById('errorsCount').textContent = errorList.length
+        document.getElementById('errorsBody').innerHTML = errorList.map(function(e) {
+          return '<tr>' +
+            '<td class="px-3 py-2 text-gray-600">' + escapeHtml(e.row) + '</td>' +
+            '<td class="px-3 py-2 font-mono text-gray-800">' + escapeHtml(e.phone) + '</td>' +
+            '<td class="px-3 py-2 text-red-900">' + escapeHtml(e.reason) + '</td>' +
+            '</tr>'
+        }).join('')
+        errorsBlock.classList.remove('hidden')
+      } else {
+        errorsBlock.classList.add('hidden')
+      }
+
+      document.getElementById('previewSection').classList.add('hidden')
+      document.getElementById('fileInfo').classList.add('hidden')
+      document.getElementById('resultSection').classList.remove('hidden')
+      document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
+    // ── Assignment panel state ───────────────────────────────────────
+    let availableStaff = []
+    let availableBranches = []
+    const staffRosterIds = new Set()
+
+    function getSelectedMode() {
+      const el = document.querySelector('input[name="assignMode"]:checked')
+      return el ? el.value : 'auto'
+    }
+
+    function refreshRosterUI() {
+      const container = document.getElementById('staffRoster')
+      if (!container) return
+      const mode = getSelectedMode()
+      const isExcl = mode === 'custom_excl'
+      const help = document.getElementById('assignRosterHelp')
+      const title = document.getElementById('assignRosterTitle')
+      if (title) title.textContent = isExcl ? 'الموظفون المستثنون' : 'الموظفون'
+      if (help) help.textContent = isExcl
+        ? 'سيتم توزيع المهام على جميع الموظفين المؤهلين عدا الموظفين المذكورين هنا.'
+        : 'سيتم توزيع المهام (round-robin) على الموظفين المذكورين هنا فقط.'
+
+      const rows = []
+      availableStaff.forEach(u => {
+        if (!staffRosterIds.has(u.id)) return
+        rows.push(
+          '<div class="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">' +
+          '<div class="text-gray-800">' + escapeHtml(u.full_name || ('#' + u.id)) + '</div>' +
+          '<button type="button" data-remove-uid="' + u.id + '" class="text-red-500 hover:text-red-700 text-xs"><i class="fas fa-times"></i> إزالة</button>' +
+          '</div>'
+        )
+      })
+      container.innerHTML = rows.join('') || '<p class="text-xs text-gray-400">لم يتم إضافة موظفين بعد.</p>'
+      container.querySelectorAll('[data-remove-uid]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const uid = parseInt(btn.getAttribute('data-remove-uid'), 10)
+          if (Number.isFinite(uid)) {
+            staffRosterIds.delete(uid)
+            refreshRosterUI()
+            refreshStaffPicker()
+            refreshAssignmentPreview()
+          }
+        })
+      })
+    }
+
+    function refreshStaffPicker() {
+      const sel = document.getElementById('addStaffSelect')
+      if (!sel) return
+      const opts = ['<option value="">+ إضافة مستخدم</option>']
+      availableStaff.forEach(u => {
+        if (staffRosterIds.has(u.id)) return
+        opts.push('<option value="' + u.id + '">' + escapeHtml(u.full_name || ('#' + u.id)) + '</option>')
+      })
+      sel.innerHTML = opts.join('')
+    }
+
+    function refreshBranchPicker() {
+      const sel = document.getElementById('assignBranchSelect')
+      if (!sel) return
+      const cur = sel.value
+      const opts = ['<option value="">— اختر الفرع —</option>']
+      availableBranches.forEach(b => {
+        opts.push('<option value="' + b.id + '">' + escapeHtml(b.name || ('#' + b.id)) + '</option>')
+      })
+      sel.innerHTML = opts.join('')
+      if (cur) sel.value = cur
+    }
+
+    function refreshAssignmentPreview() {
+      if (previewRows.length) renderPreview(previewRows)
+    }
+
+    function applyModeVisibility() {
+      const mode = getSelectedMode()
+      const branchSec = document.getElementById('assignBranchSection')
+      const customSec = document.getElementById('assignCustomSection')
+      const showBranch = mode === 'branch' || mode === 'branch_excl'
+      const showCustom = mode === 'custom' || mode === 'custom_excl'
+      if (branchSec) branchSec.classList.toggle('hidden', !showBranch)
+      if (customSec) customSec.classList.toggle('hidden', !showCustom)
+      const helpEl = document.getElementById('assignBranchHelp')
+      if (helpEl) {
+        helpEl.textContent = mode === 'branch_excl'
+          ? 'سيتم توزيع المهام على جميع الفروع عدا الفرع المحدد.'
+          : 'سيتم توزيع مهام هذا الاستيراد تلقائياً على الموظفين المنتمين إلى الفرع المحدد فقط.'
+      }
+      if (showCustom) refreshRosterUI()
+      refreshAssignmentPreview()
+    }
+
+    async function loadAssignOptions() {
+      try {
+        const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
+        const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+        const headers = {}
+        if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+        const url = '/api/follow-ups/import/assign-options' + (tenantId ? '?tenant_id=' + encodeURIComponent(tenantId) : '')
+        const resp = await fetch(url, { credentials: 'same-origin', headers })
+        const data = await resp.json().catch(() => ({}))
+        if (data && data.success) {
+          availableStaff = Array.isArray(data.available_staff) ? data.available_staff : []
+          availableBranches = Array.isArray(data.branches) ? data.branches : []
+          refreshStaffPicker()
+          refreshBranchPicker()
+          refreshAssignmentPreview()
+        }
+      } catch (_) {}
+    }
+
+    ;(function initAssignPanel() {
+      document.querySelectorAll('input[name="assignMode"]').forEach(r => {
+        r.addEventListener('change', applyModeVisibility)
+      })
+      const sel = document.getElementById('addStaffSelect')
+      if (sel) {
+        sel.addEventListener('change', () => {
+          const uid = parseInt(sel.value, 10)
+          if (Number.isFinite(uid) && uid > 0) {
+            staffRosterIds.add(uid)
+            sel.value = ''
+            refreshRosterUI()
+            refreshStaffPicker()
+            refreshAssignmentPreview()
+          }
+        })
+      }
+      const branchSel = document.getElementById('assignBranchSelect')
+      if (branchSel) {
+        branchSel.addEventListener('change', refreshAssignmentPreview)
+      }
+      applyModeVisibility()
+      loadAssignOptions()
+    })()
+
+    function resetAssignPanel() {
+      staffRosterIds.clear()
+      const autoRadio = document.getElementById('assignModeAuto')
+      if (autoRadio) autoRadio.checked = true
+      const branchSel = document.getElementById('assignBranchSelect')
+      if (branchSel) branchSel.value = ''
+      applyModeVisibility()
+      refreshStaffPicker()
+    }
+
+    window.resetForAnother = function() {
+      parsedRows = []
+      previewRows = []
+      const inp = document.getElementById('importFile'); if (inp) inp.value = ''
+      document.getElementById('resultSection').classList.add('hidden')
+      document.getElementById('downloadPreviewBtn').classList.add('hidden')
+      document.getElementById('sourceLabel').value = ''
+      resetAssignPanel()
+    }
+
+    window.submitImport = async function() {
+      if (!parsedRows.length) { alert('لا توجد بيانات للاستيراد'); return }
+      const sourceLabel = document.getElementById('sourceLabel').value.trim()
+      if (!sourceLabel) {
+        alert('يرجى إدخال مصدر المتابعات')
+        document.getElementById('sourceLabel').focus()
+        return
+      }
+      const mode = getSelectedMode()
+      let branchId = null
+      let staffIds = []
+      if (mode === 'branch' || mode === 'branch_excl') {
+        const sel = document.getElementById('assignBranchSelect')
+        const raw = sel ? parseInt(sel.value, 10) : NaN
+        if (!Number.isFinite(raw) || raw <= 0) {
+          alert('يرجى اختيار الفرع')
+          if (sel) sel.focus()
+          return
+        }
+        branchId = raw
+      }
+      if (mode === 'custom' || mode === 'custom_excl') {
+        staffIds = Array.from(staffRosterIds)
+        if (!staffIds.length) {
+          alert(mode === 'custom' ? 'يرجى إضافة موظف واحد على الأقل' : 'يرجى تحديد الموظفين المستثنين')
+          return
+        }
+      }
+      const btn = document.getElementById('submitBtn')
+      const orig = btn.innerHTML
+      btn.disabled = true
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جارٍ الاستيراد...'
+      try {
+        const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
+        const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+        const headers = { 'Content-Type': 'application/json' }
+        if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+        const body = {
+          rows: parsedRows,
+          source_label: sourceLabel,
+          assign_mode: mode,
+          assign_branch_id: branchId,
+          assign_staff_ids: staffIds,
+          auto_assign: mode !== 'none',
+        }
+        if (tenantId) body.tenant_id = tenantId
+        const resp = await fetch('/api/follow-ups/import-csv', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(body) })
+        const data = await resp.json().catch(() => ({}))
+        if (!resp.ok || !data.success) {
+          alert('فشل الاستيراد: ' + (data.error || data.message || resp.status))
+          btn.disabled = false; btn.innerHTML = orig
+          return
+        }
+        renderResultPanel(data)
+      } catch (e) {
+        console.error(e)
+        alert('حدث خطأ أثناء الاستيراد')
+        btn.disabled = false; btn.innerHTML = orig
+      }
+    }
+  </script>
+</body>
+</html>`)
+})
+
 app.get('/admin/follow-ups', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId) return c.redirect('/login')
-  const rid = normalizeRoleId(userInfo.roleId)
-  if (rid === 4 || rid === 5) return c.redirect('/admin/panel')
+  if (!canAccessMarketingModule(userInfo.roleId)) return c.redirect('/admin/panel')
 
   // Auto-assign is now triggered at follow-up creation time.
   // Keep the backend endpoint as a safety net for legacy/unassigned tasks,
   // but hide the button to avoid needing manual input.
   const showAutoAssignBtn = false
+
+  let followupAffiliatePaths: string[] = []
+  let followupImportLabels: string[] = []
+  if (userInfo.tenantId) {
+    try {
+      const pathsRes = await c.env.DB.prepare(
+        `SELECT DISTINCT affiliate_path_segment FROM company_contact_followups
+         WHERE tenant_id = ? AND affiliate_path_segment IS NOT NULL AND TRIM(affiliate_path_segment) != ''
+         ORDER BY affiliate_path_segment ASC LIMIT 100`
+      ).bind(userInfo.tenantId).all<{ affiliate_path_segment: string }>()
+      followupAffiliatePaths = ((pathsRes.results || []) as any[])
+        .map((r: any) => String(r.affiliate_path_segment || '').trim())
+        .filter(Boolean)
+    } catch (_) {}
+    try {
+      const labelsRes = await c.env.DB.prepare(
+        `SELECT DISTINCT affiliate_label FROM company_contact_followups
+         WHERE tenant_id = ? AND source_slug = 'csv' AND affiliate_label IS NOT NULL AND TRIM(affiliate_label) != ''
+         ORDER BY affiliate_label ASC LIMIT 100`
+      ).bind(userInfo.tenantId).all<{ affiliate_label: string }>()
+      followupImportLabels = ((labelsRes.results || []) as any[])
+        .map((r: any) => String(r.affiliate_label || '').trim())
+        .filter(Boolean)
+    } catch (_) {}
+  }
+  const followupAffiliatePathsJson = JSON.stringify(followupAffiliatePaths).replace(/</g, '\\u003c')
+  const followupImportLabelsJson = JSON.stringify(followupImportLabels).replace(/</g, '\\u003c')
+  const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
 
   return c.html(`
     <!DOCTYPE html>
@@ -40849,6 +43172,7 @@ app.get('/admin/follow-ups', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
+      <style>${actionsDropdownCSS}</style>
     </head>
     <body class="bg-gray-50 min-h-screen">
       <div class="border-b border-slate-200/90 bg-slate-50/90">
@@ -40865,7 +43189,7 @@ app.get('/admin/follow-ups', async (c) => {
                   <i class="fas fa-bullhorn text-2xl"></i>
                 </div>
                 <div class="min-w-0">
-                  <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">التسويق - متابعة طلبات التواصل</h1>
+                  <h1 class="text-2xl sm:text-3xl font-extrabold leading-tight">الإعلانات - متابعة طلبات التواصل</h1>
                 </div>
               </div>
             </div>
@@ -40877,8 +43201,10 @@ app.get('/admin/follow-ups', async (c) => {
                   <div class="relative">
                     <select id="followupLinkFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
                       <option value="all">الكل</option>
+                      <option value="" disabled>──────────────────</option>
                       <option value="company">رابط الشركة</option>
                       <option value="affiliate">روابط الأفلييت</option>
+                      <option value="imports">استيراد</option>
                     </select>
                     <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
                   </div>
@@ -40896,12 +43222,27 @@ app.get('/admin/follow-ups', async (c) => {
                 </div>
               </div>
 
+              <div class="flex items-center gap-1 bg-white/10 border border-white/15 rounded-xl p-1" title="طريقة العرض">
+                <button type="button" id="viewCardsBtn" onclick="switchView('cards')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" title="بطاقات">
+                  <i class="fas fa-th-large"></i>
+                </button>
+                <button type="button" id="viewRowsBtn" onclick="switchView('rows')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" title="صفوف">
+                  <i class="fas fa-list"></i>
+                </button>
+              </div>
+
               <button type="button" id="autoAssignTasksBtn" class="${showAutoAssignBtn ? 'inline-flex' : 'hidden'} items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
                 <i class="fas fa-random"></i>
                 <span>تعيين تلقائي</span>
               </button>
               <a href="/admin/contact-affiliates" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
                 <i class="fas fa-funnel-dollar"></i>روابط الأفلييت
+              </a>
+              <a href="/admin/follow-ups/import" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-file-import"></i>استيراد
+              </a>
+              <a href="/admin/follow-ups/archived" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
+                <i class="fas fa-archive"></i>الأرشيف
               </a>
             </div>
           </div>
@@ -40914,6 +43255,38 @@ app.get('/admin/follow-ups', async (c) => {
         </p>
 
         <div id="cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+
+        <div id="rows-container" class="hidden">
+          <!-- Bulk assign action bar -->
+          <div id="bulkAssignBar" class="hidden mb-4 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+            <span id="bulkAssignCount" class="text-sm font-semibold text-indigo-800"></span>
+            <button type="button" onclick="openFollowupBulkAssignModal()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+              <i class="fas fa-user-check"></i>تعيين المحدد
+            </button>
+            <button type="button" onclick="clearFollowupSelection()" class="text-sm text-indigo-600 hover:text-indigo-800 border border-indigo-300 px-3 py-2 rounded-lg">إلغاء التحديد</button>
+          </div>
+
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div id="followupsTableScroll" class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="w-10 px-4 py-3">
+                      <input type="checkbox" id="followupSelectAll" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" title="تحديد الكل">
+                    </th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الهاتف</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 min-w-[9rem]">المصدر</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap min-w-[180px]">المُعيَّن</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">التاريخ</th>
+                  </tr>
+                </thead>
+                <tbody id="followup-rows-body" class="divide-y divide-gray-50"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Auto-assign confirm / result -->
@@ -40930,6 +43303,67 @@ app.get('/admin/follow-ups', async (c) => {
             </div>
             <div id="autoAssignFlowActionsResult" class="hidden mt-6 flex justify-end">
               <button type="button" id="autoAssignResultOkBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-900 text-white">حسناً</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Archive Confirm Modal -->
+      <div id="archiveModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true">
+          <div class="px-5 py-4 border-b">
+            <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-archive ml-2 text-amber-600"></i>تأكيد الأرشفة</h2>
+          </div>
+          <div class="p-5">
+            <p class="text-sm text-gray-600 mb-4">هل تريد أرشفة هذا الطلب؟ سيختفي من القائمة الرئيسية وينتقل إلى صفحة الأرشيف.</p>
+            <div class="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-user text-gray-400 w-4 text-center"></i>
+                <span class="font-medium text-gray-700" id="archiveModalName">-</span>
+              </div>
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-phone text-emerald-500 w-4 text-center"></i>
+                <span class="text-gray-700" id="archiveModalPhone">-</span>
+              </div>
+              <div class="flex items-center gap-2 text-sm">
+                <i class="fas fa-tag text-blue-400 w-4 text-center"></i>
+                <span class="text-gray-700" id="archiveModalSource">-</span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">سبب الأرشفة <span class="text-gray-400 font-normal">(اختياري)</span></label>
+              <textarea id="archiveReasonInput" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" placeholder="مثال: تمت المتابعة، لا يوجد اهتمام..."></textarea>
+            </div>
+            <div class="mt-4 flex items-center justify-end gap-3">
+              <button id="archiveCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button id="archiveConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white">
+                <i class="fas fa-archive ml-1.5"></i>أرشفة
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Followup Bulk Assign Modal -->
+      <div id="followupBulkAssignModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden" role="dialog" aria-modal="true">
+          <div class="px-5 py-4 border-b">
+            <h2 class="text-lg font-bold text-gray-900"><i class="fas fa-user-check ml-2 text-indigo-600"></i>تعيين جماعي</h2>
+          </div>
+          <div class="p-5 space-y-4">
+            <p id="followupBulkAssignDesc" class="text-sm text-gray-600"></p>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5">اختر الموظف أو وكيل البنك</label>
+              <select id="followupBulkStaffSelect" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">-- اختر --</option>
+              </select>
+            </div>
+            <p id="followupBulkAssignStatus" class="text-sm"></p>
+            <div class="flex items-center justify-end gap-3 pt-1">
+              <button type="button" id="followupBulkAssignCancelBtn" class="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800 hover:bg-gray-50">إلغاء</button>
+              <button type="button" id="followupBulkAssignConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white">
+                <i class="fas fa-check ml-1.5"></i>تعيين
+              </button>
             </div>
           </div>
         </div>
@@ -40978,7 +43412,7 @@ app.get('/admin/follow-ups', async (c) => {
       <div id="tasksModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
         <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col" style="max-height:90vh">
           <div class="flex items-center justify-between px-5 py-4 border-b flex-shrink-0">
-            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>الإعلانات</h2>
+            <h2 class="text-xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>المهام</h2>
             <button id="closeTasksModalBtn" class="text-gray-500 hover:text-gray-700">
               <i class="fas fa-times text-xl"></i>
             </button>
@@ -41058,6 +43492,62 @@ app.get('/admin/follow-ups', async (c) => {
             .replace(/'/g, '&#39;');
         }
 
+        function displayPhone(raw) {
+          const s = String(raw || '').trim();
+          if (s.startsWith('966') && s.length === 12) return '0' + s.slice(3);
+          if (/^5\\d{8}$/.test(s)) return '0' + s;
+          return s || '-';
+        }
+
+        function normalizePhoneDigits(phoneValue) {
+          const raw = String(phoneValue || '').trim();
+          const westernDigits = raw
+            .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+            .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+          return westernDigits.replace(/[^\\d]/g, '');
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+          let digits = normalizePhoneDigits(phoneValue);
+          if (!digits) return '';
+          if (digits.startsWith('00966')) digits = digits.slice(2);
+          if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+          if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+          if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+          return '';
+        }
+
+        ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+
+        function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
+          const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+          if (!normalizedPhone) {
+            alert('لا يوجد رقم واتساب صالح لهذا العميل');
+            return;
+          }
+          let url = 'https://wa.me/' + normalizedPhone;
+          const msg = applyWaGreetingTemplate(customerName || '');
+          if (msg) url += '?text=' + encodeURIComponent(msg);
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function whatsappBtnHtml(phone, name) {
+          return '<button type="button" class="wa-btn inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors shrink-0" data-wa-phone="' +
+            escapeHtml(phone || '') + '" data-wa-name="' + escapeHtml(name || '') +
+            '" title="فتح واتساب"><i class="fab fa-whatsapp"></i><span>واتساب</span></button>';
+        }
+
+        function bindWhatsAppButtons(root) {
+          if (!root) return;
+          root.querySelectorAll('.wa-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              openCustomerWhatsApp(btn.getAttribute('data-wa-phone'), '', btn.getAttribute('data-wa-name'));
+            });
+          });
+        }
+
+        const FOLLOWUP_AFFILIATE_PATHS = ${followupAffiliatePathsJson};
+        const FOLLOWUP_IMPORT_LABELS = ${followupImportLabelsJson};
         const CONTACT_COMPANY_LINK_SOURCE_LABEL = 'رابط الشركة';
 
         function followupSourceLabel(row) {
@@ -41514,7 +44004,7 @@ app.get('/admin/follow-ups', async (c) => {
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
           try {
             const params = new URLSearchParams(window.location.search);
-            const link = (params.get('followupLinkFilter') || 'all').toLowerCase();
+            const link = params.get('followupLinkFilter') || 'all';
             const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
             const api = new URL('/api/follow-ups', window.location.origin);
             if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
@@ -41527,7 +44017,11 @@ app.get('/admin/follow-ups', async (c) => {
             }
 
             cards.innerHTML = rows.map((row) => \`
-              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+                data-followup-id="\${Number(row.id)}"
+                data-customer-name="\${escapeHtml(row.customer_name || '-')}"
+                data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
+                data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}">
                 <div class="flex items-start justify-between gap-3 mb-3">
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
@@ -41536,10 +44030,15 @@ app.get('/admin/follow-ups', async (c) => {
                     </div>
                     <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
                   </div>
-                  <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                    <button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
+                      <i class="fas fa-archive"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="space-y-2">
-                  <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
+                  <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
                   <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
                   <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
                   <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
@@ -41557,25 +44056,65 @@ app.get('/admin/follow-ups', async (c) => {
               </div>
             \`).join('');
 
+            bindWhatsAppButtons(cards);
             rows.forEach((row) => loadCardTasks(Number(row.id)));
           } catch (e) {
             cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
           }
         }
 
+        function hydrateFollowupLinkFilter() {
+          const el = document.getElementById('followupLinkFilterSelect');
+          if (!el) return;
+          el.querySelectorAll('[data-dyn]').forEach((n) => n.remove());
+          const affiliatePaths = Array.isArray(FOLLOWUP_AFFILIATE_PATHS) ? FOLLOWUP_AFFILIATE_PATHS : [];
+          const importLabels = Array.isArray(FOLLOWUP_IMPORT_LABELS) ? FOLLOWUP_IMPORT_LABELS : [];
+          function makeDivider() {
+            const d = document.createElement('option');
+            d.disabled = true;
+            d.textContent = '──────────────────';
+            d.setAttribute('data-dyn', '1');
+            return d;
+          }
+          if (affiliatePaths.length > 0) {
+            el.appendChild(makeDivider());
+            affiliatePaths.forEach((path) => {
+              const opt = document.createElement('option');
+              opt.value = 'affiliate:' + path;
+              opt.textContent = path;
+              opt.setAttribute('data-dyn', '1');
+              el.appendChild(opt);
+            });
+          }
+          if (importLabels.length > 0) {
+            el.appendChild(makeDivider());
+            importLabels.forEach((label) => {
+              const opt = document.createElement('option');
+              opt.value = 'import-label:' + label;
+              opt.textContent = label;
+              opt.setAttribute('data-dyn', '1');
+              el.appendChild(opt);
+            });
+          }
+        }
+
         function getFollowupFilterParamsFromUrl() {
           const params = new URLSearchParams(window.location.search);
-          const link = String(params.get('followupLinkFilter') || 'all').trim().toLowerCase();
+          const linkRaw = String(params.get('followupLinkFilter') || 'all').trim();
+          const linkLower = linkRaw.toLowerCase();
+          const isFixedVal = linkLower === 'company' || linkLower === 'affiliate' || linkLower === 'imports' || linkLower === 'all';
+          const isDynamic = linkRaw.toLowerCase().startsWith('affiliate:') || linkRaw.toLowerCase().startsWith('import-label:');
+          const link = isFixedVal ? linkLower : (isDynamic ? linkRaw : 'all');
           const pr = String(params.get('followupPriorityFilter') || 'all').trim().toLowerCase();
           return {
-            link: (link === 'company' || link === 'affiliate' || link === 'all') ? link : 'all',
+            link,
             pr: (pr === 'important' || pr === 'regular' || pr === 'all') ? pr : 'all'
           };
         }
 
         function setFollowupFilterParamsInUrl(next) {
           const params = new URLSearchParams(window.location.search);
-          const link = String(next?.link || 'all').trim().toLowerCase();
+          const link = String(next?.link || 'all').trim();
           const pr = String(next?.pr || 'all').trim().toLowerCase();
 
           if (link && link !== 'all') params.set('followupLinkFilter', link);
@@ -41590,6 +44129,7 @@ app.get('/admin/follow-ups', async (c) => {
         }
 
         function syncFollowupHeaderFiltersFromUrl() {
+          hydrateFollowupLinkFilter();
           const linkSelect = document.getElementById('followupLinkFilterSelect');
           const prSelect = document.getElementById('followupPriorityFilterSelect');
           if (!linkSelect || !prSelect) return;
@@ -41725,6 +44265,324 @@ app.get('/admin/follow-ups', async (c) => {
           }
         });
 
+        // ── Rows view ──────────────────────────────────────────────────────────
+
+        let followupCurrentRows = [];
+        let followupAssignableStaff = [];
+        let followupSelectedIds = new Set();
+        let followupViewMode = (localStorage.getItem('followup_view_mode') || 'cards');
+
+        async function loadFollowupAssignableStaff() {
+          try {
+            const tenantId = new URLSearchParams(window.location.search).get('tenant_id');
+            const url = '/api/follow-ups/assignable-staff' + (tenantId ? '?tenant_id=' + encodeURIComponent(tenantId) : '');
+            const res = await axios.get(url);
+            followupAssignableStaff = Array.isArray(res?.data?.data) ? res.data.data : [];
+          } catch (_) {
+            followupAssignableStaff = [];
+          }
+        }
+
+        function staffNameById(staffId) {
+          if (!staffId) return '';
+          const s = followupAssignableStaff.find((x) => String(x.id) === String(staffId));
+          return s ? (s.full_name || '') : '';
+        }
+
+        function buildStaffDropdownOptions(row) {
+          const selectedId = row.task_assigned_user_id;
+          const opts = '<option value="">-- بدون تعيين --</option>' +
+            followupAssignableStaff.map((s) =>
+              '<option value="' + Number(s.id) + '"' + (String(s.id) === String(selectedId) ? ' selected' : '') + '>' +
+              escapeHtml(s.full_name || '') + '</option>'
+            ).join('');
+          return opts;
+        }
+
+        function renderFollowupRows(rows) {
+          const tbody = document.getElementById('followup-rows-body');
+          if (!tbody) return;
+          if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">لا توجد طلبات تواصل حالياً.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = rows.map((row) => {
+            const fid = Number(row.id);
+            const sourceLabel = followupSourceLabel(row) || '-';
+            return \`<tr class="hover:bg-gray-50 transition-colors" data-followup-id="\${fid}" data-customer-name="\${escapeHtml(row.customer_name||'-')}" data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}" data-source-label="\${escapeHtml(sourceLabel)}">
+              <td class="px-4 py-3">
+                <input type="checkbox" class="followup-row-check rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-id="\${fid}" onchange="onFollowupRowCheckChange(this)">
+              </td>
+              <td class="px-3 py-3 whitespace-nowrap text-right align-middle">
+                <button type="button"
+                        data-actions-target="actions-followup-\${fid}"
+                        class="actions-dropdown-btn inline-flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap w-full">
+                  <span>إجراءات</span><i class="fas fa-chevron-down text-[10px]"></i>
+                </button>
+                <div id="actions-followup-\${fid}" hidden class="actions-dropdown-menu">
+                  <button type="button" onclick="openNotesModal(\${fid})" class="actions-dropdown-item" style="color:#a21caf;">
+                    <i class="fas fa-sticky-note"></i> الملاحظات
+                  </button>
+                  <button type="button" onclick="openTasksModal(\${fid})" class="actions-dropdown-item" style="color:#4338ca;">
+                    <i class="fas fa-tasks"></i> المهام
+                  </button>
+                  <div class="actions-dropdown-divider"></div>
+                  <button type="button" onclick="openArchiveModalById(\${fid})" class="actions-dropdown-item" style="color:#b45309;">
+                    <i class="fas fa-archive"></i> أرشفة
+                  </button>
+                </div>
+              </td>
+              <td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">\${escapeHtml(row.customer_name||'-')}</td>
+              <td class="px-4 py-3 text-gray-700 whitespace-nowrap"><div class="inline-flex items-center gap-2"><span dir="ltr">\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</div></td>
+              <td class="px-4 py-3">\${followupSourceBadgeHtml(row) || escapeHtml(sourceLabel)}</td>
+              <td class="px-4 py-3">
+                <select class="followup-staff-select w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white" data-followup-id="\${fid}" onchange="assignFollowupStaff(\${fid}, this)">
+                  \${buildStaffDropdownOptions(row)}
+                </select>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</td>
+            </tr>\`;
+          }).join('');
+          bindWhatsAppButtons(tbody);
+        }
+
+        async function assignFollowupStaff(followupId, selectEl) {
+          const assignedUserId = selectEl.value ? Number(selectEl.value) : null;
+          selectEl.disabled = true;
+          try {
+            const res = await axios.patch('/api/follow-ups/' + followupId + '/assign-user', { assigned_user_id: assignedUserId });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر التعيين');
+          } catch (e) {
+            alert(e?.response?.data?.error || e?.message || 'حدث خطأ أثناء التعيين');
+          } finally {
+            selectEl.disabled = false;
+          }
+        }
+
+        function onFollowupRowCheckChange(checkbox) {
+          const id = parseInt(checkbox.dataset.id, 10);
+          if (checkbox.checked) followupSelectedIds.add(id);
+          else followupSelectedIds.delete(id);
+          updateFollowupBulkBar();
+          syncFollowupSelectAll();
+        }
+
+        function syncFollowupSelectAll() {
+          const all = document.querySelectorAll('.followup-row-check');
+          const selectAll = document.getElementById('followupSelectAll');
+          if (!selectAll) return;
+          const checkedCount = document.querySelectorAll('.followup-row-check:checked').length;
+          selectAll.checked = all.length > 0 && checkedCount === all.length;
+          selectAll.indeterminate = checkedCount > 0 && checkedCount < all.length;
+        }
+
+        function updateFollowupBulkBar() {
+          const bar = document.getElementById('bulkAssignBar');
+          const cnt = document.getElementById('bulkAssignCount');
+          if (!bar || !cnt) return;
+          const n = followupSelectedIds.size;
+          if (n > 0) {
+            cnt.textContent = 'تم تحديد ' + n + ' طلب';
+            bar.classList.remove('hidden');
+          } else {
+            bar.classList.add('hidden');
+          }
+        }
+
+        function clearFollowupSelection() {
+          followupSelectedIds.clear();
+          document.querySelectorAll('.followup-row-check').forEach((cb) => { cb.checked = false; });
+          const selectAll = document.getElementById('followupSelectAll');
+          if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+          updateFollowupBulkBar();
+        }
+
+        document.getElementById('followupSelectAll').addEventListener('change', function() {
+          const checkboxes = document.querySelectorAll('.followup-row-check');
+          checkboxes.forEach((cb) => {
+            cb.checked = this.checked;
+            const id = parseInt(cb.dataset.id, 10);
+            if (this.checked) followupSelectedIds.add(id);
+            else followupSelectedIds.delete(id);
+          });
+          updateFollowupBulkBar();
+        });
+
+        function openFollowupBulkAssignModal() {
+          if (!followupSelectedIds.size) return;
+          const desc = document.getElementById('followupBulkAssignDesc');
+          const sel = document.getElementById('followupBulkStaffSelect');
+          const status = document.getElementById('followupBulkAssignStatus');
+          if (desc) desc.textContent = 'تعيين ' + followupSelectedIds.size + ' طلب للموظف أو وكيل البنك التالي:';
+          if (status) { status.textContent = ''; status.className = 'text-sm'; }
+          if (sel) {
+            sel.innerHTML = '<option value="">-- اختر --</option>' +
+              followupAssignableStaff.map((s) =>
+                '<option value="' + Number(s.id) + '">' + escapeHtml(s.full_name || '') + '</option>'
+              ).join('');
+            sel.value = '';
+          }
+          const modal = document.getElementById('followupBulkAssignModal');
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+
+        function closeFollowupBulkAssignModal() {
+          const modal = document.getElementById('followupBulkAssignModal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+
+        document.getElementById('followupBulkAssignCancelBtn').addEventListener('click', closeFollowupBulkAssignModal);
+        document.getElementById('followupBulkAssignModal').addEventListener('click', function(e) {
+          if (e.target === this) closeFollowupBulkAssignModal();
+        });
+
+        document.getElementById('followupBulkAssignConfirmBtn').addEventListener('click', async function() {
+          const sel = document.getElementById('followupBulkStaffSelect');
+          const status = document.getElementById('followupBulkAssignStatus');
+          if (!sel.value) {
+            status.textContent = 'يرجى اختيار موظف أو وكيل بنك';
+            status.className = 'text-sm text-red-600';
+            return;
+          }
+          const staffId = Number(sel.value);
+          const ids = Array.from(followupSelectedIds);
+          this.disabled = true;
+          status.textContent = 'جاري التعيين...';
+          status.className = 'text-sm text-gray-600';
+          try {
+            const res = await axios.post('/api/follow-ups/bulk-assign', { followup_ids: ids, assigned_user_id: staffId });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر التعيين');
+            const n = res.data.assigned_count ?? ids.length;
+            status.textContent = 'تم تعيين ' + n + ' طلب بنجاح';
+            status.className = 'text-sm text-green-700';
+            clearFollowupSelection();
+            await loadFollowUps();
+            setTimeout(closeFollowupBulkAssignModal, 800);
+          } catch (e) {
+            status.textContent = e?.response?.data?.error || e?.message || 'حدث خطأ';
+            status.className = 'text-sm text-red-600';
+          } finally {
+            this.disabled = false;
+          }
+        });
+
+        function updateViewToggleButtons() {
+          const cardsBtn = document.getElementById('viewCardsBtn');
+          const rowsBtn = document.getElementById('viewRowsBtn');
+          if (!cardsBtn || !rowsBtn) return;
+          if (followupViewMode === 'rows') {
+            cardsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-white/60 hover:text-white hover:bg-white/10';
+            rowsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-white text-gray-800';
+          } else {
+            cardsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-white text-gray-800';
+            rowsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-white/60 hover:text-white hover:bg-white/10';
+          }
+        }
+
+        function switchView(mode) {
+          followupViewMode = mode;
+          localStorage.setItem('followup_view_mode', mode);
+          updateViewToggleButtons();
+          const cardsEl = document.getElementById('cards');
+          const rowsEl = document.getElementById('rows-container');
+          if (mode === 'rows') {
+            cardsEl.classList.add('hidden');
+            rowsEl.classList.remove('hidden');
+            if (followupCurrentRows.length) renderFollowupRows(followupCurrentRows);
+          } else {
+            rowsEl.classList.add('hidden');
+            cardsEl.classList.remove('hidden');
+          }
+        }
+
+        // Override loadFollowUps to also render rows view when active
+        window.loadFollowUps = async function() {
+          const cards = document.getElementById('cards');
+          const tbody = document.getElementById('followup-rows-body');
+          const rowsContainer = document.getElementById('rows-container');
+
+          // Show loading state in whichever view is active
+          if (followupViewMode === 'rows') {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">جاري التحميل...</td></tr>';
+          } else {
+            if (cards) cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+          }
+
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const link = params.get('followupLinkFilter') || 'all';
+            const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
+            const api = new URL('/api/follow-ups', window.location.origin);
+            if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
+            if (pr && pr !== 'all') api.searchParams.set('followupPriorityFilter', pr);
+            const res = await axios.get(api.pathname + api.search);
+            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+            followupCurrentRows = rows;
+
+            if (!rows.length) {
+              if (cards) cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات تواصل حالياً.</div>';
+              if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">لا توجد طلبات تواصل حالياً.</td></tr>';
+              return;
+            }
+
+            // Cards view
+            if (cards) {
+              cards.innerHTML = rows.map((row) => \`
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+                  data-followup-id="\${Number(row.id)}"
+                  data-customer-name="\${escapeHtml(row.customer_name || '-')}"
+                  data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
+                  data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}">
+                  <div class="flex items-start justify-between gap-3 mb-3">
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                        \${followupSourceBadgeHtml(row)}
+                      </div>
+                      <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                      <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                      <button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
+                        <i class="fas fa-archive"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
+                    <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
+                    <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                    <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
+                      <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
+                    </div>
+                    <div class="pt-2 grid grid-cols-2 gap-2">
+                      <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                        <i class="fas fa-sticky-note ml-2"></i>الملاحظات
+                      </button>
+                      <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                        <i class="fas fa-tasks ml-2"></i>المهام
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              \`).join('');
+              bindWhatsAppButtons(cards);
+              rows.forEach((row) => loadCardTasks(Number(row.id)));
+            }
+
+            // Rows view
+            if (followupViewMode === 'rows') renderFollowupRows(rows);
+
+          } catch (e) {
+            if (cards) cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-red-600">حدث خطأ أثناء تحميل البيانات</td></tr>';
+          }
+        };
+
+        // ── End rows view ───────────────────────────────────────────────────────
+
         initFollowupHeaderFilters();
 
         const autoAssignFlowModal = document.getElementById('autoAssignFlowModal');
@@ -41791,8 +44649,72 @@ app.get('/admin/follow-ups', async (c) => {
           }
         });
 
-        loadFollowUps();
+        let pendingArchiveId = null;
 
+        function openArchiveModal(btn) {
+          const card = btn.closest('[data-followup-id]');
+          pendingArchiveId = parseInt(card.dataset.followupId);
+          document.getElementById('archiveModalName').textContent = card.dataset.customerName || '-';
+          document.getElementById('archiveModalPhone').textContent = card.dataset.customerPhone || '-';
+          document.getElementById('archiveModalSource').textContent = card.dataset.sourceLabel || '-';
+          document.getElementById('archiveReasonInput').value = '';
+          const modal = document.getElementById('archiveModal');
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          setTimeout(() => document.getElementById('archiveReasonInput').focus(), 50);
+        }
+
+        function openArchiveModalById(followupId) {
+          const row = document.querySelector('[data-followup-id="' + followupId + '"]');
+          pendingArchiveId = followupId;
+          document.getElementById('archiveModalName').textContent = (row && row.dataset.customerName) || '-';
+          document.getElementById('archiveModalPhone').textContent = (row && row.dataset.customerPhone) || '-';
+          document.getElementById('archiveModalSource').textContent = (row && row.dataset.sourceLabel) || '-';
+          document.getElementById('archiveReasonInput').value = '';
+          const modal = document.getElementById('archiveModal');
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+          setTimeout(() => document.getElementById('archiveReasonInput').focus(), 50);
+        }
+
+        function closeArchiveModal() {
+          pendingArchiveId = null;
+          const modal = document.getElementById('archiveModal');
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+        }
+
+        document.getElementById('archiveCancelBtn').addEventListener('click', closeArchiveModal);
+        document.getElementById('archiveModal').addEventListener('click', function(e) {
+          if (e.target === this) closeArchiveModal();
+        });
+
+        document.getElementById('archiveConfirmBtn').addEventListener('click', async function() {
+          if (!pendingArchiveId) return;
+          const btn = this;
+          btn.disabled = true;
+          try {
+            const reason = (document.getElementById('archiveReasonInput').value || '').trim();
+            await axios.patch('/api/follow-ups/' + pendingArchiveId + '/archive', { reason: reason || null });
+            closeArchiveModal();
+            await loadFollowUps();
+          } catch(e) {
+            alert('حدث خطأ أثناء الأرشفة');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+
+        // Init: apply saved view mode, load staff, then load data
+        updateViewToggleButtons();
+        if (followupViewMode === 'rows') {
+          document.getElementById('cards').classList.add('hidden');
+          document.getElementById('rows-container').classList.remove('hidden');
+        }
+
+        loadFollowupAssignableStaff().then(() => loadFollowUps());
+
+        ${actionsDropdownScript}
       </script>
     </body>
     </html>

@@ -295,7 +295,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <!-- زر العملاء -->
                     <a href="/admin/customers" class="quick-access-btn bg-gradient-to-br from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-users text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">العملاء</div>
+                        <div class="text-sm font-bold">متابعة العملاء</div>
                     </a>
                     
                     <!-- زر طلبات التمويل -->
@@ -306,9 +306,14 @@ export const fullAdminPanel = `<!DOCTYPE html>
 
                     <a href="/admin/my-tasks" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-tasks text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">الإعلانات</div>
+                        <div class="text-sm font-bold">مهامي</div>
                     </a>
-                    
+
+                    <a href="/admin/my-archived-tasks" class="quick-access-btn bg-gradient-to-br from-amber-600 to-orange-700 hover:from-amber-700 hover:to-orange-800 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-archive text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">ارشيف الإعلانات</div>
+                    </a>
+
                     <!-- زر التقارير -->
                     <a href="/admin/reports" class="quick-access-btn bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-chart-line text-3xl mb-2"></i>
@@ -317,7 +322,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     
                     <a href="/admin/follow-ups" class="quick-access-btn bg-gradient-to-br from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-bullhorn text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">التسويق</div>
+                        <div class="text-sm font-bold">الإعلانات</div>
                     </a>
                     
                     <!-- زر نسب التمويل -->
@@ -2104,6 +2109,19 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         el.setAttribute('href', '/admin/contracts/list');
                     });
                 }
+
+                // Roles 4/5/6: "مهامي" module is labeled "الإعلانات"
+                if (roleId === 4 || roleId === 5 || roleId === 6) {
+                    document.querySelectorAll('.quick-access-btn[href="/admin/my-tasks"] .text-sm').forEach((el) => {
+                        el.textContent = 'الإعلانات';
+                    });
+                    document.querySelectorAll('#global-persistent-sidebar a[href="/admin/my-tasks"]').forEach((el) => {
+                        const icon = el.querySelector('i');
+                        el.textContent = '';
+                        if (icon) el.appendChild(icon);
+                        el.appendChild(document.createTextNode('الإعلانات'));
+                    });
+                }
                 
                 // تعريف الروابط المسموحة لكل role_id
                 // Source of truth for permissions:
@@ -2158,6 +2176,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/notifications',
                         '/admin/company-settings',
                         '/admin/company-settings/locations',
+                        '/admin/my-archived-tasks',
                         '/calculator',
                     ],
                     '3': [ // Supervisor (Read-only)
@@ -2186,39 +2205,40 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts/new',
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
+                        '/admin/my-archived-tasks',
                         '/my-tasks',
                         '/calculator',
                     ],
-                    '5': [ // Bank agent (page access also enforced in index.tsx /admin/* RBAC; APIs scope actions). No marketing (/admin/follow-ups).
+                    '5': [ // Bank agent (page access also enforced in index.tsx /admin/* RBAC; APIs scope actions). No marketing.
                         '/admin/panel',
                         '/admin/customers',
                         '/admin/customers/completed',
                         '/admin/customers/archived',
                         '/admin/requests',
-                        '/admin/contact-affiliates',
                         '/admin/contracts',
                         '/admin/contracts/list',
                         '/admin/contracts/new',
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
+                        '/admin/my-archived-tasks',
                         '/my-tasks',
                         '/admin/my-leaves',
                         '/calculator',
                         '/',
                     ],
-                    '6': [ // Dual agent: union of role 4 + role 5
+                    '6': [ // Dual agent: union of role 4 + role 5 (no marketing module)
                         '/admin/panel',
                         '/admin/customers',
                         '/admin/customers/completed',
                         '/admin/customers/archived',
                         '/admin/requests',
                         '/admin/requests/completed',
-                        '/admin/contact-affiliates',
                         '/admin/contracts',
                         '/admin/contracts/list',
                         '/admin/contracts/new',
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
+                        '/admin/my-archived-tasks',
                         '/my-tasks',
                         '/admin/my-leaves',
                         '/calculator',

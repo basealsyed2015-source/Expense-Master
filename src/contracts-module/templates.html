@@ -325,12 +325,13 @@
 
     function extractDocFontSize(html) {
       const raw = String(html || '');
-      let m = raw.match(/tpl-doc-font[^>]*>[\s\S]*?font-size\s*:\s*([\d.]+px)/i)
-        || raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\s*:\s*([\d.]+px)/i)
+      // Prefer font-size on the .tpl-doc-font opening tag itself.
+      // Do NOT scan children — that matches .tpl-note-section (20px) / title (28px)
+      // and rewriting the outer wrapper to those sizes overflows page 1 (stamp drops).
+      let m = raw.match(/class=["'][^"']*tpl-doc-font[^"']*["'][^>]*style=["'][^"']*font-size\s*:\s*([\d.]+px)/i)
         || raw.match(/style=["'][^"']*font-size\s*:\s*([\d.]+px)[^"']*["'][^>]*class=["'][^"']*tpl-doc-font/i);
       if (m) return normalizeDocFontSize(m[1]);
-      m = raw.match(/font-size\s*:\s*([\d.]+px)/i);
-      return m ? normalizeDocFontSize(m[1]) : '12px';
+      return '12px';
     }
 
     function setDocFontSizeSelect(sizePx) {

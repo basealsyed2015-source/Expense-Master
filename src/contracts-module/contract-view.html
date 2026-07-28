@@ -913,6 +913,9 @@
         if (fromContract && !params.has('tenant_id')) {
           params.set('tenant_id', String(fromContract));
         }
+        if (currentContract && currentContract.template_id) {
+          params.set('template_id', String(currentContract.template_id));
+        }
         const qs = params.toString();
         const url = '/api/tenant/document-watermark' + (qs ? '?' + qs : '');
         const res = await fetch(url, { credentials: 'same-origin' });

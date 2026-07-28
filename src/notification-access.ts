@@ -55,6 +55,18 @@ export function canCreateFinancingRequest(roleId: unknown): boolean {
   return r === 1 || r === 2 || r === 3 || r === 4 || r === 5 || r === 6
 }
 
+/** Staff roles that own assigned follow-up tasks (/admin/my-tasks) — and company admin (role 2) who sees all tenant tasks. */
+export function canAccessMyFollowupTasksPage(roleId: unknown): boolean {
+  const r = normalizeRoleId(roleId)
+  return r === 2 || r === 4 || r === 5 || r === 6
+}
+
+/** Marketing module (/admin/follow-ups + affiliates/stats) is admin/supervisor only. */
+export function canAccessMarketingModule(roleId: unknown): boolean {
+  const r = normalizeRoleId(roleId)
+  return r === 1 || r === 2 || r === 3
+}
+
 export type UserInfo = {
   userId: number | null
   tenantId: number | null

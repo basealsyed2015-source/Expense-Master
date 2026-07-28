@@ -16,7 +16,7 @@ describe('customers list performance patterns', () => {
     assert.match(slice, /href="\/tailwind\.css"/)
     assert.match(slice, /\/api\/customers\/export-csv|exportCustomersCsv/)
     // Success page head (after auth gate) should prefer /tailwind.css over CDN JIT
-    const successTitle = slice.indexOf('<title>العملاء</title>')
+    const successTitle = slice.indexOf('<title>متابعة العملاء</title>')
     assert.ok(successTitle > 0)
     const headSlice = slice.slice(successTitle, successTitle + 500)
     assert.match(headSlice, /href="\/tailwind\.css"/)
