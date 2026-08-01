@@ -914,9 +914,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/contracts/templates" class="nav-item" data-page="templates">
         <i class="fas fa-layer-group"></i><span>القوالب</span>
       </a>
-      <a href="/admin/contracts/notes" class="nav-item" data-page="notes">
-        <i class="fas fa-money-check-alt"></i><span>سندات الأمر</span>
-      </a>
+      <!-- TEMPORARILY DISABLED: <a href="/admin/contracts/notes" class="nav-item" data-page="notes"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a> -->
       <a href="/admin/contracts/archive" class="nav-item" data-page="archive">
         <i class="fas fa-archive"></i><span>الأرشيف</span>
       </a>

@@ -64,6 +64,8 @@ export function patchContractsHtml(html: string): string {
   h = h.replace(/`new-contract\.html\?edit=/g, '`/admin/contracts/new?edit=')
   h = h.replace(/`notes\.html\?search=/g, '`/admin/contracts/notes?search=')
   h = h.replace(/`contract-view\.html\?id=/g, '`/admin/contracts/view?id=')
+  // TEMPORARILY DISABLED: hide the promissory notes nav link across all legacy pages
+  h = h.replace(/<a [^>]*href="\/admin\/contracts\/notes"[^>]*>[\s\S]*?<\/a>/g, '')
   return h
 }
 

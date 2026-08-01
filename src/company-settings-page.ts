@@ -61,11 +61,11 @@ export const companySettingsPage = `<!DOCTYPE html>
       <div>
         <label class="block text-sm font-bold text-gray-700 mb-2" for="contact_phone" dir="rtl">
           <i class="fas fa-phone text-teal-600 ml-1"></i>
-          رقم الجوال للتواصل
+          رقم الهاتف للتواصل
         </label>
-        <input type="tel" id="contact_phone" maxlength="40" dir="ltr" placeholder="5XXXXXXXX أو 9665XXXXXXXX"
+        <input type="tel" id="contact_phone" maxlength="40" dir="ltr" placeholder="5XXXXXXXX أو 011XXXXXXX أو 920XXXXXX"
           class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent text-left" />
-        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">اختياري. صيغة سعودية (يبدأ بـ 5). يُستخدم في صفحة التواصل ورابط واتساب.</p>
+        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed" dir="rtl">اختياري. جوال سعودي (يبدأ بـ 5) أو أرضي (011XXXXXXX) أو موحد (920XXXXXX). يُستخدم في صفحة التواصل ورابط واتساب (للجوال فقط).</p>
       </div>
       <div>
         <label class="block text-sm font-bold text-gray-700 mb-2" for="whatsapp_greeting" dir="rtl">

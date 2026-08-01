@@ -1389,15 +1389,20 @@ function normalizePublicContactPhoneDigits(rawPhone: string): string | null {
   else if (d.startsWith('966')) d = d.slice(3)
   else if (d.startsWith('05') && d.length === 10) d = d.slice(1)
   else if (d.startsWith('0')) d = d.replace(/^0+/, '')
-  if (d.length === 9 && d.startsWith('5')) d = '966' + d
-  if (!d.startsWith('966') || d.length !== 12 || !/^9665\d{8}$/.test(d)) return null
-  return d
+  // Prepend country code for bare local numbers
+  if (d.length === 9 && d.startsWith('5')) d = '966' + d             // mobile: 5XXXXXXXX
+  else if (d.length === 9 && /^1[1-9]/.test(d)) d = '966' + d        // geographic landline: 1XYYYYYYY
+  else if (d.length === 9 && d.startsWith('920')) d = '966' + d       // unified commercial: 920XXXXXX
+  if (/^9665\d{8}$/.test(d)) return d          // Saudi mobile
+  if (/^9661[1-9]\d{7}$/.test(d)) return d     // Saudi geographic landline (area codes 11–19)
+  if (/^966920\d{6}$/.test(d)) return d        // Saudi unified commercial (920)
+  return null
 }
 
-/** WhatsApp chat URL (full international number, no + — https://faq.whatsapp.com/5913398998672934). */
+/** WhatsApp chat URL — only for Saudi mobile numbers (landlines don't support WhatsApp). */
 function buildPublicWhatsappHref(rawPhone: string): string | null {
   const d = normalizePublicContactPhoneDigits(rawPhone)
-  if (!d) return null
+  if (!d || !/^9665\d{8}$/.test(d)) return null
   return `https://wa.me/${d}`
 }
 
@@ -1944,6 +1949,8 @@ function buildPublicContactPageHtml(
   const contactPhone = escapeHtml(phoneRaw)
   const waHref = buildPublicWhatsappHref(phoneRaw)
   const waHrefAttr = waHref ? escapeHtmlAttr(waHref) : ''
+  const telHref = phoneRaw && !waHref ? `tel:+${phoneRaw}` : null
+  const telHrefAttr = telHref ? escapeHtmlAttr(telHref) : ''
   const primaryColor = escapeHtml(tenant.primary_color || '#0f766e')
   const secondaryColor = escapeHtml(tenant.secondary_color || '#14b8a6')
   const bgStyle = tenant.contact_bg_image_url
@@ -2134,9 +2141,8 @@ function buildPublicContactPageHtml(
               ${tenant.contact_hero_subtitle != null ? `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">${escapeHtml(tenant.contact_hero_subtitle)}</p>` : `<p style="margin:.15rem 0 0;font-size:1.05rem;font-weight:600;color:${accentColor};text-shadow:${hasBgImage ? '0 2px 6px rgba(0,0,0,0.3)' : 'none'};">وسيتم التواصل معك</p>`}
               ${(phoneRaw || emailRaw) ? `
               <div class="contact-chips" style="margin-top:1rem;">
-                ${phoneRaw ? `<${waHref ? `a href="${waHrefAttr}" target="_blank" rel="noopener noreferrer"` : 'span'} class="contact-chip" style="background:#25D366;color:#fff;">
-                  <i class="fab fa-whatsapp"></i>${contactPhone}
-                </${waHref ? 'a' : 'span'}>` : ''}
+                ${waHref ? `<a href="${waHrefAttr}" target="_blank" rel="noopener noreferrer" class="contact-chip" style="background:#25D366;color:#fff;"><i class="fab fa-whatsapp"></i>${contactPhone}</a>` : ''}
+                ${telHref ? `<a href="${telHrefAttr}" class="contact-chip" style="background:rgba(255,255,255,0.18);color:${escapeHtmlAttr(headerTextColor)};border:1px solid rgba(255,255,255,0.3);"><i class="fas fa-phone"></i>${contactPhone}</a>` : ''}
                 ${emailRaw ? `<span class="contact-chip" style="background:rgba(255,255,255,0.18);color:${escapeHtmlAttr(headerTextColor)};border:1px solid rgba(255,255,255,0.3);">
                   <i class="fas fa-envelope"></i>${contactEmail}
                 </span>` : ''}
@@ -3888,6 +3894,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/company-settings/locations',
     '/admin/chat',
     '/admin/my-archived-tasks',
+    '/admin/my-no-response-tasks',
   ],
   '3': [
     '/admin/customers',
@@ -3920,6 +3927,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/templates',
     '/admin/my-tasks',
     '/admin/my-archived-tasks',
+    '/admin/my-no-response-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -3942,6 +3950,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/view',
     '/admin/my-tasks',
     '/admin/my-archived-tasks',
+    '/admin/my-no-response-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -3966,6 +3975,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts/templates',
     '/admin/my-tasks',
     '/admin/my-archived-tasks',
+    '/admin/my-no-response-tasks',
     '/my-tasks',
     '/admin/my-leaves',
     '/admin/my-hr',
@@ -4273,6 +4283,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     </div>
     <a href="/admin/my-tasks"><i class="fas fa-tasks"></i>${(effectiveRoleId === 4 || effectiveRoleId === 5 || effectiveRoleId === 6) ? 'الإعلانات' : 'مهامي'}</a>
     <a href="/admin/my-archived-tasks"><i class="fas fa-archive"></i>ارشيف الإعلانات</a>
+    <a href="/admin/my-no-response-tasks"><i class="fas fa-phone-slash"></i>لا يرد</a>
     <div class="gps-collapsible" data-reports-collapsible>
       <div class="gps-collapsible-row">
         <a href="/admin/reports" class="gps-collapsible-main">
@@ -4871,6 +4882,7 @@ app.use('/admin/*', async (c, next) => {
       pathname.startsWith('/admin/requests') ||
       pathname === '/admin/my-tasks' ||
       pathname === '/admin/my-archived-tasks' ||
+      pathname === '/admin/my-no-response-tasks' ||
       pathname === '/my-tasks' ||
       pathname === '/admin/my-leaves' ||
       pathname === '/admin/my-hr' ||
@@ -5526,7 +5538,7 @@ app.patch('/api/my-tenant', async (c) => {
             {
               success: false,
               error:
-                'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).'
+                'صيغة رقم الهاتف غير صحيحة. أدخل رقماً سعودياً صالحاً (جوال: 5XXXXXXXX، أرضي: 011XXXXXXX أو 920XXXXXX).'
             },
             400
           )
@@ -5923,7 +5935,7 @@ app.post('/api/my-tenant/locations', async (c) => {
           {
             success: false,
             error:
-              'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).',
+              'صيغة رقم الهاتف غير صحيحة. أدخل رقماً سعودياً صالحاً (جوال: 5XXXXXXXX، أرضي: 011XXXXXXX أو 920XXXXXX).',
           },
           400
         )
@@ -6075,7 +6087,7 @@ app.patch('/api/my-tenant/locations/:id', async (c) => {
             {
               success: false,
               error:
-                'صيغة رقم الجوال غير صحيحة. أدخل رقماً سعودياً صالحاً (مثال: 5XXXXXXXX أو 9665XXXXXXXX).',
+                'صيغة رقم الهاتف غير صحيحة. أدخل رقماً سعودياً صالحاً (جوال: 5XXXXXXXX، أرضي: 011XXXXXXX أو 920XXXXXX).',
             },
             400
           )
@@ -17473,6 +17485,7 @@ app.get('/admin/customers/add', async (c) => {
       ? prefillEnrollmentSourceRaw
       : ''
   const prefillEnrollmentSourceLabel = String(c.req.query('affiliate_label') ?? '').trim().slice(0, 200)
+  const prefillNotes = String(c.req.query('notes') ?? '').trim().slice(0, 2000)
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
 
   const queryTenantId = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
@@ -17994,7 +18007,7 @@ app.get('/admin/customers/add', async (c) => {
               </label>
               <textarea name="notes" rows="2"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
-                        placeholder="أي ملاحظات إضافية عن العميل (اختياري)"></textarea>
+                        placeholder="أي ملاحظات إضافية عن العميل (اختياري)">${escapeHtml(prefillNotes)}</textarea>
             </div>
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -21484,9 +21497,11 @@ app.get('/admin/customers', async (c) => {
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
                       class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
-                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}"
-                      onkeyup="debounceCustomersFilter()">
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}">
                   </div>
+                  <button type="button" onclick="filterTable()" class="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+                    <i class="fas fa-search ml-1"></i>بحث
+                  </button>
                   <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white" onchange="filterTable()">
                     <option value="all">الكل</option>
                     <option value="name">الاسم فقط</option>
@@ -25188,9 +25203,11 @@ app.get('/admin/requests', async (c) => {
                     <i class="fas fa-search absolute right-3 top-3 text-gray-400 text-sm"></i>
                     <input type="text" id="searchInput" placeholder="بحث في جميع الحقول..."
                       class="w-full pr-9 pl-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
-                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}"
-                      onkeyup="debounceRequestsSearch()">
+                      onkeydown="if(event.key==='Enter'){event.preventDefault();filterTable();}">
                   </div>
+                  <button type="button" onclick="filterTable()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+                    <i class="fas fa-search ml-1"></i>بحث
+                  </button>
                   <select id="filterField" class="px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white" onchange="filterTable()">
                     <option value="all">الكل</option>
                     <option value="customer">اسم العميل فقط</option>
@@ -34084,6 +34101,7 @@ app.get('/admin/contracts/new', async (c) => {
   let partyOneSummaryHtml = ''
   let partyOneNameAttr = ''
   let partyOnePhoneAttr = ''
+  let locationOptionsHtml = ''
   const tid = userInfo.tenantId
   if (tid) {
     const trow = await c.env.DB.prepare(
@@ -34109,6 +34127,16 @@ app.get('/admin/contracts/new', async (c) => {
       userInfo.roleId === 1
         ? '<span class="text-muted">لم يُحدد معرّف شركة. أضف <code>?tenant_id=</code> إلى الرابط لعرض بيانات الطرف الأول.</span>'
         : '<span class="text-muted">تعذر تحميل بيانات الشركة.</span>'
+  }
+  if (tid) {
+    try {
+      const locRows = (await c.env.DB.prepare(
+        `SELECT id, name, contact_phone FROM tenant_locations WHERE tenant_id = ? AND is_active = 1 ORDER BY is_primary DESC, name ASC`
+      ).bind(tid).all()).results as { id: number; name: string; contact_phone: string | null }[]
+      locationOptionsHtml = locRows
+        .map(l => `<option value="${escAttr(String(l.id))}" data-phone="${escAttr(l.contact_phone || '')}">${escText(l.name)}</option>`)
+        .join('\n')
+    } catch (_) {}
   }
 
   // Build financing requests JSON keyed by customer_id for the funding request dropdown
@@ -34151,12 +34179,29 @@ app.get('/admin/contracts/new', async (c) => {
     }
   } catch (_) {}
 
+  let financeTypeOptionsHtml = ''
+  try {
+    let ftTenantId: number | null = userInfo.tenantId
+    if (ftTenantId == null && userInfo.roleId === 1) {
+      const q = c.req.query('tenant_id')
+      if (q != null && /^\d+$/.test(String(q))) ftTenantId = parseInt(String(q), 10)
+    }
+    const ftRows = ftTenantId
+      ? ((await c.env.DB.prepare(
+          `SELECT type_name FROM financing_types WHERE tenant_id = ? AND is_active = 1 ORDER BY id ASC`
+        ).bind(ftTenantId).all()).results as { type_name: string }[])
+      : []
+    financeTypeOptionsHtml = ftRows.map(ft => `<option value="${escAttr(ft.type_name)}">${escText(ft.type_name)}</option>`).join('\n')
+  } catch (_) {}
+
   let html = contractsNewPage
     .replace('<!--CONTRACTS_CUSTOMERS_OPTIONS-->', optionsHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_SUMMARY-->', partyOneSummaryHtml)
     .replace('<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->', partyOneNameAttr)
-    .replace('<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->', partyOnePhoneAttr)
+    .replaceAll('<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->', partyOnePhoneAttr)
     .replace('<!--CONTRACTS_FINANCING_REQUESTS_JSON-->', frScriptTag)
+    .replace('<!--CONTRACTS_FINANCE_TYPE_OPTIONS-->', financeTypeOptionsHtml)
+    .replace('<!--CONTRACTS_LOCATION_OPTIONS-->', locationOptionsHtml)
   if (userInfo.roleId === 3) {
     html = markContractsHtmlRole3Restricted(html)
   }
@@ -34176,12 +34221,14 @@ app.get('/admin/contracts/templates', async (c) => {
   const userInfo = await getUserInfo(c)
   return c.html(withContractsUserRoleHtml(contractsTemplatesPage, userInfo.roleId))
 })
-app.get('/admin/contracts/notes', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
-  if (denied) return denied
-  const userInfo = await getUserInfo(c)
-  return c.html(withContractsUserRoleHtml(contractsNotesPage, userInfo.roleId))
-})
+// TEMPORARILY DISABLED — promissory notes page hidden across all tenants
+// app.get('/admin/contracts/notes', async (c) => {
+//   const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
+//   if (denied) return denied
+//   const userInfo = await getUserInfo(c)
+//   return c.html(withContractsUserRoleHtml(contractsNotesPage, userInfo.roleId))
+// })
+app.get('/admin/contracts/notes', (c) => c.redirect('/admin/contracts/list', 302))
 app.get('/admin/contracts/archive', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'all', { blockRole5Panel: true })
   if (denied) return denied
@@ -37684,6 +37731,68 @@ app.get('/api/follow-ups/import/assign-options', async (c) => {
   }
 })
 
+/** Pre-import duplicate check — returns which normalized phones already exist. */
+app.post('/api/follow-ups/import/precheck', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (!canAccessMarketingModule(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const body = await c.req.json().catch(() => null) as any
+    const rawPhones: string[] = Array.isArray(body?.phones)
+      ? (body.phones as unknown[]).map((p) => String(p ?? '').trim()).filter(Boolean).slice(0, 5000)
+      : []
+
+    if (!rawPhones.length) return c.json({ success: true, existing_customers: [], existing_followups: [] })
+
+    let tenantId: number | null = userInfo.tenantId != null ? Number(userInfo.tenantId) : null
+    if (!tenantId && userInfo.roleId === 1) {
+      const tidFromBody = Number.parseInt(String(body?.tenant_id ?? ''), 10)
+      if (!Number.isNaN(tidFromBody) && tidFromBody > 0) tenantId = tidFromBody
+    }
+    if (!tenantId) return c.json({ success: false, error: 'يجب تحديد الشركة' }, 400)
+
+    const normalizedPhones: string[] = []
+    const seen = new Set<string>()
+    for (const raw of rawPhones) {
+      const result = normalizeCustomerPhoneForStorage(raw)
+      if (result.normalized && !seen.has(result.normalized)) {
+        seen.add(result.normalized)
+        normalizedPhones.push(result.normalized)
+      }
+    }
+
+    if (!normalizedPhones.length) return c.json({ success: true, existing_customers: [], existing_followups: [] })
+
+    const CHUNK = 500
+    const existingCustomers = new Set<string>()
+    const existingFollowups = new Set<string>()
+
+    for (let i = 0; i < normalizedPhones.length; i += CHUNK) {
+      const chunk = normalizedPhones.slice(i, i + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+
+      const { results: custRows } = await c.env.DB.prepare(
+        `SELECT phone FROM customers WHERE phone IN (${placeholders}) AND tenant_id = ?`
+      ).bind(...chunk, tenantId).all<{ phone: string }>()
+      for (const r of (custRows || [])) existingCustomers.add(r.phone)
+
+      const { results: followupRows } = await c.env.DB.prepare(
+        `SELECT customer_phone FROM company_contact_followups WHERE customer_phone IN (${placeholders}) AND tenant_id = ?`
+      ).bind(...chunk, tenantId).all<{ customer_phone: string }>()
+      for (const r of (followupRows || [])) existingFollowups.add(r.customer_phone)
+    }
+
+    return c.json({
+      success: true,
+      existing_customers: Array.from(existingCustomers),
+      existing_followups: Array.from(existingFollowups),
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 app.post('/api/follow-ups/import-csv', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -37863,11 +37972,12 @@ app.post('/api/follow-ups/import-csv', async (c) => {
         }
         followupsCreated++
 
-        // Always create a task (default title above). Missing/unreadable schedule → now.
+        // Always create a task (default title above). Missing/unreadable schedule → 5 days from now.
+        const fiveDaysFromNow = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
         const effectiveSchedule =
           scheduledAt && !Number.isNaN(new Date(scheduledAt).getTime())
             ? scheduledAt
-            : new Date().toISOString()
+            : fiveDaysFromNow
 
         let assignedUserId: number | null = null
         if (autoAssign && staffIds.length) {
@@ -38101,9 +38211,12 @@ app.get('/api/my-followup-tasks', async (c) => {
     const isAdminView = rid === 2
 
     const archived = c.req.query('archived') === '1'
+    const noResponse = c.req.query('no_response') === '1'
     const archivedClause = archived
       ? ' AND COALESCE(f.is_archived, 0) = 1'
-      : ' AND COALESCE(f.is_archived, 0) = 0'
+      : noResponse
+        ? ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 1'
+        : ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 0'
 
     const filter = String(c.req.query('status') ?? '').trim().toLowerCase()
     const statusClause =
@@ -38138,7 +38251,7 @@ app.get('/api/my-followup-tasks', async (c) => {
              t.employee_note_text, t.employee_note_updated_at,
              f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
              f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
-             f.archive_reason,
+             f.archive_reason, f.no_response_at,
              tn.company_name,
              pr_out.id AS outgoing_pass_request_id,
              pr_out.to_user_id AS outgoing_pass_to_user_id,
@@ -38199,6 +38312,74 @@ app.patch('/api/my-followup-tasks/:id/archive', async (c) => {
     await c.env.DB.prepare(`
       UPDATE company_contact_followups SET is_archived = 1, archive_reason = ? WHERE id = ? AND tenant_id = ?
     `).bind(reason, task.followup_id, userInfo.tenantId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Mark a follow-up as "no response" — removes it from the main task list; auto-transfers after 48 h if not revoked.
+app.patch('/api/my-followup-tasks/:id/no-response', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const task = await c.env.DB.prepare(`
+      SELECT t.id, t.followup_id, t.tenant_id, t.assigned_user_id
+      FROM company_contact_followup_tasks t
+      WHERE t.id = ? AND t.tenant_id = ? AND t.assigned_user_id = ?
+      LIMIT 1
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number; followup_id: number; tenant_id: number; assigned_user_id: number }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found or not assigned to you' }, 404)
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followups
+      SET is_no_response = 1, no_response_at = CURRENT_TIMESTAMP, no_response_by = ?
+      WHERE id = ? AND tenant_id = ?
+    `).bind(userInfo.userId, task.followup_id, userInfo.tenantId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// Revoke "no response" — puts the task back in the employee's main task list.
+app.patch('/api/my-followup-tasks/:id/revoke-no-response', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const task = await c.env.DB.prepare(`
+      SELECT t.id, t.followup_id, t.tenant_id, t.assigned_user_id
+      FROM company_contact_followup_tasks t
+      WHERE t.id = ? AND t.tenant_id = ? AND t.assigned_user_id = ?
+      LIMIT 1
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number; followup_id: number; tenant_id: number; assigned_user_id: number }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found or not assigned to you' }, 404)
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followups
+      SET is_no_response = 0, no_response_at = NULL, no_response_by = NULL
+      WHERE id = ? AND tenant_id = ?
+    `).bind(task.followup_id, userInfo.tenantId).run()
 
     return c.json({ success: true })
   } catch (error: any) {
@@ -38590,6 +38771,9 @@ app.get('/admin/my-tasks', async (c) => {
             <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
           </div>
           <div class="flex gap-2 flex-wrap">
+            <a href="/admin/my-no-response-tasks" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-phone-slash ml-2"></i>لا يرد
+            </a>
             <a href="/admin/my-archived-tasks" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm">
               <i class="fas fa-archive ml-2"></i>المؤرشفة
             </a>
@@ -38957,6 +39141,10 @@ app.get('/admin/my-tasks', async (c) => {
                 '&enrollment_source=affiliate' +
                 '&affiliate_label=' + encodeURIComponent(enrollSourceLabel);
             }
+            var enrollNoteText = String(task.employee_note_text || '').trim();
+            if (enrollNoteText) {
+              enrollHref += '&notes=' + encodeURIComponent(enrollNoteText);
+            }
             var enrollCustomerBtn =
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
               '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
@@ -38981,6 +39169,7 @@ app.get('/admin/my-tasks', async (c) => {
               }
             }
             var archiveBtn = '<button type="button" data-archive="' + task.id + '" class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-archive ml-1"></i>أرشفة</button>';
+            var noResponseBtn = '<button type="button" data-no-response="' + task.id + '" class="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-phone-slash ml-1"></i>لا يرد</button>';
             const actionBtn = done
               ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
                 enrollCustomerBtn +
@@ -38989,7 +39178,7 @@ app.get('/admin/my-tasks', async (c) => {
               : '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
                 enrollCustomerBtn +
                 '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button>' +
-                archiveBtn + '</div>';
+                archiveBtn + noResponseBtn + '</div>';
             return (
               '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">' +
                 '<div class="flex flex-wrap items-start justify-between gap-2">' +
@@ -39070,6 +39259,21 @@ app.get('/admin/my-tasks', async (c) => {
                 await loadTasks();
               } catch (e) {
                 alert(e?.response?.data?.error || e?.message || 'حدث خطأ أثناء الأرشفة');
+                btn.disabled = false;
+              }
+            });
+          });
+          root.querySelectorAll('[data-no-response]').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+              var tid = btn.getAttribute('data-no-response');
+              if (!confirm('هل تريد تصنيف هذا الطلب كـ "لا يرد"؟\nسيُنقل إلى صفحة "لا يرد" وإذا لم تسترجعه خلال 48 ساعة سيُحوَّل تلقائياً إلى الموظف التالي في الطابور.')) return;
+              try {
+                btn.disabled = true;
+                var res = await axios.patch('/api/my-followup-tasks/' + tid + '/no-response');
+                if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر التصنيف');
+                await loadTasks();
+              } catch (e) {
+                alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
                 btn.disabled = false;
               }
             });
@@ -39352,6 +39556,258 @@ app.get('/admin/my-tasks', async (c) => {
           await Promise.all([loadTasks(), loadIncomingPasses()]);
           syncPassesTabStyle();
         })();
+      </script>
+    </body>
+    </html>
+  `)
+})
+
+app.get('/my-no-response-tasks', (c) => c.redirect('/admin/my-no-response-tasks'))
+
+app.get('/admin/my-no-response-tasks', async (c) => {
+  const userInfo = await getUserInfo(c)
+  if (!userInfo.userId) return c.redirect('/login')
+  if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.redirect('/admin/panel')
+
+  const rid = normalizeRoleId(userInfo.roleId)
+  const myTasksLabel = (rid === 4 || rid === 5 || rid === 6) ? 'الإعلانات' : 'مهامي'
+  const waSettings = await fetchTenantWhatsappSettings(c.env.DB, userInfo.tenantId)
+
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>لا يرد</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+      <div class="max-w-5xl mx-auto p-6">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-phone-slash ml-2 text-orange-600"></i>لا يرد</h1>
+            <p class="text-gray-600 mt-2 text-sm">الطلبات التي صُنِّفت كـ "لا يرد" — تُحوَّل تلقائياً إلى الموظف التالي بعد 48 ساعة ما لم تسترجعها</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <a href="/admin/my-tasks" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-tasks ml-2"></i>${myTasksLabel}
+            </a>
+            <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
+              <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+            </a>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2 mb-4">
+          <div class="relative flex-1">
+            <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+            <input type="text" id="nrSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+        </div>
+        <div id="nrListStatus" class="text-sm text-gray-600 mb-3"></div>
+        <div id="nrCards" class="space-y-3"></div>
+      </div>
+
+      <script>
+        (function setupAuth() {
+          var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+          if (token && window.axios) {
+            axios.defaults.headers.common['Authorization'] = 'Bearer ' + token;
+          }
+        })();
+
+        var allNrTasks = [];
+
+        function escapeHtml(v) {
+          return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        }
+
+        function normalizePhoneDigits(phoneValue) {
+          const raw = String(phoneValue || '').trim();
+          const westernDigits = raw
+            .replace(/[٠-٩]/g, function(d) { return String(d.charCodeAt(0) - 1632); })
+            .replace(/[۰-۹]/g, function(d) { return String(d.charCodeAt(0) - 1776); });
+          return westernDigits.replace(/[^\\d]/g, '');
+        }
+
+        function toSaudiWaNumber(phoneValue) {
+          let digits = normalizePhoneDigits(phoneValue);
+          if (!digits) return '';
+          if (digits.startsWith('00966')) digits = digits.slice(2);
+          if (digits.startsWith('966')) return /^9665\\d{8}$/.test(digits) ? digits : '';
+          if (digits.startsWith('05') && digits.length === 10) digits = digits.slice(1);
+          if (/^5\\d{8}$/.test(digits)) return '966' + digits;
+          return '';
+        }
+
+        ${buildWaGreetingClientScript(waSettings.greeting, waSettings.companyName)}
+
+        function openCustomerWhatsApp(primaryPhone, fallbackPhone, customerName) {
+          const normalizedPhone = toSaudiWaNumber(primaryPhone) || toSaudiWaNumber(fallbackPhone);
+          if (!normalizedPhone) {
+            alert('لا يوجد رقم واتساب صالح لهذا العميل');
+            return;
+          }
+          let url = 'https://wa.me/' + normalizedPhone;
+          const msg = applyWaGreetingTemplate(customerName || '');
+          if (msg) url += '?text=' + encodeURIComponent(msg);
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function whatsappBtnHtml(phone, name) {
+          return '<button type="button" class="wa-btn inline-flex items-center gap-1 bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded-md text-xs font-semibold transition-colors shrink-0" data-wa-phone="' +
+            escapeHtml(phone || '') + '" data-wa-name="' + escapeHtml(name || '') +
+            '" title="فتح واتساب"><i class="fab fa-whatsapp"></i><span>واتساب</span></button>';
+        }
+
+        function bindWhatsAppButtons(root) {
+          if (!root) return;
+          root.querySelectorAll('.wa-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              openCustomerWhatsApp(btn.getAttribute('data-wa-phone'), '', btn.getAttribute('data-wa-name'));
+            });
+          });
+        }
+
+        function formatDate(value) {
+          const d = new Date(value);
+          if (Number.isNaN(d.getTime())) return '-';
+          return d.toLocaleString('ar-SA', {
+            timeZone: 'Asia/Riyadh',
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: true
+          });
+        }
+
+        function formatCountdown(noResponseAt) {
+          if (!noResponseAt) return '';
+          var expiresAt = new Date(noResponseAt).getTime() + 48 * 60 * 60 * 1000;
+          var now = Date.now();
+          var diff = expiresAt - now;
+          if (diff <= 0) return '<span class="text-red-700 font-semibold">انتهت المهلة — سيتم التحويل قريباً</span>';
+          var hours = Math.floor(diff / 3600000);
+          var minutes = Math.floor((diff % 3600000) / 60000);
+          return 'يتبقى: <span class="font-semibold text-orange-700">' + hours + ' س ' + minutes + ' د</span> قبل التحويل التلقائي';
+        }
+
+        function priorityBadge(priority) {
+          return priority === 'important'
+            ? '<span class="inline-block bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">مهم</span>'
+            : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+        }
+
+        function setStatus(msg, type) {
+          var el = document.getElementById('nrListStatus');
+          el.textContent = msg || '';
+          el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
+        }
+
+        function renderCards(tasks) {
+          var root = document.getElementById('nrCards');
+          if (!tasks.length) {
+            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد طلبات مصنفة كـ "لا يرد" حالياً.</div>';
+            setStatus('');
+            return;
+          }
+          setStatus(tasks.length + ' طلب');
+          root.innerHTML = tasks.map(function (task) {
+            var countdown = task.no_response_at
+              ? '<div class="mt-2 flex items-center gap-2 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">' +
+                '<i class="fas fa-clock flex-shrink-0"></i><span data-countdown-id="' + task.no_response_at + '">' + formatCountdown(task.no_response_at) + '</span></div>'
+              : '';
+            var noteBlock = task.employee_note_text
+              ? '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                '<div class="text-xs font-medium text-gray-700 mb-1"><i class="fas fa-note-sticky ml-1 text-orange-600"></i>ملاحظة الموظف</div>' +
+                '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
+                '</div>'
+              : '';
+            return (
+              '<div class="bg-white border border-orange-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                  '<div class="min-w-0 flex-1">' +
+                    '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
+                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
+                    '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-phone-slash ml-1"></i>لا يرد</span>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                  (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
+                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+                '</div>' +
+                countdown +
+                noteBlock +
+                '<div class="mt-3 flex flex-wrap gap-2">' +
+                  '<button type="button" data-revoke="' + task.id + '" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-undo ml-1"></i>استرجاع للقائمة الرئيسية</button>' +
+                '</div>' +
+              '</div>'
+            );
+          }).join('');
+          bindWhatsAppButtons(root);
+          root.querySelectorAll('[data-revoke]').forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+              var tid = btn.getAttribute('data-revoke');
+              try {
+                btn.disabled = true;
+                var res = await axios.patch('/api/my-followup-tasks/' + tid + '/revoke-no-response');
+                if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر الاسترجاع');
+                await loadTasks();
+              } catch (e) {
+                alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
+                btn.disabled = false;
+              }
+            });
+          });
+        }
+
+        function applySearch() {
+          var q = (document.getElementById('nrSearchInput').value || '').trim().toLowerCase();
+          if (!q) { renderCards(allNrTasks); return; }
+          var filtered = allNrTasks.filter(function(t) {
+            return (String(t.task_title || '').toLowerCase().includes(q)) ||
+                   (String(t.customer_name || '').toLowerCase().includes(q)) ||
+                   (String(t.customer_phone || '').toLowerCase().includes(q));
+          });
+          renderCards(filtered);
+        }
+
+        async function loadTasks() {
+          setStatus('جاري التحميل...', 'neutral');
+          document.getElementById('nrCards').innerHTML = '';
+          try {
+            const res = await axios.get('/api/my-followup-tasks?no_response=1');
+            allNrTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
+            setStatus('');
+            applySearch();
+          } catch (e) {
+            setStatus('تعذر تحميل البيانات', 'error');
+          }
+        }
+
+        document.getElementById('nrSearchInput').addEventListener('input', applySearch);
+
+        // Refresh countdown every minute
+        setInterval(function() {
+          var root = document.getElementById('nrCards');
+          root.querySelectorAll('[data-countdown-id]').forEach(function(el) {
+            var noResponseAt = el.getAttribute('data-countdown-id');
+            el.innerHTML = formatCountdown(noResponseAt);
+          });
+        }, 60000);
+
+        loadTasks();
       </script>
     </body>
     </html>
@@ -42390,6 +42846,7 @@ app.get('/admin/follow-ups/import', async (c) => {
             <thead class="bg-gray-100">
               <tr>
                 <th class="px-3 py-2 text-right text-gray-700">#</th>
+                <th class="px-3 py-2 text-right text-gray-700">الحالة</th>
                 <th class="px-3 py-2 text-right text-gray-700">الاسم</th>
                 <th class="px-3 py-2 text-right text-gray-700">الهاتف</th>
                 <th class="px-3 py-2 text-right text-gray-700">عنوان المهمة</th>
@@ -42410,6 +42867,11 @@ app.get('/admin/follow-ups/import', async (c) => {
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">مصدر المتابعات <span class="text-red-500">*</span></label>
           <input type="text" id="sourceLabel" placeholder="مثال: حملة يوليو" maxlength="100"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-300 focus:border-orange-400 outline-none">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">عنوان موحد للمهام <span class="text-gray-400 font-normal">(اختياري — يطغى على عمود عنوان المهمة)</span></label>
+          <input type="text" id="taskTitleOverride" placeholder="اتركه فارغاً لاستخدام بيانات الملف" maxlength="500"
             class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-300 focus:border-orange-400 outline-none">
         </div>
 
@@ -42555,11 +43017,92 @@ app.get('/admin/follow-ups/import', async (c) => {
   <script>
     let parsedRows = []
     let previewRows = []
+    let precheckState = null // null | { loading: true } | { existingCustomers: Set, existingFollowups: Set }
+    let taskTitleOverride = ''
+    let staffLoadPromise = null
 
     function normalizeCsvCell(v) {
       return String(v == null ? '' : v).replace(/^\\uFEFF/, '').replace(/\\u200F/g, '').trim()
     }
     function normalizeHeader(v) { return normalizeCsvCell(v).toLowerCase() }
+
+    function normalizePhoneForPrecheck(raw) {
+      let s = String(raw || '').trim()
+        .replace(/[\\u0660-\\u0669]/g, function(d) { return String(d.charCodeAt(0) - 1632) })
+        .replace(/[\\u06F0-\\u06F9]/g, function(d) { return String(d.charCodeAt(0) - 1776) })
+      let digits = s.replace(/\\D/g, '')
+      if (!digits) return null
+      if (digits.startsWith('00966')) digits = digits.slice(2)
+      else if (!digits.startsWith('966')) digits = '966' + digits.replace(/^0+/, '')
+      const local = digits.startsWith('966') ? digits.slice(3) : digits
+      if (!/^5\\d{8}$/.test(local)) return null
+      return '966' + local
+    }
+
+    function setPrecheckLoadingUI(on) {
+      const el = document.getElementById('precheckLoadingNote')
+      if (el) el.classList.toggle('hidden', !on)
+    }
+
+    async function runPrecheck(rows) {
+      precheckState = { loading: true }
+      setPrecheckLoadingUI(true)
+      try {
+        const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
+        const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+        const headers = { 'Content-Type': 'application/json' }
+        if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+        const phones = rows.map(function(r) { return r.phone })
+        const bodyObj = { phones }
+        if (tenantId) bodyObj.tenant_id = tenantId
+        const resp = await fetch('/api/follow-ups/import/precheck', { method: 'POST', credentials: 'same-origin', headers, body: JSON.stringify(bodyObj) })
+        const data = await resp.json().catch(function() { return {} })
+        if (data && data.success) {
+          precheckState = {
+            loading: false,
+            existingCustomers: new Set(Array.isArray(data.existing_customers) ? data.existing_customers : []),
+            existingFollowups: new Set(Array.isArray(data.existing_followups) ? data.existing_followups : []),
+          }
+        } else {
+          precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set() }
+        }
+      } catch (_) {
+        precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set() }
+      }
+      // Ensure staff data is loaded so the assignment column is populated in one stable render
+      if (staffLoadPromise) await staffLoadPromise
+      setPrecheckLoadingUI(false)
+      renderPreview(previewRows)
+      updateSubmitCount()
+    }
+
+    function getRowSkipReason(row, seenNormalized) {
+      const normalized = normalizePhoneForPrecheck(row.phone)
+      if (!normalized) return 'invalid_phone'
+      if (seenNormalized.has(normalized)) return 'duplicate_in_file'
+      if (precheckState && !precheckState.loading) {
+        if (precheckState.existingCustomers.has(normalized)) return 'existing_customer'
+        if (precheckState.existingFollowups.has(normalized)) return 'existing_followup'
+      }
+      return null
+    }
+
+    function computeRowStatuses(rows) {
+      const seen = new Set()
+      return rows.map(function(row) {
+        const normalized = normalizePhoneForPrecheck(row.phone)
+        const reason = getRowSkipReason(row, seen)
+        if (normalized && !reason) seen.add(normalized)
+        return { normalized, reason }
+      })
+    }
+
+    function updateSubmitCount() {
+      const statuses = computeRowStatuses(previewRows)
+      const importableCount = statuses.filter(function(s) { return !s.reason }).length
+      const submitCountEl = document.getElementById('submitCount')
+      if (submitCountEl) submitCountEl.textContent = importableCount
+    }
 
     function isReadableSchedule(v) {
       const s = String(v == null ? '' : v).trim()
@@ -42658,6 +43201,7 @@ app.get('/admin/follow-ups/import', async (c) => {
           }
         })
         previewRows = out
+        precheckState = null
         document.getElementById('fileName').textContent = file.name
         document.getElementById('fileSize').textContent = (file.size > 1024*1024 ? (file.size/1048576).toFixed(2)+' MB' : (file.size/1024).toFixed(2)+' KB')
         document.getElementById('fileInfo').classList.remove('hidden')
@@ -42665,6 +43209,7 @@ app.get('/admin/follow-ups/import', async (c) => {
         document.getElementById('previewSection').classList.remove('hidden')
         document.getElementById('downloadPreviewBtn').classList.remove('hidden')
         document.getElementById('sourceLabel').focus()
+        runPrecheck(out)
       } catch (e) {
         console.error(e)
         alert('حدث خطأ أثناء قراءة الملف')
@@ -42704,7 +43249,35 @@ app.get('/admin/follow-ups/import', async (c) => {
       })
     })()
 
+    ;(function() {
+      const el = document.getElementById('taskTitleOverride')
+      if (el) {
+        el.addEventListener('input', function() {
+          taskTitleOverride = el.value.trim()
+          if (previewRows.length) renderPreview(previewRows)
+        })
+      }
+    })()
+
+    const SKIP_REASON_LABEL_PREVIEW = {
+      invalid_phone: 'رقم غير صالح',
+      duplicate_in_file: 'مكرر في الملف',
+      existing_customer: 'عميل موجود',
+      existing_followup: 'متابعة موجودة',
+    }
+
+    function formatStatusCell(skipReason) {
+      if (skipReason) {
+        return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">' +
+          escapeHtml(SKIP_REASON_LABEL_PREVIEW[skipReason] || skipReason) + '</span>'
+      }
+      return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">✓ سيتم الاستيراد</span>'
+    }
+
     function formatTitlePreviewCell(c) {
+      if (taskTitleOverride) {
+        return '<span class="text-indigo-700 font-medium">' + escapeHtml(taskTitleOverride) + ' <span class="text-xs font-normal text-indigo-400">(موحد)</span></span>'
+      }
       if (c.task_title) {
         return '<span class="text-gray-600">' + escapeHtml(c.task_title) + '</span>'
       }
@@ -42718,10 +43291,10 @@ app.get('/admin/follow-ups/import', async (c) => {
       if (c.schedule_status === 'invalid') {
         return '<div class="text-amber-800">' +
           '<div class="line-through text-gray-400 text-xs">' + escapeHtml(c.scheduled_at_raw) + '</div>' +
-          '<div class="font-medium">— (صيغة غير صالحة → الآن)</div>' +
+          '<div class="font-medium">— (صيغة غير صالحة → بعد 5 أيام)</div>' +
         '</div>'
       }
-      return '<span class="text-amber-800 font-medium">الآن (افتراضي)</span>'
+      return '<span class="text-amber-800 font-medium">بعد 5 أيام (افتراضي)</span>'
     }
 
     function computePreviewAssignments(rows) {
@@ -42755,20 +43328,27 @@ app.get('/admin/follow-ups/import', async (c) => {
       const MAX = 50
       const tbody = document.getElementById('previewBody')
       const slice = items.slice(0, MAX)
+      const statuses = computeRowStatuses(items)
       const assignments = computePreviewAssignments(items)
-      tbody.innerHTML = slice.map((c, i) => (
-        '<tr class="hover:bg-gray-50">' +
+      tbody.innerHTML = slice.map((c, i) => {
+        const { reason } = statuses[i]
+        const willSkip = !!reason
+        const rowClass = willSkip ? 'bg-red-50 opacity-70' : 'hover:bg-gray-50'
+        const assignCell = willSkip ? '<span class="text-gray-300 text-xs">—</span>' : formatAssignmentPreviewCell(assignments[i])
+        return '<tr class="' + rowClass + '">' +
           '<td class="px-3 py-2 text-gray-500">' + (i+1) + '</td>' +
+          '<td class="px-3 py-2">' + formatStatusCell(reason) + '</td>' +
           '<td class="px-3 py-2">' + escapeHtml(c.name) + '</td>' +
           '<td class="px-3 py-2">' + escapeHtml(c.phone) + '</td>' +
           '<td class="px-3 py-2">' + formatTitlePreviewCell(c) + '</td>' +
           '<td class="px-3 py-2 text-gray-600">' + escapeHtml(c.priority) + '</td>' +
           '<td class="px-3 py-2">' + formatSchedulePreviewCell(c) + '</td>' +
-          '<td class="px-3 py-2">' + formatAssignmentPreviewCell(assignments[i]) + '</td>' +
+          '<td class="px-3 py-2">' + assignCell + '</td>' +
         '</tr>'
-      )).join('')
+      }).join('')
       document.getElementById('rowCount').textContent = items.length
-      document.getElementById('submitCount').textContent = items.length
+      const importableCount = statuses.filter(function(s) { return !s.reason }).length
+      document.getElementById('submitCount').textContent = importableCount
       document.getElementById('previewMore').textContent = items.length > MAX ? ('... و ' + (items.length - MAX) + ' صف إضافي غير معروض') : ''
 
       const invalidCount = items.filter(function(c) { return c.schedule_status === 'invalid' }).length
@@ -42780,10 +43360,10 @@ app.get('/admin/follow-ups/import', async (c) => {
         parts.push(missingTitle + ' صف بلا عنوان مهمة → سيُستخدم «' + DEFAULT_TASK_TITLE + '»')
       }
       if (invalidCount) {
-        parts.push(invalidCount + ' صف فيه موعد غير قابل للقراءة وسيُتجاهل (يُعامل كفارغ → يُجدول الآن)')
+        parts.push(invalidCount + ' صف فيه موعد غير قابل للقراءة وسيُتجاهل (يُجدول بعد 5 أيام)')
       }
       if (missingSchedule) {
-        parts.push(missingSchedule + ' صف بلا موعد → يُجدول تلقائياً إلى الوقت الحالي')
+        parts.push(missingSchedule + ' صف بلا موعد → يُجدول بعد 5 أيام من الاستيراد')
       }
       if (noteEl) {
         if (parts.length) {
@@ -42803,15 +43383,19 @@ app.get('/admin/follow-ups/import', async (c) => {
     window.downloadPreviewXlsx = function() {
       if (!previewRows.length) return
       if (typeof XLSX === 'undefined') { alert('مكتبة Excel غير محملة. حدث الصفحة.'); return }
+      const statuses = computeRowStatuses(previewRows)
       const assignments = computePreviewAssignments(previewRows)
-      const header = ['#', 'الاسم', 'الهاتف', 'عنوان المهمة', 'الأولوية', 'موعد المهمة', 'الموظف المكلف (معاينة)']
+      const header = ['#', 'الحالة', 'الاسم', 'الهاتف', 'عنوان المهمة', 'الأولوية', 'موعد المهمة', 'الموظف المكلف (معاينة)']
       const rows = previewRows.map(function(c, i) {
-        const staff = assignments[i]
+        const { reason } = statuses[i]
+        const staff = reason ? null : assignments[i]
+        const statusLabel = reason ? (SKIP_REASON_LABEL_PREVIEW[reason] || reason) : 'سيتم الاستيراد'
         return [
           i + 1,
+          statusLabel,
           c.name,
           c.phone,
-          c.task_title || DEFAULT_TASK_TITLE,
+          taskTitleOverride || c.task_title || DEFAULT_TASK_TITLE,
           c.priority,
           c.schedule_status === 'valid' ? c.scheduled_at : '',
           staff ? (staff.full_name || ('#' + staff.id)) : '',
@@ -42826,7 +43410,10 @@ app.get('/admin/follow-ups/import', async (c) => {
     window.clearFile = function() {
       parsedRows = []
       previewRows = []
+      precheckState = null
+      taskTitleOverride = ''
       const inp = document.getElementById('importFile'); if (inp) inp.value = ''
+      const ttInp = document.getElementById('taskTitleOverride'); if (ttInp) ttInp.value = ''
       document.getElementById('fileInfo').classList.add('hidden')
       document.getElementById('previewSection').classList.add('hidden')
       document.getElementById('downloadPreviewBtn').classList.add('hidden')
@@ -42988,23 +43575,26 @@ app.get('/admin/follow-ups/import', async (c) => {
       refreshAssignmentPreview()
     }
 
-    async function loadAssignOptions() {
-      try {
-        const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
-        const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
-        const headers = {}
-        if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
-        const url = '/api/follow-ups/import/assign-options' + (tenantId ? '?tenant_id=' + encodeURIComponent(tenantId) : '')
-        const resp = await fetch(url, { credentials: 'same-origin', headers })
-        const data = await resp.json().catch(() => ({}))
-        if (data && data.success) {
-          availableStaff = Array.isArray(data.available_staff) ? data.available_staff : []
-          availableBranches = Array.isArray(data.branches) ? data.branches : []
-          refreshStaffPicker()
-          refreshBranchPicker()
-          refreshAssignmentPreview()
-        }
-      } catch (_) {}
+    function loadAssignOptions() {
+      staffLoadPromise = (async function() {
+        try {
+          const tenantId = new URLSearchParams(window.location.search).get('tenant_id')
+          const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
+          const headers = {}
+          if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+          const url = '/api/follow-ups/import/assign-options' + (tenantId ? '?tenant_id=' + encodeURIComponent(tenantId) : '')
+          const resp = await fetch(url, { credentials: 'same-origin', headers })
+          const data = await resp.json().catch(() => ({}))
+          if (data && data.success) {
+            availableStaff = Array.isArray(data.available_staff) ? data.available_staff : []
+            availableBranches = Array.isArray(data.branches) ? data.branches : []
+            refreshStaffPicker()
+            refreshBranchPicker()
+            refreshAssignmentPreview()
+          }
+        } catch (_) {}
+      })()
+      return staffLoadPromise
     }
 
     ;(function initAssignPanel() {
@@ -43045,7 +43635,10 @@ app.get('/admin/follow-ups/import', async (c) => {
     window.resetForAnother = function() {
       parsedRows = []
       previewRows = []
+      precheckState = null
+      taskTitleOverride = ''
       const inp = document.getElementById('importFile'); if (inp) inp.value = ''
+      const ttInp = document.getElementById('taskTitleOverride'); if (ttInp) ttInp.value = ''
       document.getElementById('resultSection').classList.add('hidden')
       document.getElementById('downloadPreviewBtn').classList.add('hidden')
       document.getElementById('sourceLabel').value = ''
@@ -43089,8 +43682,11 @@ app.get('/admin/follow-ups/import', async (c) => {
         const lsToken = localStorage.getItem('authToken') || localStorage.getItem('token') || ''
         const headers = { 'Content-Type': 'application/json' }
         if (lsToken) headers['Authorization'] = 'Bearer ' + lsToken
+        const rowsToSend = taskTitleOverride
+          ? parsedRows.map(function(r) { return Object.assign({}, r, { task_title: taskTitleOverride }) })
+          : parsedRows
         const body = {
-          rows: parsedRows,
+          rows: rowsToSend,
           source_label: sourceLabel,
           assign_mode: mode,
           assign_branch_id: branchId,
@@ -43195,33 +43791,6 @@ app.get('/admin/follow-ups', async (c) => {
             </div>
 
             <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/10 border border-white/15 rounded-2xl p-2">
-                <div class="min-w-[14rem]">
-                  <label class="block text-[11px] font-bold text-white/90 mb-1">مصدر الرابط</label>
-                  <div class="relative">
-                    <select id="followupLinkFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
-                      <option value="all">الكل</option>
-                      <option value="" disabled>──────────────────</option>
-                      <option value="company">رابط الشركة</option>
-                      <option value="affiliate">روابط الأفلييت</option>
-                      <option value="imports">استيراد</option>
-                    </select>
-                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
-                  </div>
-                </div>
-                <div class="min-w-[14rem]">
-                  <label class="block text-[11px] font-bold text-white/90 mb-1">الأولوية</label>
-                  <div class="relative">
-                    <select id="followupPriorityFilterSelect" class="w-full h-9 appearance-none bg-white/95 hover:bg-white border border-white/40 rounded-xl px-3 pl-10 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-white/60 cursor-pointer">
-                      <option value="all">الكل</option>
-                      <option value="important">مهم</option>
-                      <option value="regular">عادي</option>
-                    </select>
-                    <i class="fas fa-chevron-down absolute left-3 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none text-xs"></i>
-                  </div>
-                </div>
-              </div>
-
               <div class="flex items-center gap-1 bg-white/10 border border-white/15 rounded-xl p-1" title="طريقة العرض">
                 <button type="button" id="viewCardsBtn" onclick="switchView('cards')" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" title="بطاقات">
                   <i class="fas fa-th-large"></i>
@@ -43244,6 +43813,61 @@ app.get('/admin/follow-ups', async (c) => {
               <a href="/admin/follow-ups/archived" class="inline-flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white px-4 py-2 rounded-xl text-sm font-medium border border-white/20">
                 <i class="fas fa-archive"></i>الأرشيف
               </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter panel -->
+      <div class="bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <!-- Always visible: search + toggle -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative flex-1 min-w-[160px] max-w-sm">
+              <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+              <input type="text" id="followupSearchInput" placeholder="بحث بالاسم أو الهاتف أو المصدر..."
+                class="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();applyFollowupClientFilters();}">
+            </div>
+            <button type="button" onclick="applyFollowupClientFilters()" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+              <i class="fas fa-search ml-1"></i>بحث
+            </button>
+            <button type="button" onclick="toggleFollowupFilters()" class="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:text-orange-600 bg-white transition-colors whitespace-nowrap">
+              <span>فلاتر</span>
+              <i class="fas fa-filter text-orange-500 text-xs"></i>
+              <i id="followupFiltersIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform:rotate(-90deg)"></i>
+            </button>
+          </div>
+          <!-- Collapsible filters -->
+          <div id="followupFiltersPanel" style="display:none;" class="mt-3 pt-3 border-t border-gray-100">
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="relative">
+                <select id="followupLinkFilterSelect" class="h-9 appearance-none bg-white border border-gray-200 rounded-lg px-3 pl-8 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer">
+                  <option value="all">المصدر: الكل</option>
+                  <option value="" disabled>──────────────────</option>
+                  <option value="company">رابط الشركة</option>
+                  <option value="affiliate">روابط الأفلييت</option>
+                  <option value="imports">استيراد</option>
+                </select>
+                <i class="fas fa-chevron-down absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+              </div>
+              <div class="relative">
+                <select id="followupPriorityFilterSelect" class="h-9 appearance-none bg-white border border-gray-200 rounded-lg px-3 pl-8 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer">
+                  <option value="all">الأولوية: الكل</option>
+                  <option value="important">مهم</option>
+                  <option value="regular">عادي</option>
+                </select>
+                <i class="fas fa-chevron-down absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+              </div>
+              <div class="relative">
+                <select id="followupEmployeeFilter" class="h-9 appearance-none bg-white border border-gray-200 rounded-lg px-3 pl-8 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer" onchange="applyFollowupClientFilters()">
+                  <option value="all">الموظف: الكل</option>
+                </select>
+                <i class="fas fa-chevron-down absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+              </div>
+              <button onclick="resetFollowupFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
+                <i class="fas fa-redo"></i> إعادة تعيين
+              </button>
             </div>
           </div>
         </div>
@@ -44021,7 +44645,8 @@ app.get('/admin/follow-ups', async (c) => {
                 data-followup-id="\${Number(row.id)}"
                 data-customer-name="\${escapeHtml(row.customer_name || '-')}"
                 data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
-                data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}">
+                data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}"
+                data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
                 <div class="flex items-start justify-between gap-3 mb-3">
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
@@ -44138,6 +44763,73 @@ app.get('/admin/follow-ups', async (c) => {
           prSelect.value = current.pr;
         }
 
+        function toggleFollowupFilters() {
+          const panel = document.getElementById('followupFiltersPanel');
+          const icon = document.getElementById('followupFiltersIcon');
+          if (!panel) return;
+          const opening = panel.style.display === 'none';
+          panel.style.display = opening ? 'block' : 'none';
+          if (icon) icon.style.transform = opening ? '' : 'rotate(-90deg)';
+        }
+
+        function hydrateFollowupEmployeeFilter() {
+          const el = document.getElementById('followupEmployeeFilter');
+          if (!el) return;
+          const current = el.value || 'all';
+          const names = new Set();
+          followupAssignableStaff.forEach((s) => {
+            const name = String(s.full_name || '').trim();
+            if (name) names.add(name);
+          });
+          el.innerHTML = '<option value="all">الموظف: الكل</option>' +
+            '<option value="غير مخصص">غير مخصص</option>' +
+            Array.from(names).sort((a, b) => a.localeCompare(b, 'ar')).map((n) =>
+              '<option value="' + n.replace(/"/g, '&quot;') + '">' + n + '</option>'
+            ).join('');
+          if (current && current !== 'all' && names.has(current)) el.value = current;
+        }
+
+        function applyFollowupClientFilters() {
+          const searchVal = ((document.getElementById('followupSearchInput') || {}).value || '').trim().toLowerCase();
+          const empVal = ((document.getElementById('followupEmployeeFilter') || {}).value || 'all');
+
+          const cards = document.getElementById('cards');
+          if (cards) {
+            cards.querySelectorAll('[data-followup-id]').forEach((card) => {
+              const name = (card.getAttribute('data-customer-name') || '').toLowerCase();
+              const phone = (card.getAttribute('data-customer-phone') || '').toLowerCase();
+              const source = (card.getAttribute('data-source-label') || '').toLowerCase();
+              const assigned = (card.getAttribute('data-assigned') || '').trim();
+              const matchSearch = !searchVal || name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal);
+              const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
+              card.style.display = (matchSearch && matchEmp) ? '' : 'none';
+            });
+          }
+
+          const tbody = document.getElementById('followup-rows-body');
+          if (tbody) {
+            tbody.querySelectorAll('tr[data-followup-id]').forEach((row) => {
+              const name = (row.getAttribute('data-customer-name') || '').toLowerCase();
+              const phone = (row.getAttribute('data-customer-phone') || '').toLowerCase();
+              const source = (row.getAttribute('data-source-label') || '').toLowerCase();
+              const assigned = (row.getAttribute('data-assigned') || '').trim();
+              const matchSearch = !searchVal || name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal);
+              const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
+              row.style.display = (matchSearch && matchEmp) ? '' : 'none';
+            });
+          }
+        }
+
+        function resetFollowupFilters() {
+          const searchEl = document.getElementById('followupSearchInput');
+          if (searchEl) searchEl.value = '';
+          const empEl = document.getElementById('followupEmployeeFilter');
+          if (empEl) empEl.value = 'all';
+          setFollowupFilterParamsInUrl({ link: 'all', pr: 'all' });
+          syncFollowupHeaderFiltersFromUrl();
+          loadFollowUps();
+        }
+
         function initFollowupHeaderFilters() {
           const linkSelect = document.getElementById('followupLinkFilterSelect');
           const prSelect = document.getElementById('followupPriorityFilterSelect');
@@ -44148,18 +44840,18 @@ app.get('/admin/follow-ups', async (c) => {
           linkSelect.addEventListener('change', function() {
             const current = getFollowupFilterParamsFromUrl();
             setFollowupFilterParamsInUrl({ link: this.value, pr: current.pr });
-            loadFollowUps();
+            loadFollowUps().then(() => applyFollowupClientFilters());
           });
 
           prSelect.addEventListener('change', function() {
             const current = getFollowupFilterParamsFromUrl();
             setFollowupFilterParamsInUrl({ link: current.link, pr: this.value });
-            loadFollowUps();
+            loadFollowUps().then(() => applyFollowupClientFilters());
           });
 
           window.addEventListener('popstate', function() {
             syncFollowupHeaderFiltersFromUrl();
-            loadFollowUps();
+            loadFollowUps().then(() => applyFollowupClientFilters());
           });
         }
 
@@ -44278,6 +44970,7 @@ app.get('/admin/follow-ups', async (c) => {
             const url = '/api/follow-ups/assignable-staff' + (tenantId ? '?tenant_id=' + encodeURIComponent(tenantId) : '');
             const res = await axios.get(url);
             followupAssignableStaff = Array.isArray(res?.data?.data) ? res.data.data : [];
+            hydrateFollowupEmployeeFilter();
           } catch (_) {
             followupAssignableStaff = [];
           }
@@ -44309,7 +45002,7 @@ app.get('/admin/follow-ups', async (c) => {
           tbody.innerHTML = rows.map((row) => {
             const fid = Number(row.id);
             const sourceLabel = followupSourceLabel(row) || '-';
-            return \`<tr class="hover:bg-gray-50 transition-colors" data-followup-id="\${fid}" data-customer-name="\${escapeHtml(row.customer_name||'-')}" data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}" data-source-label="\${escapeHtml(sourceLabel)}">
+            return \`<tr class="hover:bg-gray-50 transition-colors" data-followup-id="\${fid}" data-customer-name="\${escapeHtml(row.customer_name||'-')}" data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}" data-source-label="\${escapeHtml(sourceLabel)}" data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
               <td class="px-4 py-3">
                 <input type="checkbox" class="followup-row-check rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-id="\${fid}" onchange="onFollowupRowCheckChange(this)">
               </td>
@@ -44534,7 +45227,8 @@ app.get('/admin/follow-ups', async (c) => {
                   data-followup-id="\${Number(row.id)}"
                   data-customer-name="\${escapeHtml(row.customer_name || '-')}"
                   data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
-                  data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}">
+                  data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}"
+                  data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
                   <div class="flex items-start justify-between gap-3 mb-3">
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
@@ -44712,7 +45406,7 @@ app.get('/admin/follow-ups', async (c) => {
           document.getElementById('rows-container').classList.remove('hidden');
         }
 
-        loadFollowupAssignableStaff().then(() => loadFollowUps());
+        loadFollowupAssignableStaff().then(() => loadFollowUps().then(() => applyFollowupClientFilters()));
 
         ${actionsDropdownScript}
       </script>
@@ -45096,6 +45790,144 @@ app.post('/api/customer-reminders/trigger', async (c) => {
   }
 })
 
+// Auto-transfer "no response" followup tasks to the next eligible employee after 48 hours.
+// Distribution order mirrors the follow-up CSV import: staff ordered by name, cursor from
+// tenant_followup_auto_assign_state, pure round-robin excluding the current assignee.
+async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; skipped: number }> {
+  const { results: expiredRows } = await db.prepare(`
+    SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id
+    FROM company_contact_followup_tasks t
+    INNER JOIN company_contact_followups f ON f.id = t.followup_id
+    WHERE COALESCE(f.is_no_response, 0) = 1
+      AND f.no_response_at IS NOT NULL
+      AND datetime(f.no_response_at) <= datetime('now', '-48 hours')
+      AND COALESCE(f.is_archived, 0) = 0
+    ORDER BY f.no_response_at ASC
+    LIMIT 200
+  `).all<{ task_id: number; tenant_id: number; assigned_user_id: number; followup_id: number }>()
+
+  let transferred = 0
+  let skipped = 0
+
+  // Per-tenant cache: staff list, round-robin cursor, and user name lookup
+  const tenantStaffCache = new Map<number, { id: number; full_name: string }[]>()
+  const tenantStateCache = new Map<number, number | null>()
+  const userNameCache = new Map<number, string>()
+
+  for (const row of (expiredRows || [])) {
+    const tenantId = row.tenant_id
+
+    if (!tenantStaffCache.has(tenantId)) {
+      // Same staff query as follow-up CSV import (roles 4/5/6, ordered by name)
+      const { results: staffRows } = await db.prepare(`
+        SELECT u.id, u.full_name
+        FROM users u
+        WHERE u.is_active = 1
+          AND (
+            (u.role_id IN (4, 6, 14) AND u.tenant_id = ?)
+            OR (
+              u.role_id IN (5, 15, 6)
+              AND (
+                u.tenant_id = ?
+                OR EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?)
+              )
+            )
+          )
+        ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC
+      `).bind(tenantId, tenantId, tenantId).all<{ id: number; full_name: string }>()
+
+      // Deduplicate (role 6 can appear twice from both clauses)
+      const seen = new Set<number>()
+      const dedupedStaff: { id: number; full_name: string }[] = []
+      for (const s of (staffRows || [])) {
+        if (!seen.has(s.id)) { seen.add(s.id); dedupedStaff.push(s) }
+      }
+      tenantStaffCache.set(tenantId, dedupedStaff)
+      for (const s of dedupedStaff) userNameCache.set(s.id, s.full_name || '')
+
+      const stateRow = await db.prepare(`
+        SELECT last_auto_assigned_user_id FROM tenant_followup_auto_assign_state
+        WHERE tenant_id = ? LIMIT 1
+      `).bind(tenantId).first<{ last_auto_assigned_user_id: number | null }>()
+      tenantStateCache.set(tenantId, stateRow?.last_auto_assigned_user_id ?? null)
+    }
+
+    const staff = tenantStaffCache.get(tenantId) || []
+    if (!staff.length) { skipped++; continue }
+
+    const staffIds = staff.map((s) => s.id)
+
+    // Prefer staff other than the current assignee; fall back to full list if only one person
+    const preferred = staffIds.filter((id) => id !== row.assigned_user_id)
+    const eligible = preferred.length ? preferred : staffIds
+    if (!eligible.length) { skipped++; continue }
+
+    // Round-robin pick from eligible using the follow-up cursor
+    const lastId = tenantStateCache.get(tenantId) ?? null
+    const lastIdx = lastId != null ? staffIds.indexOf(lastId) : -1
+    let nextId: number | null = null
+    for (let i = 1; i <= staffIds.length; i++) {
+      const candidate = staffIds[(lastIdx + i) % staffIds.length]
+      if (eligible.includes(candidate)) { nextId = candidate; break }
+    }
+    if (nextId == null) nextId = eligible[0]
+
+    // Transfer the task
+    await db.prepare(`
+      UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?
+    `).bind(nextId, row.task_id, tenantId).run()
+
+    // Clear the no-response flag so the task appears normally in the new employee's list
+    await db.prepare(`
+      UPDATE company_contact_followups
+      SET is_no_response = 0, no_response_at = NULL, no_response_by = NULL
+      WHERE id = ? AND tenant_id = ?
+    `).bind(row.followup_id, tenantId).run()
+
+    // Audit trail: note visible to anyone reviewing the task
+    const fromName = userNameCache.get(row.assigned_user_id) || String(row.assigned_user_id)
+    const toName = userNameCache.get(nextId) || String(nextId)
+    try {
+      await db.prepare(`
+        INSERT INTO company_contact_followup_task_notes
+          (task_id, tenant_id, user_id, user_name, note_text, note_type)
+        VALUES (?, ?, 0, 'النظام', ?, 'auto_transfer')
+      `).bind(
+        row.task_id, tenantId,
+        `تم تحويل المهمة تلقائياً من ${fromName} إلى ${toName} بسبب عدم الرد خلال 48 ساعة`
+      ).run()
+    } catch { /* note table may be missing in test envs */ }
+
+    // Update follow-up round-robin cursor (same state table as CSV import)
+    await db.prepare(`
+      INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tenant_id) DO UPDATE SET
+        last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(tenantId, nextId).run()
+
+    tenantStateCache.set(tenantId, nextId)
+    transferred++
+  }
+
+  return { transferred, skipped }
+}
+
+// Manual trigger for admins to test without waiting for cron.
+app.post('/api/followup-no-response/trigger', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const role = normalizeRoleId(userInfo.roleId)
+    if (role !== 1 && role !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const result = await processNoResponseTransfers(c.env.DB)
+    return c.json({ success: true, ...result })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
 export { ChatConversationRoom, UserNotificationRoom }
 
 export default {
@@ -45104,6 +45936,11 @@ export default {
     ctx.waitUntil(
       processCustomerReminders(env.DB).then(({ created, skipped }) => {
         console.log(`[customer-reminders] created=${created} skipped=${skipped}`)
+      })
+    )
+    ctx.waitUntil(
+      processNoResponseTransfers(env.DB).then(({ transferred, skipped }) => {
+        console.log(`[no-response-transfers] transferred=${transferred} skipped=${skipped}`)
       })
     )
   },

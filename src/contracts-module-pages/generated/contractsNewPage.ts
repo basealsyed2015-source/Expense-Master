@@ -912,7 +912,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/contracts/list" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
       <a href="/admin/contracts/new" class="nav-item active"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
       <a href="/admin/contracts/templates" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
-      <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <!-- TEMPORARILY DISABLED: <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a> -->
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
       
     </nav>
@@ -986,24 +986,19 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
             <div class="form-grid">
               <div class="form-group form-full">
+                <label class="form-label">الفرع</label>
+                <select class="form-control" id="contract_location_id" onchange="onBranchChange(this)">
+                  <option value="" data-phone="<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->">— الشركة الرئيسية —</option>
+                  <!--CONTRACTS_LOCATION_OPTIONS-->
+                </select>
+              </div>
+              <div class="form-group form-full">
                 <label class="form-label">اسم الشركة (الطرف الأول)</label>
-                <input type="text" class="form-control" id="party_one_name" placeholder="اسم الشركة" value="<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->" />
+                <input type="text" class="form-control" id="party_one_name" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" value="<!--CONTRACTS_PARTY_ONE_NAME_ATTR-->" />
               </div>
               <div class="form-group form-full">
                 <label class="form-label">هاتف الشركة</label>
-                <input type="text" class="form-control" id="party_one_phone" placeholder="05XXXXXXXX" dir="ltr" style="text-align:right;" value="<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->" />
-              </div>
-              <div class="form-group form-full">
-                <label class="form-label">شعار الشركة (صورة)</label>
-                <input type="file" class="form-control" id="party_one_logo_file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                <input type="hidden" id="party_one_logo" />
-                <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">يُرفع إلى نفس تخزين المرفقات (R2) — PNG أو JPEG أو WebP أو GIF، حتى 2 ميجابايت</div>
-                <div id="party_one_logo_preview" style="margin-top:10px;display:none;">
-                  <img id="party_one_logo_img" alt="" style="max-height:80px;max-width:220px;border-radius:8px;border:1px solid var(--border);object-fit:contain;" />
-                  <div style="margin-top:8px;">
-                    <button type="button" class="btn btn-ghost btn-sm" id="party_one_logo_clear"><i class="fas fa-times"></i> إزالة الصورة</button>
-                  </div>
-                </div>
+                <input type="text" class="form-control" id="party_one_phone" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;direction:ltr;text-align:right;" value="<!--CONTRACTS_PARTY_ONE_PHONE_ATTR-->" />
               </div>
             </div>
           </div>
@@ -1093,10 +1088,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <label class="form-label">نوع التمويل <span class="required">*</span></label>
                 <select class="form-control" id="finance_type" required>
                   <option value="">-- اختر نوع التمويل --</option>
-                  <option value="رهن عقاري">رهن عقاري</option>
-                  <option value="تمويل شخصي">تمويل شخصي</option>
-                  <option value="تمويل تجاري">تمويل تجاري</option>
-                  <option value="أخرى">أخرى</option>
+                  <!--CONTRACTS_FINANCE_TYPE_OPTIONS-->
                 </select>
                 <div class="invalid-feedback">يرجى اختيار نوع التمويل</div>
               </div>
@@ -1106,16 +1098,19 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <div class="invalid-feedback">يرجى إدخال مبلغ التمويل</div>
               </div>
               <div class="form-group">
-                <label class="form-label">اسم البنك / الجهة الممولة</label>
-                <input type="text" class="form-control" id="bank_name" placeholder="مثال: بنك الراجحي" />
+                <label class="form-label">اسم البنك / الجهة الممولة <span class="required">*</span></label>
+                <input type="text" class="form-control" id="bank_name" placeholder="مثال: بنك الراجحي" required />
+                <div class="invalid-feedback">يرجى إدخال اسم البنك أو الجهة الممولة</div>
               </div>
               <div class="form-group">
-                <label class="form-label">وصف العقار</label>
-                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" />
+                <label class="form-label">وصف العقار <span class="required">*</span></label>
+                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" required />
+                <div class="invalid-feedback">يرجى إدخال وصف العقار</div>
               </div>
               <div class="form-group form-full">
-                <label class="form-label">موقع العقار</label>
-                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" />
+                <label class="form-label">موقع العقار <span class="required">*</span></label>
+                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" required />
+                <div class="invalid-feedback">يرجى إدخال موقع العقار</div>
               </div>
             </div>
           </div>
@@ -1312,6 +1307,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       if (digits.startsWith('0') && digits.length === 10) return digits.slice(1);
       if (digits.length === 9 && digits.startsWith('5')) return digits;
       return digits.length >= 9 ? digits.slice(-9) : raw;
+    }
+
+    function onBranchChange(select) {
+      const opt = select.options[select.selectedIndex];
+      const phone = opt ? (opt.getAttribute('data-phone') || '') : '';
+      const phoneEl = document.getElementById('party_one_phone');
+      if (phoneEl) phoneEl.value = phone;
     }
 
     function fillFromCustomer(customerId) {
@@ -1587,6 +1589,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         { id: 'party_two_phone', msg: 'يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
         { id: 'finance_type', msg: 'يرجى اختيار نوع التمويل', check: v => v !== '' },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
+        { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
+        { id: 'property_description', msg: 'يرجى إدخال وصف العقار', check: v => v.trim().length > 0 },
+        { id: 'property_location', msg: 'يرجى إدخال موقع العقار', check: v => v.trim().length > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
         { id: 'note_order_number', msg: 'يرجى إدخال رقم سند الأمر', check: v => v.trim().length > 0 }
       ];
@@ -1617,7 +1622,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <div class="info-row">
               <div class="info-item"><label>اسم الشركة</label><span>\${data.party_one_name ? escHtml(data.party_one_name) : '—'}</span></div>
               <div class="info-item"><label>هاتف الشركة</label><span>\${data.party_one_phone ? escHtml(data.party_one_phone) : '—'}</span></div>
-              <div class="info-item"><label>الشعار</label><span>\${data.party_one_logo ? 'مرفق' : '—'}</span></div>
             </div>
           </div>
           <div style="background:#f7f9fc;border-radius:10px;padding:16px;">
@@ -1811,6 +1815,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         note_due_date: document.getElementById('note_due_date').value,
         status: statusValue,
         notes: document.getElementById('notes')?.value || '',
+        location_id: (function() {
+          const v = document.getElementById('contract_location_id')?.value;
+          return (v && /^\d+$/.test(v)) ? Number(v) : null;
+        })(),
         is_archived: false,
         financing_request_id: (function() {
           const v = document.getElementById('financing_request_id')?.value;
@@ -1911,10 +1919,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     // Auto-calc commission on amount change
       document.addEventListener('DOMContentLoaded', async () => {
       configureContractStatusSectionVisibility();
-      document.getElementById('party_one_logo_file')?.addEventListener('change', onPartyOneLogoFileChange);
-      document.getElementById('party_one_logo_clear')?.addEventListener('click', () => {
-        setPartyOneLogoPreview('');
-      });
+
 
       document.getElementById('finance_amount')?.addEventListener('input', () => {
         if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
@@ -1985,6 +1990,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           if (p1n) p1n.value = c.party_one_name || '';
           if (p1p) p1p.value = c.party_one_phone || '';
           setPartyOneLogoPreview(c.party_one_logo || '');
+          const locSel = document.getElementById('contract_location_id');
+          if (locSel && c.location_id) locSel.value = String(c.location_id);
           document.getElementById('party_two_name').value = c.party_two_name || '';
           document.getElementById('party_two_id').value = c.party_two_id || '';
           document.getElementById('party_two_phone').value = normalizePhone(c.party_two_phone || '');

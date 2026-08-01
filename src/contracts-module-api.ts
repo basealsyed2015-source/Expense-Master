@@ -579,8 +579,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
-          property_description, property_location, bank_name, notes, is_archived, financing_request_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          property_description, property_location, bank_name, notes, is_archived, financing_request_id, location_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -611,7 +611,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.bank_name ?? null,
             body.notes ?? null,
             body.is_archived ? 1 : 0,
-            body.financing_request_id != null ? Number(body.financing_request_id) : null
+            body.financing_request_id != null ? Number(body.financing_request_id) : null,
+            body.location_id != null ? Number(body.location_id) : null
           )
           .run()
       } catch (e) {
@@ -937,6 +938,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('notes', 'notes')
       maybe('is_archived', 'is_archived')
       maybe('financing_request_id', 'financing_request_id')
+      maybe('location_id', 'location_id')
       fields.push(...approvalFields)
       vals.push(...approvalVals)
       if (fields.length === 0) {

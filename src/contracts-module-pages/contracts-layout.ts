@@ -87,9 +87,11 @@ export function contractsSidebarNav(active: ContractsNavKey): string {
       <a href="${R.templates}" class="${n('templates', 'nav-item')}" data-page="templates">
         <i class="fas fa-layer-group"></i><span>القوالب</span>
       </a>
+      <!-- TEMPORARILY DISABLED: promissory notes page
       <a href="${R.notes}" class="${n('notes', 'nav-item')}" data-page="notes">
         <i class="fas fa-money-check-alt"></i><span>سندات الأمر</span>
       </a>
+      -->
       <a href="${R.archive}" class="${n('archive', 'nav-item')}" data-page="archive">
         <i class="fas fa-archive"></i><span>الأرشيف</span>
       </a>
