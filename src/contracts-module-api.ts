@@ -1,5 +1,9 @@
 import type { Context } from 'hono'
-import { customerEligibleForContractCreate } from './notification-access'
+import {
+  customerEligibleForContractCreate,
+  resolveWorkflowNotifyTargetUserIds,
+  insertWorkflowCrossPartyAlarms,
+} from './notification-access'
 
 type UserInfo = {
   userId: number | null
@@ -13,6 +17,31 @@ type GetUserInfo = (c: Context) => Promise<UserInfo>
 const STATUS_AWAITING_BANK_AGENT_APPROVAL = 'بانتظار موافقة ممثل البنك'
 const STATUS_AWAITING_ADMIN_APPROVAL = 'بانتظار موافقة الإدارة'
 const FINAL_APPROVAL_STATUSES = new Set(['نشط', 'بانتظار التمويل', 'مكتمل'])
+
+async function resolveContractAdminUserIds(
+  db: D1Database,
+  tenantId: number,
+  excludeUserId: number | null
+): Promise<number[]> {
+  const rows = await db
+    .prepare(
+      `SELECT id FROM users WHERE tenant_id = ? AND role_id IN (1, 2) AND is_active = 1`
+    )
+    .bind(tenantId)
+    .all<{ id: number }>()
+  return (rows.results || [])
+    .map((r) => Number(r.id))
+    .filter((id) => id !== excludeUserId)
+}
+
+async function resolveActorName(db: D1Database, userId: number | null): Promise<string> {
+  if (!userId) return ''
+  const row = await db
+    .prepare(`SELECT full_name FROM users WHERE id = ? LIMIT 1`)
+    .bind(userId)
+    .first<{ full_name?: string | null }>()
+  return String(row?.full_name ?? '').trim()
+}
 
 function sqlTable(name: string): string | null {
   if (name === 'templates') return 'contract_templates'
@@ -335,10 +364,19 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       binds.push(info.userId, info.userId, info.userId, effectiveTenantId!, effectiveTenantId!)
     }
 
-    // Role 5 bank agent: customers they created (fallback handled below if column missing).
+    // Role 5 bank agent: only customers they are assigned to via financing_requests.assigned_bank_agent_id.
     if (info.roleId === 5 && info.userId) {
-      sql += ` AND created_by = ?`
-      binds.push(info.userId)
+      sql += ` AND EXISTS (
+        SELECT 1 FROM financing_requests fr
+        WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+          AND COALESCE(fr.is_completed, 0) = 0
+      ) AND NOT EXISTS (
+        SELECT 1 FROM contracts co
+        WHERE co.customer_id = customers.id AND co.tenant_id = ?
+          AND COALESCE(co.is_archived, 0) = 0
+          AND co.status NOT IN ('مكتمل', 'مؤرشف')
+      )`
+      binds.push(info.userId, effectiveTenantId!)
     }
 
     sql += ` ORDER BY full_name ASC LIMIT 500`
@@ -347,15 +385,6 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       const { results } = await c.env.DB.prepare(sql).bind(...binds).all()
       return c.json({ data: results || [] })
     } catch (e: any) {
-      const msg = String(e?.message || e || '')
-      const isMissingCreatedBy = /no such column:\s*created_by/i.test(msg)
-      if (info.roleId === 5 && isMissingCreatedBy) {
-        // Older DB: keep previous behavior rather than erroring.
-        const fallbackSql = sql.replace(/\s+AND\s+created_by\s*=\s*\?\s*/i, ' ')
-        const fallbackBinds = binds.slice(0, -1)
-        const { results } = await c.env.DB.prepare(fallbackSql).bind(...fallbackBinds).all()
-        return c.json({ data: results || [] })
-      }
       throw e
     }
   })
@@ -438,7 +467,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (tenantId == null) return c.json({ error: 'Missing tenant' }, 400)
 
     if (table === 'contract_templates') {
-      if (info.roleId === 4 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
+      if (info.roleId === 4 || info.roleId === 5 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
       const template_name = String(body.template_name ?? '')
       if (!template_name.trim()) return c.json({ error: 'template_name required' }, 400)
       if (looksBrowserTranslatedTemplate(body.body_content)) {
@@ -500,12 +529,57 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contracts') {
-      if (info.roleId === 5) return c.json({ error: 'Forbidden' }, 403)
-
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
 
       let role6IsBothColumns = false
+
+      // Role 5 (bank agent): validate customer scope (created by this user), active FR optional, no blocking contract.
+      if (info.roleId === 5 && info.userId) {
+        const customerId = body.customer_id != null ? Number(body.customer_id) : null
+        if (customerId) {
+          // Must be assigned as bank agent on an active financing request for this customer, with no blocking contract.
+          let frRow: { id: number } | null = null
+          try {
+            frRow = await c.env.DB.prepare(
+              `SELECT id FROM financing_requests
+               WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
+                 AND COALESCE(is_completed, 0) = 0
+               ORDER BY id DESC LIMIT 1`
+            )
+              .bind(customerId, tenantId, info.userId)
+              .first<{ id: number }>()
+          } catch (e: unknown) {
+            const msg = String((e as { message?: string })?.message || e || '')
+            if (/no such column:\s*is_completed/i.test(msg)) {
+              frRow = await c.env.DB.prepare(
+                `SELECT id FROM financing_requests
+                 WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
+                 ORDER BY id DESC LIMIT 1`
+              )
+                .bind(customerId, tenantId, info.userId)
+                .first<{ id: number }>()
+            } else {
+              return c.json({ error: 'database_error', detail: msg }, 500)
+            }
+          }
+          if (!frRow) return c.json({ error: 'Forbidden' }, 403)
+          // Check no blocking active contract already exists for this customer.
+          try {
+            const blocking = await c.env.DB.prepare(
+              `SELECT 1 FROM contracts WHERE customer_id = ? AND tenant_id = ?
+               AND COALESCE(is_archived, 0) = 0 AND status NOT IN ('مكتمل', 'مؤرشف') LIMIT 1`
+            )
+              .bind(customerId, tenantId)
+              .first()
+            if (blocking) return c.json({ error: 'Forbidden' }, 403)
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            return c.json({ error: 'database_error', detail: msg }, 500)
+          }
+          body.financing_request_id = frRow.id
+        }
+      }
 
       // Role 4 / Role 6: validate customer scope (employee and/or bank-agent for role 6), active FR, no blocking contract.
       if ((info.roleId === 4 || info.roleId === 6) && info.userId) {
@@ -565,6 +639,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       let initialStatus: string
       if (info.roleId === 4) {
         initialStatus = STATUS_AWAITING_BANK_AGENT_APPROVAL
+      } else if (info.roleId === 5) {
+        // Bank agent is the creator — bank approval step is already done
+        initialStatus = STATUS_AWAITING_ADMIN_APPROVAL
       } else if (info.roleId === 6) {
         // Same user in both columns → skip bank approval step
         initialStatus = role6IsBothColumns ? STATUS_AWAITING_ADMIN_APPROVAL : STATUS_AWAITING_BANK_AGENT_APPROVAL
@@ -630,8 +707,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         return c.json({ error: 'database_error', detail: msg }, 500)
       }
       const id = r.meta.last_row_id as number
-      // Role 6 both-column: set bank-agent audit fields for traceability
-      if (info.roleId === 6 && role6IsBothColumns && info.userId) {
+      // Role 5 / Role 6 both-column: set bank-agent audit fields for traceability
+      if ((info.roleId === 5 || (info.roleId === 6 && role6IsBothColumns)) && info.userId) {
         try {
           await c.env.DB.prepare(
             `UPDATE contracts SET bank_agent_approved_by = ?, bank_agent_approved_at = CURRENT_TIMESTAMP WHERE id = ?`
@@ -643,6 +720,47 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         }
       }
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
+
+      // Send notifications for contracts entering an approval queue
+      try {
+        const customerId = body.customer_id != null ? Number(body.customer_id) : null
+        const frId = body.financing_request_id != null ? Number(body.financing_request_id) : null
+        const actorName = await resolveActorName(c.env.DB, info.userId)
+        const contractLabel = `عقد #${id}`
+        const linkUrl = `/admin/contracts/${id}`
+
+        if (initialStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL && customerId) {
+          // Notify the assigned bank agent that a new contract needs their approval
+          const targetUserIds = await resolveWorkflowNotifyTargetUserIds(
+            c.env.DB, customerId, 5, tenantId, frId
+          )
+          const targets = targetUserIds.filter((uid) => uid !== info.userId)
+          if (targets.length) {
+            await insertWorkflowCrossPartyAlarms(c.env.DB, {
+              customerId,
+              tenantId,
+              targetUserIds: targets,
+              customerName: contractLabel,
+              note: `أنشأ ${actorName} ${contractLabel} بانتظار موافقتك كممثل بنك`,
+              linkUrl,
+            })
+          }
+        } else if (initialStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
+          // Role 6 both-column: bank step was skipped — notify admins directly
+          const targets = await resolveContractAdminUserIds(c.env.DB, tenantId, info.userId)
+          if (targets.length) {
+            await insertWorkflowCrossPartyAlarms(c.env.DB, {
+              customerId,
+              tenantId,
+              targetUserIds: targets,
+              customerName: contractLabel,
+              note: `أنشأ ${actorName} ${contractLabel} بانتظار موافقة الإدارة`,
+              linkUrl,
+            })
+          }
+        }
+      } catch (_) {}
+
       return c.json({ ...row, id })
     }
 
@@ -723,7 +841,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contract_templates') {
-      if (info.roleId === 4 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
+      if (info.roleId === 4 || info.roleId === 5 || info.roleId === 6) return c.json({ error: 'Forbidden' }, 403)
       if (body.body_content !== undefined && looksBrowserTranslatedTemplate(body.body_content)) {
         return c.json({ error: 'browser_translate_blocked', detail: TRANSLATE_BLOCKED_MSG }, 400)
       }
@@ -961,6 +1079,55 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         }
         return c.json({ error: 'database_error', detail: msg }, 500)
       }
+
+      // Notify relevant parties when a contract transitions between approval stages
+      if (statusChanged) {
+        try {
+          const currentStatus = String(existing.status ?? '')
+          const requestedStatus = String(body.status ?? '')
+          const customerId = (existing as any).customer_id ? Number((existing as any).customer_id) : null
+          const frId = (existing as any).financing_request_id ? Number((existing as any).financing_request_id) : null
+          const effectiveTenantId = info.tenantId ?? existing.tenant_id
+          const actorName = await resolveActorName(c.env.DB, info.userId)
+          const contractLabel = `عقد #${id}`
+          const linkUrl = `/admin/contracts/${id}`
+
+          if (
+            currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL &&
+            requestedStatus === STATUS_AWAITING_ADMIN_APPROVAL
+          ) {
+            // Bank agent approved — notify admins
+            const targets = await resolveContractAdminUserIds(c.env.DB, effectiveTenantId, info.userId)
+            if (targets.length) {
+              await insertWorkflowCrossPartyAlarms(c.env.DB, {
+                customerId,
+                tenantId: effectiveTenantId,
+                targetUserIds: targets,
+                customerName: contractLabel,
+                note: `اعتمد ${actorName} ${contractLabel} كممثل بنك — بانتظار موافقة الإدارة`,
+                linkUrl,
+              })
+            }
+          } else if (
+            currentStatus === STATUS_AWAITING_ADMIN_APPROVAL &&
+            FINAL_APPROVAL_STATUSES.has(requestedStatus)
+          ) {
+            // Admin gave final approval — notify the contract creator
+            const creatorId = existing.created_by ? Number(existing.created_by) : null
+            if (creatorId && creatorId !== info.userId) {
+              await insertWorkflowCrossPartyAlarms(c.env.DB, {
+                customerId,
+                tenantId: effectiveTenantId,
+                targetUserIds: [creatorId],
+                customerName: contractLabel,
+                note: `وافقت الإدارة على ${contractLabel} — الحالة الجديدة: ${requestedStatus}`,
+                linkUrl,
+              })
+            }
+          }
+        } catch (_) {}
+      }
+
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()
       return c.json(row)
     }
@@ -1067,7 +1234,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
     const info = await withEffectiveTenantForContractsApi(c, rawInfo)
-    if (info.roleId === 4 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
+    if (info.roleId === 4 || info.roleId === 5 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
       return c.json({ error: 'Forbidden' }, 403)
     }
     const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
@@ -1123,7 +1290,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const { info: rawInfo, error } = await auth(c, getUserInfo)
     if (error) return error
     const info = await withEffectiveTenantForContractsApi(c, rawInfo)
-    if (info.roleId === 4 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
+    if (info.roleId === 4 || info.roleId === 5 || info.roleId === 6 || isContractsModuleReadOnlyRole(info)) {
       return c.json({ error: 'Forbidden' }, 403)
     }
     const attachments = (c.env as { ATTACHMENTS?: { put: (k: string, b: ArrayBuffer, o?: { httpMetadata?: { contentType?: string } }) => Promise<unknown> } }).ATTACHMENTS
@@ -1203,7 +1370,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contract_templates' && (info.roleId === 4 || info.roleId === 6)) return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contract_templates' && (info.roleId === 4 || info.roleId === 5 || info.roleId === 6)) return c.json({ error: 'Forbidden' }, 403)
     if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6) && existing.created_by !== info.userId) {
       return c.json({ error: 'Forbidden' }, 403)
     }

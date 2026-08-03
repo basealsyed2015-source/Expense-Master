@@ -116,7 +116,6 @@ import {
   contractsArchivePage,
   contractsSettingsPage,
   markContractsHtmlRole3Restricted,
-  markContractsHtmlRole5HideNewContract
 } from './contracts-module-pages'
 import { registerContractsModuleApi } from './contracts-module-api'
 import { registerContractsStaticRoutes } from './contracts-module-static-routes'
@@ -9470,6 +9469,21 @@ app.post('/api/customers', async (c) => {
         }
       }
     }
+    // Carry over rating from followup task if registration came from my-tasks flow
+    const taskIdFromForm = Number.parseInt(String(formData.get('task_id') ?? ''), 10)
+    if (Number.isFinite(taskIdFromForm) && taskIdFromForm > 0 && createdCustomerId && tenant_id) {
+      try {
+        const taskRow = await c.env.DB.prepare(
+          `SELECT rating, rating_note FROM company_contact_followup_tasks WHERE id = ? AND tenant_id = ? LIMIT 1`
+        ).bind(taskIdFromForm, tenant_id).first<{ rating: number | null; rating_note: string | null }>()
+        if (taskRow?.rating && taskRow.rating >= 1 && taskRow.rating <= 5) {
+          await c.env.DB.prepare(
+            `INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`
+          ).bind(createdCustomerId, full_name, taskRow.rating, taskRow.rating_note || null, userInfo.userId || null, tenant_id).run()
+        }
+      } catch (_) { /* don't fail customer creation if rating carry-over fails */ }
+    }
+
     if (inlineCustomerForm) {
       return c.json({
         ok: true,
@@ -17486,6 +17500,8 @@ app.get('/admin/customers/add', async (c) => {
       : ''
   const prefillEnrollmentSourceLabel = String(c.req.query('affiliate_label') ?? '').trim().slice(0, 200)
   const prefillNotes = String(c.req.query('notes') ?? '').trim().slice(0, 2000)
+  const prefillTaskIdRaw = Number.parseInt(String(c.req.query('task_id') ?? ''), 10)
+  const prefillTaskId = Number.isFinite(prefillTaskIdRaw) && prefillTaskIdRaw > 0 ? prefillTaskIdRaw : 0
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
 
   const queryTenantId = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
@@ -17576,6 +17592,7 @@ app.get('/admin/customers/add', async (c) => {
                 ? `<input type="hidden" name="tenant_id" value="${resolvedTenantIdForLocations}" />`
                 : ''
             }
+            ${prefillTaskId ? `<input type="hidden" name="task_id" value="${prefillTaskId}" />` : ''}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
@@ -18118,6 +18135,18 @@ app.get('/admin/customers/add', async (c) => {
                 إلغاء
               </a>
             </div>
+            ${prefillTaskId ? `
+            <div class="flex gap-3 flex-wrap pt-4 mt-2 border-t border-gray-200">
+              <button type="button" id="btn-archive-task" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2">
+                <i class="fas fa-archive ml-1"></i>
+                أرشفة
+              </button>
+              <button type="button" id="btn-no-response-task" class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2">
+                <i class="fas fa-phone-slash ml-1"></i>
+                لا يرد
+              </button>
+            </div>
+            ` : ''}
             <div id="customer-create-message" class="mt-6 pt-4 border-t border-gray-200 text-right" dir="rtl" aria-live="polite"></div>
           </form>
         </div>
@@ -18235,6 +18264,48 @@ app.get('/admin/customers/add', async (c) => {
             }
             setMessage('error', msg);
           }
+
+          (function taskActionButtons() {
+            var archiveBtn = document.getElementById('btn-archive-task');
+            var noResponseBtn = document.getElementById('btn-no-response-task');
+            var taskId = ${prefillTaskId || 0};
+            if (!taskId) return;
+            if (archiveBtn) {
+              archiveBtn.addEventListener('click', async function () {
+                var reason = window.prompt('سيتم أرشفة طلب المتابعة المرتبط بهذه المهمة.\\nأدخل سبب الأرشفة (اختياري) أو اضغط موافق للمتابعة بدون سبب:');
+                if (reason === null) return;
+                archiveBtn.disabled = true;
+                try {
+                  var res = await fetch('/api/my-followup-tasks/' + taskId + '/archive', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: reason || null })
+                  });
+                  var data = await res.json().catch(function () { return {}; });
+                  if (!res.ok || !data.success) throw new Error(data.error || 'تعذرت الأرشفة');
+                  window.location.href = '/admin/my-tasks';
+                } catch (e) {
+                  alert(e.message || 'حدث خطأ أثناء الأرشفة');
+                  archiveBtn.disabled = false;
+                }
+              });
+            }
+            if (noResponseBtn) {
+              noResponseBtn.addEventListener('click', async function () {
+                if (!confirm('هل تريد تصنيف هذا الطلب كـ "لا يرد"?\\nسيُنقل إلى صفحة "لا يرد" وإذا لم تسترجعه خلال 48 ساعة سيُحوَّل تلقائياً إلى الموظف التالي في الطابور.')) return;
+                noResponseBtn.disabled = true;
+                try {
+                  var res = await fetch('/api/my-followup-tasks/' + taskId + '/no-response', { method: 'PATCH' });
+                  var data = await res.json().catch(function () { return {}; });
+                  if (!res.ok || !data.success) throw new Error(data.error || 'تعذر التصنيف');
+                  window.location.href = '/admin/my-tasks';
+                } catch (e) {
+                  alert(e.message || 'حدث خطأ');
+                  noResponseBtn.disabled = false;
+                }
+              });
+            }
+          })();
 
           (function jobTypeToggle() {
             var jobType = document.getElementById('job_type');
@@ -34071,11 +34142,10 @@ app.get('/admin/contracts/list', async (c) => {
   const userInfo = await getUserInfo(c)
   let page = contractsListPage
   if (userInfo.roleId === 3) page = markContractsHtmlRole3Restricted(page)
-  else if (userInfo.roleId === 5) page = markContractsHtmlRole5HideNewContract(page)
   return c.html(withContractsUserRoleHtml(page, userInfo.roleId))
 })
 app.get('/admin/contracts/new', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true, blockRole5Panel: true })
+  const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
@@ -34211,12 +34281,10 @@ app.get('/admin/contracts/view', async (c) => {
   const denied = await ensureContractsModuleAccess(c, 'list-new-only', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
-  const html =
-    userInfo.roleId === 5 ? markContractsHtmlRole5HideNewContract(contractsViewPage) : contractsViewPage
-  return c.html(withContractsUserRoleHtml(html, userInfo.roleId))
+  return c.html(withContractsUserRoleHtml(contractsViewPage, userInfo.roleId))
 })
 app.get('/admin/contracts/templates', async (c) => {
-  const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true, blockRole5Panel: true })
+  const denied = await ensureContractsModuleAccess(c, 'all', { allowRole4: true })
   if (denied) return denied
   const userInfo = await getUserInfo(c)
   return c.html(withContractsUserRoleHtml(contractsTemplatesPage, userInfo.roleId))
@@ -37767,26 +37835,47 @@ app.post('/api/follow-ups/import/precheck', async (c) => {
     const CHUNK = 500
     const existingCustomers = new Set<string>()
     const existingFollowups = new Set<string>()
+    const existingEmployees: Record<string, { id: number; full_name: string }> = {}
 
     for (let i = 0; i < normalizedPhones.length; i += CHUNK) {
       const chunk = normalizedPhones.slice(i, i + CHUNK)
       const placeholders = chunk.map(() => '?').join(',')
 
       const { results: custRows } = await c.env.DB.prepare(
-        `SELECT phone FROM customers WHERE phone IN (${placeholders}) AND tenant_id = ?`
-      ).bind(...chunk, tenantId).all<{ phone: string }>()
-      for (const r of (custRows || [])) existingCustomers.add(r.phone)
+        `SELECT c.phone, u.id AS user_id, u.full_name
+         FROM customers c
+         LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+         LEFT JOIN users u ON u.id = ca.employee_id
+         WHERE c.phone IN (${placeholders}) AND c.tenant_id = ?`
+      ).bind(...chunk, tenantId).all<{ phone: string; user_id: number | null; full_name: string | null }>()
+      for (const r of (custRows || [])) {
+        existingCustomers.add(r.phone)
+        if (r.user_id && !existingEmployees[r.phone]) {
+          existingEmployees[r.phone] = { id: r.user_id, full_name: r.full_name || '' }
+        }
+      }
 
       const { results: followupRows } = await c.env.DB.prepare(
-        `SELECT customer_phone FROM company_contact_followups WHERE customer_phone IN (${placeholders}) AND tenant_id = ?`
-      ).bind(...chunk, tenantId).all<{ customer_phone: string }>()
-      for (const r of (followupRows || [])) existingFollowups.add(r.customer_phone)
+        `SELECT f.customer_phone, u.id AS user_id, u.full_name
+         FROM company_contact_followups f
+         LEFT JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+         LEFT JOIN users u ON u.id = t.assigned_user_id
+         WHERE f.customer_phone IN (${placeholders}) AND f.tenant_id = ?
+         ORDER BY t.created_at DESC`
+      ).bind(...chunk, tenantId).all<{ customer_phone: string; user_id: number | null; full_name: string | null }>()
+      for (const r of (followupRows || [])) {
+        existingFollowups.add(r.customer_phone)
+        if (r.user_id && !existingEmployees[r.customer_phone]) {
+          existingEmployees[r.customer_phone] = { id: r.user_id, full_name: r.full_name || '' }
+        }
+      }
     }
 
     return c.json({
       success: true,
       existing_customers: Array.from(existingCustomers),
       existing_followups: Array.from(existingFollowups),
+      existing_employees: existingEmployees,
     })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -38245,10 +38334,15 @@ app.get('/api/my-followup-tasks', async (c) => {
       ? 'WHERE t.tenant_id = ?'
       : 'WHERE t.assigned_user_id = ? AND t.tenant_id = ?'
 
-    const { results } = await c.env.DB.prepare(`
+    const binds = isAdminView
+      ? [userInfo.userId, userInfo.tenantId]
+      : [userInfo.userId, userInfo.userId, userInfo.tenantId]
+
+    const buildQuery = (withRating: boolean) => `
       SELECT t.id, t.followup_id, t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
              t.priority, t.status, t.created_at,
              t.employee_note_text, t.employee_note_updated_at,
+             ${withRating ? 't.rating, t.rating_note,' : ''}
              f.customer_name, f.customer_phone, f.customer_message, f.source_slug,
              f.affiliate_path_segment, f.affiliate_label, f.created_at AS followup_created_at,
              f.archive_reason, f.no_response_at,
@@ -38269,15 +38363,22 @@ app.get('/api/my-followup-tasks', async (c) => {
       ${statusClause}
       ORDER BY ${completedLastClause} ${innerSort}
       LIMIT 300
-    `).bind(
-      ...(isAdminView
-        ? [userInfo.userId, userInfo.tenantId]
-        : [userInfo.userId, userInfo.userId, userInfo.tenantId])
-    ).all()
+    `
 
-    const data = (results || []).map((row: Record<string, unknown>) =>
-      normalizeContactFollowupRowForApi(row)
-    )
+    let results: Record<string, unknown>[]
+    try {
+      const r = await c.env.DB.prepare(buildQuery(true)).bind(...binds).all()
+      results = (r.results || []) as Record<string, unknown>[]
+    } catch (e: any) {
+      if (/no such column.*rating/i.test(String(e?.message || ''))) {
+        const r = await c.env.DB.prepare(buildQuery(false)).bind(...binds).all()
+        results = (r.results || []) as Record<string, unknown>[]
+      } else {
+        throw e
+      }
+    }
+
+    const data = results.map((row) => normalizeContactFollowupRowForApi(row))
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -38380,6 +38481,44 @@ app.patch('/api/my-followup-tasks/:id/revoke-no-response', async (c) => {
       SET is_no_response = 0, no_response_at = NULL, no_response_by = NULL
       WHERE id = ? AND tenant_id = ?
     `).bind(task.followup_id, userInfo.tenantId).run()
+
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.patch('/api/my-followup-tasks/:id/rating', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const taskId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return c.json({ success: false, error: 'Invalid task id' }, 400)
+    }
+
+    const body = await c.req.json().catch(() => ({})) as { rating?: number | null; note?: string | null }
+    const ratingRaw = body.rating == null ? null : parseInt(String(body.rating), 10)
+    if (ratingRaw !== null && (ratingRaw < 1 || ratingRaw > 5)) {
+      return c.json({ success: false, error: 'rating must be 1–5 or null' }, 400)
+    }
+    const noteVal = ratingRaw != null ? (String(body.note ?? '').trim().slice(0, 1000) || null) : null
+
+    const task = await c.env.DB.prepare(`
+      SELECT t.id, t.tenant_id, t.assigned_user_id
+      FROM company_contact_followup_tasks t
+      WHERE t.id = ? AND t.tenant_id = ? AND t.assigned_user_id = ?
+      LIMIT 1
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number }>()
+
+    if (!task?.id) return c.json({ success: false, error: 'Task not found or not assigned to you' }, 404)
+
+    await c.env.DB.prepare(`
+      UPDATE company_contact_followup_tasks SET rating = ?, rating_note = ? WHERE id = ?
+    `).bind(ratingRaw, noteVal, taskId).run()
 
     return c.json({ success: true })
   } catch (error: any) {
@@ -38795,7 +38934,6 @@ app.get('/admin/my-tasks', async (c) => {
           <div class="flex flex-wrap gap-2 mb-3">
             <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
             <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
-            <button type="button" data-filter="completed" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">مكتملة</button>
           </div>
           <div class="flex flex-col sm:flex-row gap-2 mb-4">
             <div class="relative flex-1">
@@ -38821,6 +38959,55 @@ app.get('/admin/my-tasks', async (c) => {
           <p class="text-sm text-gray-600 mb-3">طلبات زميل لنقل مهمة إليك. قبولك ينقل التعيين إليك ويزيلها عن المرسل.</p>
           <div id="passListStatus" class="text-sm text-gray-600 mb-3"></div>
           <div id="passCards" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <!-- Task Review Modal -->
+      <div id="taskReviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-visible">
+          <div id="taskReviewModalHeader" class="bg-gradient-to-r from-yellow-400 to-green-500 px-6 py-4 flex items-center justify-between transition-all duration-300 rounded-t-2xl">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-user-check ml-2"></i><span id="taskReviewModalTitle">تقييم العميل</span></h2>
+            <button onclick="closeTaskReviewModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+          </div>
+          <div class="p-6 space-y-5">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">التقييم</label>
+              <div class="relative" id="taskReviewRatingContainer">
+                <button type="button" id="taskReviewRatingBtn" onclick="toggleTaskRatingDropdown(event)"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-right flex items-center justify-between font-semibold transition-all duration-200 bg-white text-gray-400">
+                  <span id="taskReviewRatingText">— اختر تقييم العميل —</span>
+                  <i class="fas fa-chevron-down text-sm transition-transform" id="taskReviewRatingChevron"></i>
+                </button>
+                <div id="taskReviewRatingDropdown" class="hidden absolute z-[1200] w-full mt-1 rounded-xl shadow-xl overflow-hidden border border-gray-100">
+                  <button type="button" onclick="selectTaskRating(5)" class="w-full px-4 py-3.5 text-right font-bold text-green-800 bg-green-50 hover:bg-green-100 transition-colors border-b border-green-100 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز
+                  </button>
+                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد
+                  </button>
+                  <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول
+                  </button>
+                  <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ
+                  </button>
+                  <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-comment-alt text-gray-400 ml-1"></i> الملاحظة / سبب التقييم</label>
+              <textarea id="taskReviewNote" rows="3" placeholder="أدخل ملاحظة أو سبب التقييم..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"></textarea>
+            </div>
+          </div>
+          <div class="px-6 pb-6 flex flex-wrap gap-3 justify-end">
+            <button onclick="closeTaskReviewModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors text-sm">إلغاء</button>
+            <button onclick="saveTaskReview()" id="taskReviewSaveBtn" class="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed" disabled>
+              <i class="fas fa-save ml-1"></i> حفظ التقييم
+            </button>
+          </div>
         </div>
       </div>
 
@@ -38861,6 +39048,98 @@ app.get('/admin/my-tasks', async (c) => {
         let tenantStaff = [];
         let allTasks = [];
         let noteModalState = { open: false, required: false, resolve: null };
+
+        // ---- Task Review Modal ----
+        let taskReviewTaskId = null;
+        let taskReviewRating = 0;
+        const TASK_RATING_CFG = {
+          5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d' },
+          4: { label: 'عميل جيد',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f' },
+          3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309' },
+          2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c' },
+          1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
+        };
+
+        function openTaskReviewModal(taskId, customerName, currentRating, currentNote) {
+          taskReviewTaskId = taskId;
+          taskReviewRating = 0;
+          document.getElementById('taskReviewModalTitle').textContent = 'تقييم العميل: ' + customerName;
+          document.getElementById('taskReviewNote').value = currentNote || '';
+          resetTaskReviewRating();
+          if (currentRating && TASK_RATING_CFG[currentRating]) selectTaskRating(currentRating);
+          document.getElementById('taskReviewModal').classList.remove('hidden');
+          document.getElementById('taskReviewModal').style.display = 'flex';
+        }
+        function closeTaskReviewModal() {
+          document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+          document.getElementById('taskReviewModal').classList.add('hidden');
+          document.getElementById('taskReviewModal').style.display = '';
+        }
+        function selectTaskRating(n) {
+          taskReviewRating = n;
+          const cfg = TASK_RATING_CFG[n];
+          const btn = document.getElementById('taskReviewRatingBtn');
+          btn.style.backgroundColor = cfg.bgColor;
+          btn.style.borderColor = cfg.borderColor;
+          btn.style.color = cfg.textColor;
+          document.getElementById('taskReviewRatingText').textContent = cfg.label;
+          document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+          document.getElementById('taskReviewRatingChevron').style.transform = '';
+          document.getElementById('taskReviewModalHeader').style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+          const saveBtn = document.getElementById('taskReviewSaveBtn');
+          saveBtn.disabled = false;
+          saveBtn.className = 'px-5 py-2.5 rounded-lg font-bold transition-all shadow-md text-sm text-white cursor-pointer';
+          saveBtn.style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+        }
+        function toggleTaskRatingDropdown(e) {
+          e.stopPropagation();
+          const dd = document.getElementById('taskReviewRatingDropdown');
+          const chevron = document.getElementById('taskReviewRatingChevron');
+          const isOpen = !dd.classList.contains('hidden');
+          dd.classList.toggle('hidden');
+          chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+        }
+        function resetTaskReviewRating() {
+          taskReviewRating = 0;
+          const btn = document.getElementById('taskReviewRatingBtn');
+          btn.style.backgroundColor = ''; btn.style.borderColor = ''; btn.style.color = '';
+          document.getElementById('taskReviewRatingText').textContent = '— اختر تقييم العميل —';
+          document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+          document.getElementById('taskReviewRatingChevron').style.transform = '';
+          document.getElementById('taskReviewModalHeader').style.background = '';
+          const saveBtn = document.getElementById('taskReviewSaveBtn');
+          saveBtn.disabled = true;
+          saveBtn.className = 'px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed';
+          saveBtn.style.background = '';
+        }
+        document.getElementById('taskReviewModal').addEventListener('click', function(e) { if (e.target === this) closeTaskReviewModal(); });
+        document.addEventListener('click', function(e) {
+          const dd = document.getElementById('taskReviewRatingDropdown');
+          const rc = document.getElementById('taskReviewRatingContainer');
+          if (!dd || !rc) return;
+          if (!dd.classList.contains('hidden') && !rc.contains(e.target)) {
+            dd.classList.add('hidden');
+            document.getElementById('taskReviewRatingChevron').style.transform = '';
+          }
+        });
+        async function saveTaskReview() {
+          if (!taskReviewRating) return;
+          const note = document.getElementById('taskReviewNote').value.trim();
+          const saveBtn = document.getElementById('taskReviewSaveBtn');
+          saveBtn.disabled = true;
+          try {
+            const res = await axios.patch('/api/my-followup-tasks/' + taskReviewTaskId + '/rating', { rating: taskReviewRating, note: note || null });
+            if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ التقييم');
+            if (taskReviewRating === 1) {
+              await axios.patch('/api/my-followup-tasks/' + taskReviewTaskId + '/archive', { reason: note || 'عميل موقوف' });
+            }
+            closeTaskReviewModal();
+            await loadTasks();
+          } catch(e) {
+            alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
+            saveBtn.disabled = false;
+          }
+        }
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -39110,7 +39389,6 @@ app.get('/admin/my-tasks', async (c) => {
             return;
           }
           root.innerHTML = tasks.map(function (task) {
-            const done = isCompleted(task);
             var hasNote = task.employee_note_text != null && String(task.employee_note_text).trim() !== '';
             var noteBlock =
               '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
@@ -39134,7 +39412,8 @@ app.get('/admin/my-tasks', async (c) => {
               '</div>' +
               '</div>';
             var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
-              '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim());
+              '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim()) +
+              '&task_id=' + encodeURIComponent(String(task.id));
             var enrollSourceLabel = followupSourceLabel(task);
             if (enrollSourceLabel) {
               enrollHref +=
@@ -39149,38 +39428,51 @@ app.get('/admin/my-tasks', async (c) => {
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
               '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
             var passBlock = '';
-            if (!done) {
-              var outId = task.outgoing_pass_request_id;
-              if (outId != null && outId !== '' && Number(outId) > 0) {
-                passBlock =
-                  '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
-                  '<div class="mb-2"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' +
-                  escapeHtml(task.outgoing_pass_to_name || '') + '</strong> (ما زلت المعيّن حتى يقبل زميلك)</div>' +
-                  '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-sm font-medium text-violet-800 underline">إلغاء طلب التمرير</button></div>';
-              } else {
-                passBlock =
-                  '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
-                  '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-share ml-1 text-violet-600"></i>تمرير المهمة لزميل</div>' +
-                  '<div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">' +
-                  '<select data-pass-select="' + task.id + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
-                  staffOptionsHtml() + '</select>' +
-                  '<button type="button" data-pass-submit="' + task.id + '" class="whitespace-nowrap bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50" ' +
-                  (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
-              }
+            var outId = task.outgoing_pass_request_id;
+            if (outId != null && outId !== '' && Number(outId) > 0) {
+              passBlock =
+                '<div class="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">' +
+                '<div class="mb-2"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' +
+                escapeHtml(task.outgoing_pass_to_name || '') + '</strong> (ما زلت المعيّن حتى يقبل زميلك)</div>' +
+                '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-sm font-medium text-violet-800 underline">إلغاء طلب التمرير</button></div>';
+            } else {
+              passBlock =
+                '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+                '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-share ml-1 text-violet-600"></i>تمرير المهمة لزميل</div>' +
+                '<div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">' +
+                '<select data-pass-select="' + task.id + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
+                staffOptionsHtml() + '</select>' +
+                '<button type="button" data-pass-submit="' + task.id + '" class="whitespace-nowrap bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50" ' +
+                (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
             }
-            var archiveBtn = '<button type="button" data-archive="' + task.id + '" class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-archive ml-1"></i>أرشفة</button>';
-            var noResponseBtn = '<button type="button" data-no-response="' + task.id + '" class="w-full sm:w-auto bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-phone-slash ml-1"></i>لا يرد</button>';
-            const actionBtn = done
-              ? '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap items-stretch sm:items-center">' +
-                enrollCustomerBtn +
-                '<button type="button" data-reopen="' + task.id + '" class="text-sm text-indigo-700 hover:underline font-medium py-2 sm:py-0">إعادة إلى قيد التنفيذ</button>' +
-                archiveBtn + '</div>'
-              : '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
-                enrollCustomerBtn +
-                '<button type="button" data-complete="' + task.id + '" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">تعليم كمكتملة</button>' +
-                archiveBtn + noResponseBtn + '</div>';
+            var taskRating = Number(task.rating) || 0;
+            var CARD_RATING_CFG = {
+              5: { label: 'عميل ممتاز', color: '#14532d', bg: '#dcfce7', border: '#16a34a' },
+              4: { label: 'عميل جيد',   color: '#365314', bg: '#ecfccb', border: '#65a30d' },
+              3: { label: 'عميل مقبول', color: '#713f12', bg: '#fef9c3', border: '#ca8a04' },
+              2: { label: 'عميل سيئ',   color: '#7c2d12', bg: '#ffedd5', border: '#ea580c' },
+              1: { label: 'عميل موقوف', color: '#7f1d1d', bg: '#fee2e2', border: '#dc2626' },
+            };
+            var reviewBtnHtml;
+            if (taskRating && CARD_RATING_CFG[taskRating]) {
+              var rcfg = CARD_RATING_CFG[taskRating];
+              reviewBtnHtml = '<button type="button" data-review-task="' + task.id + '" ' +
+                'style="background:' + rcfg.bg + ';color:' + rcfg.color + ';border:1px solid ' + rcfg.border + ';" ' +
+                'class="w-full sm:w-auto text-sm font-bold px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2">' +
+                '<i class="fas fa-star"></i>' + rcfg.label + '<i class="fas fa-pencil-alt text-xs opacity-60 mr-1"></i></button>';
+            } else {
+              reviewBtnHtml = '<button type="button" data-review-task="' + task.id + '" ' +
+                'class="w-full sm:w-auto bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-sm font-medium px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2">' +
+                '<i class="fas fa-star ml-1"></i>تقييم العميل</button>';
+            }
+            const actionBtn =
+              '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
+              enrollCustomerBtn + reviewBtnHtml + '</div>';
+            var cardBorderStyle = taskRating && CARD_RATING_CFG[taskRating]
+              ? 'border-color:' + CARD_RATING_CFG[taskRating].border + ';border-width:2px;'
+              : '';
             return (
-              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">' +
+              '<div class="bg-white border rounded-xl p-4 shadow-sm" style="' + cardBorderStyle + '">' +
                 '<div class="flex flex-wrap items-start justify-between gap-2">' +
                   '<div class="min-w-0 flex-1">' +
                     '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
@@ -39207,12 +39499,6 @@ app.get('/admin/my-tasks', async (c) => {
 
           bindWhatsAppButtons(root);
 
-          root.querySelectorAll('[data-complete]').forEach(function (btn) {
-            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-complete'), 'completed'); });
-          });
-          root.querySelectorAll('[data-reopen]').forEach(function (btn) {
-            btn.addEventListener('click', function () { patchTask(btn.getAttribute('data-reopen'), 'pending'); });
-          });
           root.querySelectorAll('[data-note]').forEach(function (btn) {
             btn.addEventListener('click', function () {
               var tid = btn.getAttribute('data-note');
@@ -39266,7 +39552,7 @@ app.get('/admin/my-tasks', async (c) => {
           root.querySelectorAll('[data-no-response]').forEach(function (btn) {
             btn.addEventListener('click', async function () {
               var tid = btn.getAttribute('data-no-response');
-              if (!confirm('هل تريد تصنيف هذا الطلب كـ "لا يرد"؟\nسيُنقل إلى صفحة "لا يرد" وإذا لم تسترجعه خلال 48 ساعة سيُحوَّل تلقائياً إلى الموظف التالي في الطابور.')) return;
+              if (!confirm('هل تريد تصنيف هذا الطلب كـ "لا يرد"؟\\nسيُنقل إلى صفحة "لا يرد" وإذا لم تسترجعه خلال 48 ساعة سيُحوَّل تلقائياً إلى الموظف التالي في الطابور.')) return;
               try {
                 btn.disabled = true;
                 var res = await axios.patch('/api/my-followup-tasks/' + tid + '/no-response');
@@ -39276,6 +39562,13 @@ app.get('/admin/my-tasks', async (c) => {
                 alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
                 btn.disabled = false;
               }
+            });
+          });
+          root.querySelectorAll('[data-review-task]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-review-task');
+              var task = (Array.isArray(tasks) ? tasks : []).find(function (t) { return String(t.id) === String(tid); });
+              openTaskReviewModal(tid, task?.customer_name || '', Number(task?.rating) || 0, task?.rating_note || '');
             });
           });
           root.querySelectorAll('[data-history]').forEach(function (btn) {
@@ -39383,7 +39676,7 @@ app.get('/admin/my-tasks', async (c) => {
           document.getElementById('cards').innerHTML = '';
           try {
             var params = new URLSearchParams();
-            if (activeFilter === 'pending' || activeFilter === 'completed') params.set('status', activeFilter);
+            if (activeFilter === 'pending') params.set('status', activeFilter);
             params.set('sort', activeSort);
             const res = await axios.get('/api/my-followup-tasks?' + params.toString());
             if (res && res.data && res.data.success === false) {
@@ -39405,30 +39698,6 @@ app.get('/admin/my-tasks', async (c) => {
               setListStatus(String(errBody || 'تعذر تحميل المهام'), 'error');
             }
             document.getElementById('cards').innerHTML = '';
-          }
-        }
-
-        async function patchTask(id, status) {
-          if (!id) return;
-          try {
-            var payload = { status: status };
-            if (String(status).toLowerCase() === 'completed') {
-              const note = await openNoteModal({
-                title: 'ملاحظة عند إكمال المهمة',
-                hint: 'اختياري: اكتب ملاحظة تُحفظ مع المهمة عند الإكمال.',
-                placeholder: 'اكتب الملاحظة (اختياري)...',
-                initialValue: '',
-                required: false
-              });
-              if (note != null && String(note).trim()) {
-                payload.note_text = String(note).trim();
-              }
-            }
-            await axios.patch('/api/my-followup-tasks/' + id, payload, { headers: { 'Content-Type': 'application/json' } });
-            await Promise.all([loadTasks(), loadIncomingPasses()]);
-          } catch (e) {
-            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر تحديث المهمة';
-            alert(msg);
           }
         }
 
@@ -43062,12 +43331,13 @@ app.get('/admin/follow-ups/import', async (c) => {
             loading: false,
             existingCustomers: new Set(Array.isArray(data.existing_customers) ? data.existing_customers : []),
             existingFollowups: new Set(Array.isArray(data.existing_followups) ? data.existing_followups : []),
+            existingEmployees: (data.existing_employees && typeof data.existing_employees === 'object') ? data.existing_employees : {},
           }
         } else {
-          precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set() }
+          precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set(), existingEmployees: {} }
         }
       } catch (_) {
-        precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set() }
+        precheckState = { loading: false, existingCustomers: new Set(), existingFollowups: new Set(), existingEmployees: {} }
       }
       // Ensure staff data is loaded so the assignment column is populated in one stable render
       if (staffLoadPromise) await staffLoadPromise
@@ -43331,10 +43601,18 @@ app.get('/admin/follow-ups/import', async (c) => {
       const statuses = computeRowStatuses(items)
       const assignments = computePreviewAssignments(items)
       tbody.innerHTML = slice.map((c, i) => {
-        const { reason } = statuses[i]
+        const { reason, normalized } = statuses[i]
         const willSkip = !!reason
         const rowClass = willSkip ? 'bg-red-50 opacity-70' : 'hover:bg-gray-50'
-        const assignCell = willSkip ? '<span class="text-gray-300 text-xs">—</span>' : formatAssignmentPreviewCell(assignments[i])
+        let assignCell
+        if (!willSkip) {
+          assignCell = formatAssignmentPreviewCell(assignments[i])
+        } else if ((reason === 'existing_customer' || reason === 'existing_followup') && precheckState && precheckState.existingEmployees && normalized && precheckState.existingEmployees[normalized]) {
+          const emp = precheckState.existingEmployees[normalized]
+          assignCell = '<span class="inline-flex items-center gap-1 text-gray-500 text-xs"><span class="text-gray-400">↩</span>' + escapeHtml(emp.full_name || ('#' + emp.id)) + '</span>'
+        } else {
+          assignCell = '<span class="text-gray-300 text-xs">—</span>'
+        }
         return '<tr class="' + rowClass + '">' +
           '<td class="px-3 py-2 text-gray-500">' + (i+1) + '</td>' +
           '<td class="px-3 py-2">' + formatStatusCell(reason) + '</td>' +

@@ -346,20 +346,12 @@ function getContractsRoleId() {
 
 function applyRole3ContractsRestrictions() {
   const roleId = getContractsRoleId();
-  if (![3, 4, 5].includes(roleId)) return;
+  if (![3, 4, 5, 6].includes(roleId)) return;
 
   const allowedSidebarLinks =
-    roleId === 4
+    roleId === 4 || roleId === 5 || roleId === 6
       ? new Set(['/admin/contracts/list', '/admin/contracts/new', '/admin/contracts/templates'])
-      : roleId === 5
-        ? new Set([
-            '/admin/contracts',
-            '/admin/contracts/list',
-            '/admin/contracts/templates',
-            '/admin/contracts/notes',
-            '/admin/contracts/archive'
-          ])
-        : new Set(['/admin/contracts/list', '/admin/contracts/new']);
+      : new Set(['/admin/contracts/list', '/admin/contracts/new']);
   document.querySelectorAll('.sidebar-nav .nav-item[href]').forEach((link) => {
     const href = (link.getAttribute('href') || '').split('?')[0];
     if (!allowedSidebarLinks.has(href)) {
@@ -367,18 +359,8 @@ function applyRole3ContractsRestrictions() {
     }
   });
 
-  if (roleId === 5) {
-    document
-      .querySelectorAll(
-        '.topbar a.btn.btn-primary[href="/admin/contracts/new"], .topbar-trailing a[href="/admin/contracts/new"]'
-      )
-      .forEach((el) => {
-        el.style.display = 'none';
-      });
-  }
-
   const hideRestrictedListActions = () => {
-    if (roleId === 4) {
+    if (roleId === 4 || roleId === 5 || roleId === 6) {
       document
         .querySelectorAll('button[onclick*="editTemplate("], button[onclick*="deleteTemplate("]')
         .forEach((el) => {
