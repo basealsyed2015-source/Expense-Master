@@ -8894,6 +8894,8 @@ app.post('/api/customers', async (c) => {
     const property_owner = (formData.get('property_owner') as string)?.trim() || null
     const real_estate_office = (formData.get('real_estate_office') as string)?.trim() || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
+    const salary_bank_id_raw = Number.parseInt(String(formData.get('salary_bank_id') ?? ''), 10)
+    const salary_bank_id = Number.isFinite(salary_bank_id_raw) && salary_bank_id_raw > 0 ? salary_bank_id_raw : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const rawEnrollmentSource = String(formData.get('enrollment_source') ?? '').trim()
@@ -9397,6 +9399,13 @@ app.post('/api/customers', async (c) => {
       } catch (_) {
         /* columns may not exist until migration 0075 is applied */
       }
+      if (salary_bank_id != null) {
+        try {
+          await c.env.DB.prepare(`UPDATE customers SET salary_bank_id = ? WHERE id = ?`).bind(salary_bank_id, createdCustomerId).run()
+        } catch (_) {
+          /* column may not exist until migration 0138 is applied */
+        }
+      }
       if (customerAttachmentsFromForm.length > 0) {
         await saveCustomerAttachmentsJson(c.env.DB, createdCustomerId, customerAttachmentsFromForm)
       }
@@ -9482,6 +9491,11 @@ app.post('/api/customers', async (c) => {
           ).bind(createdCustomerId, full_name, taskRow.rating, taskRow.rating_note || null, userInfo.userId || null, tenant_id).run()
         }
       } catch (_) { /* don't fail customer creation if rating carry-over fails */ }
+      try {
+        await c.env.DB.prepare(
+          `UPDATE company_contact_followup_tasks SET status = 'completed' WHERE id = ? AND tenant_id = ?`
+        ).bind(taskIdFromForm, tenant_id).run()
+      } catch (_) { /* don't fail customer creation if task completion fails */ }
     }
 
     if (inlineCustomerForm) {
@@ -9626,6 +9640,8 @@ app.post('/api/customers/:id', async (c) => {
     const property_owner = (formData.get('property_owner') as string)?.trim() || null
     const real_estate_office = (formData.get('real_estate_office') as string)?.trim() || null
     const basic_salary = formData.get('basic_salary') ? parseFloat(formData.get('basic_salary') as string) : null
+    const salary_bank_id_raw = Number.parseInt(String(formData.get('salary_bank_id') ?? ''), 10)
+    const salary_bank_id = Number.isFinite(salary_bank_id_raw) && salary_bank_id_raw > 0 ? salary_bank_id_raw : null
     const monthly_salary = parseFloat(formData.get('monthly_salary') as string || '0')
     const notes = (formData.get('notes') as string)?.trim() || null
     const solutions_json = normalizeCustomerSolutionsJson(formData.get('solutions_json') as string | null)
@@ -9793,6 +9809,11 @@ app.post('/api/customers/:id', async (c) => {
       await c.env.DB.prepare(`UPDATE customers SET property_owner = ?, real_estate_office = ? WHERE id = ?`).bind(property_owner, real_estate_office, id).run()
     } catch (_) {
       /* columns may not exist until migration 0075 is applied */
+    }
+    try {
+      await c.env.DB.prepare(`UPDATE customers SET salary_bank_id = ? WHERE id = ?`).bind(salary_bank_id, id).run()
+    } catch (_) {
+      /* column may not exist until migration 0138 is applied */
     }
     if (formData.get('attachments_json') != null) {
       await saveCustomerAttachmentsJson(c.env.DB, id, customerAttachmentsFromForm)
@@ -17502,6 +17523,13 @@ app.get('/admin/customers/add', async (c) => {
   const prefillNotes = String(c.req.query('notes') ?? '').trim().slice(0, 2000)
   const prefillTaskIdRaw = Number.parseInt(String(c.req.query('task_id') ?? ''), 10)
   const prefillTaskId = Number.isFinite(prefillTaskIdRaw) && prefillTaskIdRaw > 0 ? prefillTaskIdRaw : 0
+  let prefillTaskData: { status: string | null; rating: number | null; rating_note: string | null } | null = null
+  if (prefillTaskId && userInfo.tenantId) {
+    prefillTaskData = await c.env.DB.prepare(
+      `SELECT status, rating, rating_note FROM company_contact_followup_tasks WHERE id = ? AND tenant_id = ? LIMIT 1`
+    ).bind(prefillTaskId, userInfo.tenantId).first<{ status: string | null; rating: number | null; rating_note: string | null }>() ?? null
+  }
+  const prefillTaskIsCompleted = prefillTaskData?.status === 'completed'
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
 
   const queryTenantId = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
@@ -17529,6 +17557,18 @@ app.get('/admin/customers/add', async (c) => {
           `<option value="${r.id}"${r.id === defaultNewCustomerLocationId ? ' selected' : ''}>${escapeHtml(r.name)}</option>`
       )
       .join('')
+  }
+
+  // Salary bank dropdown: tenant-only banks for the add form
+  let salaryBankOptionsHtmlAdd = '<option value="">— بدون تحديد —</option>'
+  if (resolvedTenantIdForLocations) {
+    try {
+      const salaryBanksRes = await c.env.DB.prepare(
+        `SELECT id, bank_name FROM banks WHERE tenant_id = ? AND is_active = 1 ORDER BY bank_name ASC`
+      ).bind(resolvedTenantIdForLocations).all<{ id: number; bank_name: string }>()
+      const salaryBanks = (salaryBanksRes.results || []) as Array<{ id: number; bank_name: string }>
+      salaryBankOptionsHtmlAdd += salaryBanks.map(b => `<option value="${b.id}">${escapeHtml(b.bank_name)}</option>`).join('')
+    } catch (_) {}
   }
 
   // Bank agent dropdown: role 2/1 can pick a role-5 user; role 5 is auto-assigned server-side.
@@ -17970,6 +18010,15 @@ app.get('/admin/customers/add', async (c) => {
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-university text-blue-600 ml-1"></i>
+                  بنك الراتب
+                </label>
+                <select name="salary_bank_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                  ${salaryBankOptionsHtmlAdd}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-money-bill text-green-600 ml-1"></i>
                   الراتب الشهري *
                 </label>
@@ -18145,12 +18194,52 @@ app.get('/admin/customers/add', async (c) => {
                 <i class="fas fa-phone-slash ml-1"></i>
                 لا يرد
               </button>
+              ${!prefillTaskIsCompleted ? `<button type="button" id="btn-review-task" class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-6 py-3 rounded-lg font-bold flex items-center gap-2"><i class="fas fa-star ml-1"></i>تقييم العميل</button>` : ''}
             </div>
             ` : ''}
             <div id="customer-create-message" class="mt-6 pt-4 border-t border-gray-200 text-right" dir="rtl" aria-live="polite"></div>
           </form>
         </div>
       </div>
+      ${prefillTaskId && !prefillTaskIsCompleted ? `
+      <div id="taskReviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-visible">
+          <div id="taskReviewModalHeader" class="bg-gradient-to-r from-yellow-400 to-green-500 px-6 py-4 flex items-center justify-between transition-all duration-300 rounded-t-2xl">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-user-check ml-2"></i>تقييم العميل</h2>
+            <button onclick="closeTaskReviewModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+          </div>
+          <div class="p-6 space-y-5">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">التقييم</label>
+              <div class="relative" id="taskReviewRatingContainer">
+                <button type="button" id="taskReviewRatingBtn" onclick="toggleTaskRatingDropdown(event)"
+                  class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-right flex items-center justify-between font-semibold transition-all duration-200 bg-white text-gray-400">
+                  <span id="taskReviewRatingText">— اختر تقييم العميل —</span>
+                  <i class="fas fa-chevron-down text-sm transition-transform" id="taskReviewRatingChevron"></i>
+                </button>
+                <div id="taskReviewRatingDropdown" class="hidden absolute z-[1200] w-full mt-1 rounded-xl shadow-xl overflow-hidden border border-gray-100">
+                  <button type="button" onclick="selectTaskRating(5)" class="w-full px-4 py-3.5 text-right font-bold text-green-800 bg-green-50 hover:bg-green-100 transition-colors border-b border-green-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز</button>
+                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد</button>
+                  <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول</button>
+                  <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ</button>
+                  <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-1"><i class="fas fa-comment-alt text-gray-400 ml-1"></i> الملاحظة / سبب التقييم</label>
+              <textarea id="taskReviewNote" rows="3" placeholder="أدخل ملاحظة أو سبب التقييم..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"></textarea>
+            </div>
+          </div>
+          <div class="px-6 pb-6 flex flex-wrap gap-3 justify-end">
+            <button onclick="closeTaskReviewModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors text-sm">إلغاء</button>
+            <button onclick="saveTaskReview()" id="taskReviewSaveBtn" class="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed" disabled>
+              <i class="fas fa-save ml-1"></i> حفظ التقييم
+            </button>
+          </div>
+        </div>
+      </div>
+      ` : ''}
       <script>
         (function () {
           const form = document.getElementById('add-customer-form');
@@ -18265,9 +18354,112 @@ app.get('/admin/customers/add', async (c) => {
             setMessage('error', msg);
           }
 
+          var TASK_RATING_CFG = {
+            5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#22c55e', headerTo: '#16a34a' },
+            4: { label: 'عميل جيد',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#a3e635', headerTo: '#65a30d' },
+            3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#facc15', headerTo: '#ca8a04' },
+            2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#fb923c', headerTo: '#ea580c' },
+            1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
+          };
+          var taskReviewRating = 0;
+          function openTaskReviewModal(initialRating, initialNote) {
+            taskReviewRating = 0;
+            document.getElementById('taskReviewNote').value = initialNote || '';
+            resetTaskReviewRating();
+            if (initialRating && TASK_RATING_CFG[initialRating]) selectTaskRating(initialRating);
+            var modal = document.getElementById('taskReviewModal');
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+          }
+          function closeTaskReviewModal() {
+            document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+            var modal = document.getElementById('taskReviewModal');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+          }
+          function selectTaskRating(n) {
+            taskReviewRating = n;
+            var cfg = TASK_RATING_CFG[n];
+            var btn = document.getElementById('taskReviewRatingBtn');
+            btn.style.backgroundColor = cfg.bgColor;
+            btn.style.borderColor = cfg.borderColor;
+            btn.style.color = cfg.textColor;
+            document.getElementById('taskReviewRatingText').textContent = cfg.label;
+            document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+            document.getElementById('taskReviewRatingChevron').style.transform = '';
+            document.getElementById('taskReviewModalHeader').style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+            var saveBtn = document.getElementById('taskReviewSaveBtn');
+            saveBtn.disabled = false;
+            saveBtn.className = 'px-5 py-2.5 rounded-lg font-bold transition-all shadow-md text-sm text-white cursor-pointer';
+            saveBtn.style.background = 'linear-gradient(to right, ' + cfg.headerFrom + ', ' + cfg.headerTo + ')';
+          }
+          function toggleTaskRatingDropdown(e) {
+            e.stopPropagation();
+            var dd = document.getElementById('taskReviewRatingDropdown');
+            var chevron = document.getElementById('taskReviewRatingChevron');
+            var isOpen = !dd.classList.contains('hidden');
+            dd.classList.toggle('hidden');
+            chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+          }
+          function resetTaskReviewRating() {
+            taskReviewRating = 0;
+            var btn = document.getElementById('taskReviewRatingBtn');
+            btn.style.backgroundColor = ''; btn.style.borderColor = ''; btn.style.color = '';
+            document.getElementById('taskReviewRatingText').textContent = '— اختر تقييم العميل —';
+            document.getElementById('taskReviewRatingDropdown').classList.add('hidden');
+            document.getElementById('taskReviewRatingChevron').style.transform = '';
+            document.getElementById('taskReviewModalHeader').style.background = '';
+            var saveBtn = document.getElementById('taskReviewSaveBtn');
+            saveBtn.disabled = true;
+            saveBtn.className = 'px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed';
+            saveBtn.style.background = '';
+          }
+          async function saveTaskReview() {
+            if (!taskReviewRating) return;
+            var taskId = ${prefillTaskId || 0};
+            var note = document.getElementById('taskReviewNote').value.trim();
+            var saveBtn = document.getElementById('taskReviewSaveBtn');
+            saveBtn.disabled = true;
+            try {
+              var res = await fetch('/api/my-followup-tasks/' + taskId + '/rating', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rating: taskReviewRating, note: note || null })
+              });
+              var data = await res.json().catch(function() { return {}; });
+              if (!res.ok || !data.success) throw new Error(data.error || 'تعذر حفظ التقييم');
+              if (taskReviewRating === 1) {
+                await fetch('/api/my-followup-tasks/' + taskId + '/archive', {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ reason: note || 'عميل موقوف' })
+                });
+              }
+              closeTaskReviewModal();
+            } catch(e) {
+              alert(e.message || 'حدث خطأ');
+              saveBtn.disabled = false;
+            }
+          }
+          (function reviewModalEvents() {
+            var modal = document.getElementById('taskReviewModal');
+            if (!modal) return;
+            modal.addEventListener('click', function(e) { if (e.target === modal) closeTaskReviewModal(); });
+            document.addEventListener('click', function(e) {
+              var dd = document.getElementById('taskReviewRatingDropdown');
+              var rc = document.getElementById('taskReviewRatingContainer');
+              if (!dd || !rc) return;
+              if (!dd.classList.contains('hidden') && !rc.contains(e.target)) {
+                dd.classList.add('hidden');
+                document.getElementById('taskReviewRatingChevron').style.transform = '';
+              }
+            });
+          })();
+
           (function taskActionButtons() {
             var archiveBtn = document.getElementById('btn-archive-task');
             var noResponseBtn = document.getElementById('btn-no-response-task');
+            var reviewBtn = document.getElementById('btn-review-task');
             var taskId = ${prefillTaskId || 0};
             if (!taskId) return;
             if (archiveBtn) {
@@ -18303,6 +18495,11 @@ app.get('/admin/customers/add', async (c) => {
                   alert(e.message || 'حدث خطأ');
                   noResponseBtn.disabled = false;
                 }
+              });
+            }
+            if (reviewBtn) {
+              reviewBtn.addEventListener('click', function () {
+                openTaskReviewModal(${prefillTaskData?.rating ?? 0}, ${JSON.stringify(prefillTaskData?.rating_note ?? '')});
               });
             }
           })();
@@ -21071,6 +21268,7 @@ app.get('/admin/customers', async (c) => {
     const employeeFilterQ = String(c.req.query('employeeFilter') ?? 'all')
     const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
     const sourceFilterQ = String(c.req.query('sourceFilter') ?? 'all')
+    const salaryBankFilterQ = String(c.req.query('salaryBankFilter') ?? 'all')
 
     // Build query based on role — always exclude archived and completed customers
     let query = `
@@ -21087,8 +21285,10 @@ app.get('/admin/customers', async (c) => {
           ub_direct.username,
           NULLIF(TRIM(ub_fr.full_name), ''),
           ub_fr.username
-        ) AS assigned_bank_agent_name
+        ) AS assigned_bank_agent_name,
+        sb.bank_name AS salary_bank_name
       FROM customers
+      LEFT JOIN banks sb ON sb.id = customers.salary_bank_id
       LEFT JOIN customer_assignments ca ON customers.id = ca.customer_id
       LEFT JOIN users u ON ca.employee_id = u.id AND u.role_id IN (4, 5, 6, 14)
       LEFT JOIN tenant_locations tl ON customers.location_id = tl.id
@@ -21267,6 +21467,17 @@ app.get('/admin/customers', async (c) => {
         queryParams.push(sourceFilterQ.slice(6))
       }
     }
+    if (salaryBankFilterQ !== 'all') {
+      if (salaryBankFilterQ === 'none') {
+        query += ` AND (customers.salary_bank_id IS NULL OR customers.salary_bank_id = 0)`
+      } else {
+        const sbId = Number.parseInt(salaryBankFilterQ, 10)
+        if (Number.isFinite(sbId) && sbId > 0) {
+          query += ` AND customers.salary_bank_id = ?`
+          queryParams.push(sbId)
+        }
+      }
+    }
 
     // Count before ORDER/LIMIT for server-side pagination
     const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _customers_page`
@@ -21373,6 +21584,7 @@ app.get('/admin/customers', async (c) => {
       employeeFilter: employeeFilterQ,
       bankAgentFilter: bankAgentFilterQ,
       sourceFilter: sourceFilterQ,
+      salaryBankFilter: salaryBankFilterQ,
       page: customersServerPage,
       pageSize: customersServerPageSize,
     }).replace(/</g, '\\u003c')
@@ -27465,6 +27677,21 @@ app.get('/admin/customers/:id/edit', async (c) => {
       }
     }
 
+    // Salary bank dropdown for edit form: tenant-only banks
+    const currentSalaryBankId = (customer as any).salary_bank_id != null ? Number((customer as any).salary_bank_id) : null
+    let salaryBankOptionsHtmlEdit = '<option value="">— بدون تحديد —</option>'
+    if (customerTenantIdEdit && customerTenantIdEdit > 0) {
+      try {
+        const salaryBanksResEdit = await c.env.DB.prepare(
+          `SELECT id, bank_name FROM banks WHERE tenant_id = ? AND is_active = 1 ORDER BY bank_name ASC`
+        ).bind(customerTenantIdEdit).all<{ id: number; bank_name: string }>()
+        const salaryBanksEdit = (salaryBanksResEdit.results || []) as Array<{ id: number; bank_name: string }>
+        salaryBankOptionsHtmlEdit += salaryBanksEdit
+          .map(b => `<option value="${b.id}"${currentSalaryBankId === b.id ? ' selected' : ''}>${escapeHtml(b.bank_name)}</option>`)
+          .join('')
+      } catch (_) {}
+    }
+
     // Bank agent section for role 2: fetch role-5 users in the same tenant.
     let editBankAgentSectionHtml = ''
     if (normalizeRoleId(userInfo.roleId) === 2) {
@@ -27733,6 +27960,15 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">الراتب الأساسي</label>
                   <input type="number" name="basic_salary" step="0.01" min="0" value="${(customer as any).basic_salary ?? ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">
+                    <i class="fas fa-university text-blue-600 ml-1"></i>
+                    بنك الراتب
+                  </label>
+                  <select name="salary_bank_id" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+                    ${salaryBankOptionsHtmlEdit}
+                  </select>
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">الراتب الشهري *</label>

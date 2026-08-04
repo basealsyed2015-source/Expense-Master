@@ -70,7 +70,9 @@
       "Bash(where ffprobe *)",
       "Bash(where mkvmerge *)",
       "Bash(where mkvtoolnix *)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(wrangler deployments *)",
+      "Bash(wrangler versions *)"
     ]
   }
 }
