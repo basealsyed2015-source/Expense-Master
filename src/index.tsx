@@ -21636,6 +21636,16 @@ app.get('/admin/customers', async (c) => {
           .filter(Boolean)
       } catch (_) { /* column may not exist on older DBs */ }
     }
+    let filterSalaryBanks: Array<{ id: number; bank_name: string }> = []
+    if (userInfo.tenantId) {
+      try {
+        const sbRes = await c.env.DB.prepare(
+          `SELECT id, bank_name FROM banks WHERE tenant_id = ? AND is_active = 1 ORDER BY bank_name ASC`
+        ).bind(Number(userInfo.tenantId)).all<{ id: number; bank_name: string }>()
+        filterSalaryBanks = (sbRes.results || []) as typeof filterSalaryBanks
+      } catch (_) {}
+    }
+    const filterSalaryBanksJson = JSON.stringify(filterSalaryBanks).replace(/</g, '\\u003c')
     const filterEmployeeNamesJson = JSON.stringify(
       filterEmployees
         .map((u) => String(u.full_name || u.username || '').trim())
@@ -21844,6 +21854,11 @@ app.get('/admin/customers', async (c) => {
                       </optgroup>
                     </select>
 
+                    <select id="salaryBankFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="all">بنك الراتب: الكل</option>
+                      <option value="none">بدون بنك</option>
+                    </select>
+
                     <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
                       <i class="fas fa-redo"></i> إعادة تعيين
                     </button>
@@ -21887,6 +21902,7 @@ app.get('/admin/customers', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap" title="موظف البنك المعيّن على سجل العميل">موظف البنك</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">العقد</th>
                   <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">التقييم</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">بنك الراتب</th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200" id="tableBody">
@@ -22024,6 +22040,9 @@ app.get('/admin/customers', async (c) => {
                     </td>
                     <td class="px-6 py-3 whitespace-nowrap text-center" id="rating-cell-${customer.id}">
                       <span class="text-gray-300 text-sm">—</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                      ${customer.salary_bank_name ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">${escapeHtml(String(customer.salary_bank_name))}</span>` : '<span class="text-gray-300">—</span>'}
                     </td>
                   </tr>
                 `
@@ -22202,6 +22221,7 @@ app.get('/admin/customers', async (c) => {
           const TENANT_EMPLOYEE_FILTER_NAMES = ${filterEmployeeNamesJson};
           const TENANT_BANK_AGENT_FILTER_LABELS = ${filterBankAgentLabelsJson};
           const TENANT_SOURCE_LABELS = ${filterSourceLabelsJson};
+          const TENANT_SALARY_BANKS = ${filterSalaryBanksJson};
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
           const presetRequestsFilter = pageParams.get('requestsFilter');
@@ -22729,7 +22749,7 @@ app.get('/admin/customers', async (c) => {
           function buildCustomersListUrl(overrides) {
             const params = new URLSearchParams(window.location.search)
             const next = Object.assign({}, CUSTOMERS_FILTER_STATE, overrides || {})
-            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','sourceFilter','page','pageSize']
+            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','sourceFilter','salaryBankFilter','page','pageSize']
             keys.forEach((k) => {
               const v = next[k]
               if (v == null || v === '' || v === 'all' || (k === 'page' && Number(v) === 1) || (k === 'pageSize' && Number(v) === 15)) {
@@ -22749,6 +22769,7 @@ app.get('/admin/customers', async (c) => {
             if (next.employeeFilter && next.employeeFilter !== 'all') params.set('employeeFilter', String(next.employeeFilter))
             if (next.bankAgentFilter && next.bankAgentFilter !== 'all') params.set('bankAgentFilter', String(next.bankAgentFilter))
             if (next.sourceFilter && next.sourceFilter !== 'all') params.set('sourceFilter', String(next.sourceFilter)); else params.delete('sourceFilter')
+            if (next.salaryBankFilter && next.salaryBankFilter !== 'all') params.set('salaryBankFilter', String(next.salaryBankFilter)); else params.delete('salaryBankFilter')
             if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
             if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
             const qs = params.toString()
@@ -23039,6 +23060,7 @@ app.get('/admin/customers', async (c) => {
             const employeeFilter = (document.getElementById('employeeFilter') || {value: 'all'}).value;
             const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value;
             const sourceFilter = (document.getElementById('sourceFilter') || {value: 'all'}).value;
+            const salaryBankFilter = (document.getElementById('salaryBankFilter') || {value: 'all'}).value;
             navigateCustomersList({
               q: searchInput,
               filterField,
@@ -23048,6 +23070,7 @@ app.get('/admin/customers', async (c) => {
               employeeFilter,
               bankAgentFilter,
               sourceFilter,
+              salaryBankFilter,
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -23086,6 +23109,7 @@ app.get('/admin/customers', async (c) => {
               employeeFilter: 'all',
               bankAgentFilter: 'all',
               sourceFilter: 'all',
+              salaryBankFilter: 'all',
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -23188,6 +23212,18 @@ app.get('/admin/customers', async (c) => {
           // (filterTable navigates and was causing perpetual reloads).
           hydrateCustomersRoleFilters();
           hydrateSourceFilter();
+          (function hydrateSalaryBankFilter() {
+            const el = document.getElementById('salaryBankFilter');
+            if (!el) return;
+            const banks = Array.isArray(TENANT_SALARY_BANKS) ? TENANT_SALARY_BANKS : [];
+            banks.forEach(function(b) {
+              const opt = document.createElement('option');
+              opt.value = String(b.id);
+              opt.textContent = b.bank_name;
+              el.appendChild(opt);
+            });
+            el.value = CUSTOMERS_FILTER_STATE.salaryBankFilter || 'all';
+          })();
           applyPresetFiltersFromUrl();
           applyCustomersPagination();
           loadCustomerRatings();
@@ -39683,27 +39719,15 @@ app.get('/admin/my-tasks', async (c) => {
             }
             var taskRating = Number(task.rating) || 0;
             var CARD_RATING_CFG = {
-              5: { label: 'عميل ممتاز', color: '#14532d', bg: '#dcfce7', border: '#16a34a' },
-              4: { label: 'عميل جيد',   color: '#365314', bg: '#ecfccb', border: '#65a30d' },
-              3: { label: 'عميل مقبول', color: '#713f12', bg: '#fef9c3', border: '#ca8a04' },
-              2: { label: 'عميل سيئ',   color: '#7c2d12', bg: '#ffedd5', border: '#ea580c' },
-              1: { label: 'عميل موقوف', color: '#7f1d1d', bg: '#fee2e2', border: '#dc2626' },
+              5: { border: '#16a34a' },
+              4: { border: '#65a30d' },
+              3: { border: '#ca8a04' },
+              2: { border: '#ea580c' },
+              1: { border: '#dc2626' },
             };
-            var reviewBtnHtml;
-            if (taskRating && CARD_RATING_CFG[taskRating]) {
-              var rcfg = CARD_RATING_CFG[taskRating];
-              reviewBtnHtml = '<button type="button" data-review-task="' + task.id + '" ' +
-                'style="background:' + rcfg.bg + ';color:' + rcfg.color + ';border:1px solid ' + rcfg.border + ';" ' +
-                'class="w-full sm:w-auto text-sm font-bold px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2">' +
-                '<i class="fas fa-star"></i>' + rcfg.label + '<i class="fas fa-pencil-alt text-xs opacity-60 mr-1"></i></button>';
-            } else {
-              reviewBtnHtml = '<button type="button" data-review-task="' + task.id + '" ' +
-                'class="w-full sm:w-auto bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-sm font-medium px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2">' +
-                '<i class="fas fa-star ml-1"></i>تقييم العميل</button>';
-            }
             const actionBtn =
               '<div class="mt-3 flex flex-col sm:flex-row gap-2 flex-wrap">' +
-              enrollCustomerBtn + reviewBtnHtml + '</div>';
+              enrollCustomerBtn + '</div>';
             var cardBorderStyle = taskRating && CARD_RATING_CFG[taskRating]
               ? 'border-color:' + CARD_RATING_CFG[taskRating].border + ';border-width:2px;'
               : '';
@@ -39798,13 +39822,6 @@ app.get('/admin/my-tasks', async (c) => {
                 alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
                 btn.disabled = false;
               }
-            });
-          });
-          root.querySelectorAll('[data-review-task]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var tid = btn.getAttribute('data-review-task');
-              var task = (Array.isArray(tasks) ? tasks : []).find(function (t) { return String(t.id) === String(tid); });
-              openTaskReviewModal(tid, task?.customer_name || '', Number(task?.rating) || 0, task?.rating_note || '');
             });
           });
           root.querySelectorAll('[data-history]').forEach(function (btn) {

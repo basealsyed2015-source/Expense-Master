@@ -57001,7 +57001,7 @@ ${n?`
             <button type="button" data-filter="all" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-800">الكل</button>
             <button type="button" data-filter="pending" class="filter-btn px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700">قيد التنفيذ</button>
           </div>
-          <div class="flex flex-col sm:flex-row gap-2 mb-3">
+          <div class="flex flex-col sm:flex-row gap-2 mb-4">
             <div class="relative flex-1">
               <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
               <input type="text" id="taskSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
@@ -57017,23 +57017,8 @@ ${n?`
               <i class="fas fa-sort absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
             </div>
           </div>
-          <div id="listStatus" class="text-sm text-gray-600 mb-2"></div>
-          <div class="flex gap-4" style="height:calc(100vh - 280px);min-height:420px;">
-            <div id="taskListPanel" class="w-full md:w-2/5 overflow-y-auto bg-white border border-gray-200 rounded-xl flex-shrink-0">
-              <div id="taskList"></div>
-            </div>
-            <div id="taskDetailPanel" class="hidden md:flex flex-col flex-1 overflow-y-auto">
-              <button id="detailBackBtn" class="md:hidden mb-3 text-sm text-indigo-600 font-medium flex items-center gap-1 flex-shrink-0">
-                <i class="fas fa-arrow-right"></i> العودة للقائمة
-              </button>
-              <div id="taskDetail">
-                <div class="flex flex-col items-center justify-center h-48 text-gray-400 pt-16">
-                  <i class="fas fa-hand-pointer text-4xl mb-3 opacity-30"></i>
-                  <p class="text-sm">اختر مهمة من القائمة</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
+          <div id="cards" class="space-y-3"></div>
         </div>
 
         <div id="passesPage" class="hidden">
@@ -57128,7 +57113,6 @@ ${n?`
         let activePageTab = 'tasks';
         let tenantStaff = [];
         let allTasks = [];
-        let selectedTaskId = null;
         let noteModalState = { open: false, required: false, resolve: null };
 
         // ---- Task Review Modal ----
