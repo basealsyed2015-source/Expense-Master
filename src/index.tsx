@@ -23914,6 +23914,10 @@ app.get('/admin/notifications', async (c) => {
                 <i class="fas fa-route ml-2"></i>
                 إجراءات سير العمل
               </button>
+              <button type="button" data-notification-filter="task_pass_request" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+                <i class="fas fa-share ml-2"></i>
+                طلبات التمرير
+              </button>
             </div>
           </div>
 
@@ -23925,6 +23929,18 @@ app.get('/admin/notifications', async (c) => {
                 <p class="text-gray-600">جاري تحميل الإشعارات...</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Task Pass Request Popup Modal -->
+        <div id="passRequestModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div class="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-share ml-2"></i>طلب تمرير مهمة</h2>
+              <button onclick="closePassRequestModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="passRequestModalBody" class="p-6 max-h-[60vh] overflow-y-auto"></div>
+            <div id="passRequestModalFooter" class="px-6 pb-5 flex justify-end gap-3"></div>
           </div>
         </div>
 
@@ -23990,7 +24006,7 @@ app.get('/admin/notifications', async (c) => {
               filtered = allNotifications.filter(function (n) { return notificationIsUnread(n); });
             } else if (currentFilter === 'read') {
               filtered = allNotifications.filter(function (n) { return !notificationIsUnread(n); });
-            } else if (currentFilter === 'request' || currentFilter === 'status_change' || currentFilter === 'workflow_action') {
+            } else if (['request', 'status_change', 'workflow_action', 'task_pass_request'].includes(currentFilter)) {
               filtered = allNotifications.filter(n => n.category === currentFilter);
             }
 
@@ -24006,6 +24022,8 @@ app.get('/admin/notifications', async (c) => {
 
             const html = filtered.map(notification => {
               const isWorkflow = notification.category === 'workflow_action';
+              const isPassRequest = notification.category === 'task_pass_request';
+              const isPassResponse = notification.category === 'task_pass_response';
 
               const typeIcons = {
                 info: 'fa-info-circle text-blue-600',
@@ -24019,16 +24037,38 @@ app.get('/admin/notifications', async (c) => {
                 status_change: 'fa-sync',
                 system: 'fa-cog',
                 general: 'fa-bell',
-                workflow_action: 'fa-route'
+                workflow_action: 'fa-route',
+                task_pass_request: 'fa-share',
+                task_pass_response: 'fa-reply'
               };
 
-              const typeIcon = typeIcons[notification.type] || typeIcons.info;
+              var passTypeIcon = isPassRequest ? 'fa-share text-violet-600' : isPassResponse ? 'fa-reply text-violet-600' : null;
+              const typeIcon = passTypeIcon || typeIcons[notification.type] || typeIcons.info;
               const categoryIcon = categoryIcons[notification.category] || categoryIcons.general;
 
               var unreadCard = notificationIsUnread(notification);
-              var cardClass = isWorkflow
-                ? (unreadCard ? 'notification-workflow-unread' : 'notification-workflow-read')
-                : (unreadCard ? 'notification-unread' : 'notification-read');
+              var cardClass = (isPassRequest || isPassResponse)
+                ? (unreadCard ? 'bg-violet-50 border border-violet-200 border-r-4 border-r-violet-500' : 'bg-white border border-gray-200 opacity-85')
+                : isWorkflow
+                  ? (unreadCard ? 'notification-workflow-unread' : 'notification-workflow-read')
+                  : (unreadCard ? 'notification-unread' : 'notification-read');
+
+              var passRequestBtn = isPassRequest && notification.related_pass_request_id ? \`
+                <button onclick="openPassRequestPopup(\${notification.related_pass_request_id}, \${notification.id})"
+                  class="mt-3 inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
+                  <i class="fas fa-eye"></i> عرض طلب التمرير
+                </button>
+              \` : '';
+
+              var categoryLabel = notification.category === 'request' ? 'طلب جديد' :
+                notification.category === 'status_change' ? 'تحديث حالة' :
+                notification.category === 'workflow_action' ? 'سير العمل' :
+                notification.category === 'task_pass_request' ? 'طلب تمرير مهمة' :
+                notification.category === 'task_pass_response' ? 'رد على طلب التمرير' :
+                notification.category === 'system' ? 'نظام' : 'عام';
+
+              var titleColor = (isPassRequest || isPassResponse) ? 'text-violet-900' : isWorkflow ? 'text-amber-800' : 'text-gray-800';
+              var msgColor = (isPassRequest || isPassResponse) ? 'text-violet-800' : isWorkflow ? 'text-amber-900' : 'text-gray-700';
 
               return \`
                 <div class="notification-card \${cardClass} rounded-lg p-4 shadow-sm">
@@ -24038,7 +24078,7 @@ app.get('/admin/notifications', async (c) => {
                     </div>
                     <div class="flex-1">
                       <div class="flex items-start justify-between mb-2">
-                        <h3 class="text-lg font-bold \${isWorkflow ? 'text-amber-800' : 'text-gray-800'}">\${notification.title}</h3>
+                        <h3 class="text-lg font-bold \${titleColor}">\${notification.title}</h3>
                         <div class="flex gap-2">
                           \${unreadCard ? \`
                             <button onclick="markAsRead(\${notification.id})" class="text-blue-600 hover:text-blue-800 transition" title="تحديد كمقروء">
@@ -24050,20 +24090,18 @@ app.get('/admin/notifications', async (c) => {
                           </button>
                         </div>
                       </div>
-                      <p class="\${isWorkflow ? 'text-amber-900' : 'text-gray-700'} mb-3">\${notification.message}</p>
-                      <div class="flex items-center gap-4 text-sm text-gray-600">
+                      <p class="\${msgColor} mb-2">\${notification.message}</p>
+                      \${passRequestBtn}
+                      <div class="flex items-center gap-4 text-sm text-gray-600 mt-3">
                         <span>
                           <i class="fas \${categoryIcon} ml-1"></i>
-                          \${notification.category === 'request' ? 'طلب جديد' :
-                            notification.category === 'status_change' ? 'تحديث حالة' :
-                            notification.category === 'workflow_action' ? 'سير العمل' :
-                            notification.category === 'system' ? 'نظام' : 'عام'}
+                          \${categoryLabel}
                         </span>
                         <span>
                           <i class="fas fa-clock ml-1"></i>
                           \${new Date(notification.created_at).toLocaleString('ar-SA')}
                         </span>
-                        \${notification.related_request_id ? \`
+                        \${notification.related_request_id && !isPassRequest && !isPassResponse ? \`
                           <a href="/admin/requests/\${notification.related_request_id}/workflow" class="\${isWorkflow ? 'text-amber-700 hover:text-amber-900' : 'text-blue-600 hover:text-blue-800'} font-bold">
                             <i class="fas fa-external-link-alt ml-1"></i>
                             عرض سير العمل #\${notification.related_request_id}
@@ -24124,6 +24162,109 @@ app.get('/admin/notifications', async (c) => {
               setNotificationFilter(f, t);
             });
           })();
+
+          // ── Task Pass Request Popup ──────────────────────────────────
+          var passPopupNotifId = null;
+          var passPopupPassId = null;
+
+          function escapePassHtml(v) {
+            return String(v ?? '')
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          }
+
+          function priorityLabel(p) {
+            if (p === 'important') return '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full">مهم</span>';
+            return '<span class="inline-block bg-gray-100 text-gray-700 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
+          }
+
+          async function openPassRequestPopup(passRequestId, notificationId) {
+            passPopupPassId = passRequestId;
+            passPopupNotifId = notificationId;
+            var modal = document.getElementById('passRequestModal');
+            var body = document.getElementById('passRequestModalBody');
+            var footer = document.getElementById('passRequestModalFooter');
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            body.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>';
+            footer.innerHTML = '';
+            try {
+              var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              var headers = token ? { Authorization: 'Bearer ' + token } : {};
+              var res = await axios.get('/api/my-followup-task-passes/' + passRequestId, { headers: headers });
+              var d = res.data && res.data.data;
+              if (!d) throw new Error('لم يتم العثور على الطلب');
+
+              var noteHtml = d.pass_note_text
+                ? '<div class="mt-3 rounded-lg border border-violet-300 bg-violet-50 p-3">' +
+                  '<div class="text-xs font-semibold text-violet-800 mb-1"><i class="fas fa-note-sticky ml-1"></i>ملاحظة التمرير</div>' +
+                  '<div class="text-sm text-violet-900 font-medium whitespace-pre-wrap break-words">' + escapePassHtml(d.pass_note_text) + '</div>' +
+                  '</div>'
+                : '';
+
+              body.innerHTML =
+                '<div class="space-y-3">' +
+                  '<div class="text-base font-bold text-gray-900">' + escapePassHtml(d.task_title || '') + '</div>' +
+                  '<div class="flex flex-wrap gap-2">' + priorityLabel(d.priority) + '</div>' +
+                  '<div class="text-xs text-gray-600 space-y-1.5">' +
+                    '<div><i class="fas fa-user ml-1 text-violet-500"></i>من: <strong>' + escapePassHtml(d.from_user_name || '') + '</strong></div>' +
+                    '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapePassHtml(d.company_name || '-') + '</div>' +
+                    '<div><i class="fas fa-user ml-1 text-gray-400"></i>' + escapePassHtml(d.customer_name || '-') +
+                      ' — <span dir="ltr">' + escapePassHtml(d.customer_phone || '-') + '</span></div>' +
+                    (d.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapePassHtml(d.customer_message) + '</span></div>' : '') +
+                    '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapePassHtml(d.scheduled_at_gregorian || '-') +
+                      (d.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapePassHtml(d.scheduled_at_hijri) : '') + '</div>' +
+                    '<div class="text-gray-400">طلب متابعة رقم #' + escapePassHtml(String(d.followup_id || '')) + '</div>' +
+                  '</div>' +
+                  noteHtml +
+                '</div>';
+
+              if (d.status === 'pending') {
+                footer.innerHTML =
+                  '<button type="button" onclick="submitPassPopupAction(\'reject\')" ' +
+                    'class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">رفض</button>' +
+                  '<button type="button" onclick="submitPassPopupAction(\'accept\')" ' +
+                    'class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">قبول المهمة</button>';
+              } else {
+                var statusLabel = d.status === 'accepted' ? 'تم القبول' : d.status === 'rejected' ? 'تم الرفض' : 'ملغى';
+                footer.innerHTML = '<span class="text-sm text-gray-500">' + escapePassHtml(statusLabel) + '</span>';
+              }
+            } catch (e) {
+              body.innerHTML = '<p class="text-red-600 text-sm text-center py-4">' + escapePassHtml(e?.response?.data?.error || e?.message || 'تعذر تحميل بيانات الطلب') + '</p>';
+            }
+          }
+
+          function closePassRequestModal() {
+            var modal = document.getElementById('passRequestModal');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+            passPopupPassId = null;
+            passPopupNotifId = null;
+          }
+
+          async function submitPassPopupAction(action) {
+            if (!passPopupPassId) return;
+            var footer = document.getElementById('passRequestModalFooter');
+            var btns = footer.querySelectorAll('button');
+            btns.forEach(function(b) { b.disabled = true; });
+            try {
+              var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              var headers = token ? { Authorization: 'Bearer ' + token } : {};
+              await axios.patch('/api/my-followup-task-passes/' + passPopupPassId, { action: action }, { headers: headers });
+              if (passPopupNotifId) {
+                await axios.put('/api/notifications/' + passPopupNotifId + '/read', {}, { headers: headers });
+              }
+              closePassRequestModal();
+              await loadNotifications();
+            } catch (e) {
+              btns.forEach(function(b) { b.disabled = false; });
+              alert(e?.response?.data?.error || e?.message || 'حدث خطأ');
+            }
+          }
+
+          document.getElementById('passRequestModal').addEventListener('click', function(e) {
+            if (e.target === this) closePassRequestModal();
+          });
 
           // Load notifications on page load
           loadNotifications();
@@ -38960,7 +39101,7 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
     }
 
     const task = await c.env.DB.prepare(`
-      SELECT id, tenant_id, assigned_user_id, status
+      SELECT id, tenant_id, assigned_user_id, status, task_title
       FROM company_contact_followup_tasks
       WHERE id = ? LIMIT 1
     `).bind(taskId).first<{
@@ -38968,6 +39109,7 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
       tenant_id: number
       assigned_user_id: number | null
       status: string | null
+      task_title: string | null
     }>()
 
     if (!task?.id) return c.json({ success: false, error: 'Task not found' }, 404)
@@ -38992,11 +39134,13 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
       return c.json({ success: false, error: 'توجد بالفعل طلب تمرير معلّق لهذه المهمة' }, 400)
     }
 
-    await c.env.DB.prepare(`
+    const passInsertResult = await c.env.DB.prepare(`
       INSERT INTO company_contact_followup_task_pass_requests
         (task_id, tenant_id, from_user_id, to_user_id, status, note_text)
       VALUES (?, ?, ?, ?, 'pending', ?)
     `).bind(taskId, userInfo.tenantId, userInfo.userId, toUserId, passNote).run()
+
+    const passRequestId = passInsertResult.meta.last_row_id
 
     const passUserRow = await c.env.DB.prepare(`
       SELECT full_name FROM users WHERE id = ? LIMIT 1
@@ -39008,6 +39152,17 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
         (task_id, tenant_id, user_id, user_name, note_text, note_type)
       VALUES (?, ?, ?, ?, ?, 'pass_note')
     `).bind(taskId, userInfo.tenantId, userInfo.userId, passUserName, passNote).run()
+
+    await c.env.DB.prepare(`
+      INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
+      VALUES (?, ?, ?, 'info', 'task_pass_request', ?, ?)
+    `).bind(
+      toUserId,
+      'طلب تمرير مهمة',
+      `${passUserName} يطلب تمرير مهمة إليك: ${task.task_title || ''}`,
+      passRequestId,
+      userInfo.tenantId
+    ).run()
 
     return c.json({ success: true, message: 'تم إرسال طلب التمرير' })
   } catch (error: any) {
@@ -39048,6 +39203,42 @@ app.get('/api/my-followup-task-passes/incoming', async (c) => {
   }
 })
 
+app.get('/api/my-followup-task-passes/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!canAccessMyFollowupTasksPage(userInfo.roleId)) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (!userInfo.tenantId) return c.json({ success: true, data: null })
+
+    const passId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(passId) || passId <= 0) return c.json({ success: false, error: 'Invalid id' }, 400)
+
+    const row = await c.env.DB.prepare(`
+      SELECT pr.id AS pass_request_id, pr.task_id, pr.from_user_id, pr.to_user_id, pr.status,
+             pr.note_text AS pass_note_text, pr.created_at AS pass_created_at,
+             fu.full_name AS from_user_name, tu.full_name AS to_user_name,
+             t.task_title, t.scheduled_at_gregorian, t.scheduled_at_hijri,
+             t.priority, t.status AS task_status, t.followup_id,
+             f.customer_name, f.customer_phone, f.customer_message,
+             f.affiliate_label, tn.company_name
+      FROM company_contact_followup_task_pass_requests pr
+      INNER JOIN company_contact_followup_tasks t ON t.id = pr.task_id
+      INNER JOIN company_contact_followups f ON f.id = t.followup_id
+      LEFT JOIN tenants tn ON tn.id = t.tenant_id
+      LEFT JOIN users fu ON fu.id = pr.from_user_id
+      LEFT JOIN users tu ON tu.id = pr.to_user_id
+      WHERE pr.id = ? AND pr.tenant_id = ?
+        AND (pr.to_user_id = ? OR pr.from_user_id = ?)
+      LIMIT 1
+    `).bind(passId, userInfo.tenantId, userInfo.userId, userInfo.userId).first()
+
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
+    return c.json({ success: true, data: row })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 app.patch('/api/my-followup-task-passes/:id', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -39067,8 +39258,11 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
     }
 
     const row = await c.env.DB.prepare(`
-      SELECT pr.id, pr.task_id, pr.tenant_id, pr.from_user_id, pr.to_user_id, pr.status
+      SELECT pr.id, pr.task_id, pr.tenant_id, pr.from_user_id, pr.to_user_id, pr.status,
+             fu.full_name AS from_user_name, tu.full_name AS to_user_name
       FROM company_contact_followup_task_pass_requests pr
+      LEFT JOIN users fu ON fu.id = pr.from_user_id
+      LEFT JOIN users tu ON tu.id = pr.to_user_id
       WHERE pr.id = ? LIMIT 1
     `).bind(passId).first<{
       id: number
@@ -39077,6 +39271,8 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
       from_user_id: number
       to_user_id: number
       status: string
+      from_user_name: string | null
+      to_user_name: string | null
     }>()
 
     if (!row?.id) return c.json({ success: false, error: 'Not found' }, 404)
@@ -39101,29 +39297,40 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
       return c.json({ success: false, error: 'Forbidden' }, 403)
     }
 
+    const taskForPass = await c.env.DB.prepare(`
+      SELECT id, assigned_user_id, status, task_title FROM company_contact_followup_tasks
+      WHERE id = ? AND tenant_id = ? LIMIT 1
+    `).bind(row.task_id, userInfo.tenantId).first<{
+      id: number
+      assigned_user_id: number | null
+      status: string | null
+      task_title: string | null
+    }>()
+
     if (action === 'reject') {
       await c.env.DB.prepare(`
         UPDATE company_contact_followup_task_pass_requests
         SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).bind(passId).run()
+      await c.env.DB.prepare(`
+        INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
+        VALUES (?, ?, ?, 'warning', 'task_pass_response', ?, ?)
+      `).bind(
+        row.from_user_id,
+        'تم رفض طلب التمرير',
+        `${row.to_user_name || 'الموظف'} رفض طلب التمرير للمهمة: ${taskForPass?.task_title || ''}`,
+        passId,
+        userInfo.tenantId
+      ).run()
       return c.json({ success: true, message: 'تم رفض طلب التمرير' })
     }
 
-    const task = await c.env.DB.prepare(`
-      SELECT id, assigned_user_id, status FROM company_contact_followup_tasks
-      WHERE id = ? AND tenant_id = ? LIMIT 1
-    `).bind(row.task_id, userInfo.tenantId).first<{
-      id: number
-      assigned_user_id: number | null
-      status: string | null
-    }>()
-
-    if (!task?.id) return c.json({ success: false, error: 'Task not found' }, 404)
-    if (task.assigned_user_id !== row.from_user_id) {
+    if (!taskForPass?.id) return c.json({ success: false, error: 'Task not found' }, 404)
+    if (taskForPass.assigned_user_id !== row.from_user_id) {
       return c.json({ success: false, error: 'تعيين المهمة تغيّر؛ لا يمكن القبول' }, 400)
     }
-    const tst = String(task.status ?? '').trim().toLowerCase()
+    const tst = String(taskForPass.status ?? '').trim().toLowerCase()
     if (tst === 'completed') {
       await c.env.DB.prepare(`
         UPDATE company_contact_followup_task_pass_requests
@@ -39144,6 +39351,17 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
       SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(passId).run()
+
+    await c.env.DB.prepare(`
+      INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
+      VALUES (?, ?, ?, 'success', 'task_pass_response', ?, ?)
+    `).bind(
+      row.from_user_id,
+      'تم قبول طلب التمرير',
+      `${row.to_user_name || 'الموظف'} قبل طلب التمرير للمهمة: ${taskForPass.task_title || ''}`,
+      passId,
+      userInfo.tenantId
+    ).run()
 
     return c.json({ success: true, message: 'تم قبول المهمة ونقلها إليك' })
   } catch (error: any) {
