@@ -1254,6 +1254,20 @@ function normalizeArabicAndPersianDigits(value: string): string {
     .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 1776))
 }
 
+/**
+ * Customers/requests list search: allow typing mobiles with a leading 0 (05…)
+ * by stripping leading zeros so LIKE matches phones stored as 5… / 9665….
+ */
+function normalizeListSearchQuery(raw: string): string {
+  const trimmed = normalizeArabicAndPersianDigits(String(raw ?? '').trim())
+  if (!trimmed) return ''
+  const compact = trimmed.replace(/[\s\-().+]/g, '')
+  if (/^\d+$/.test(compact) && compact.startsWith('0')) {
+    return compact.replace(/^0+/, '') || trimmed
+  }
+  return trimmed
+}
+
 function normalizeCustomerPhoneForStorage(rawPhone: string | null | undefined): { normalized: string | null; error: string | null } {
   const raw = normalizeArabicAndPersianDigits(String(rawPhone ?? '').trim())
   let digits = raw.replace(/[^\d]/g, '')
@@ -8535,6 +8549,7 @@ app.get('/api/customers/export-csv', async (c) => {
     if (!userInfo.userId || !userInfo.roleId) return c.json({ success: false, error: 'Unauthorized' }, 401)
 
     const searchQ = String(c.req.query('q') ?? '').trim()
+    const searchQNormalized = normalizeListSearchQuery(searchQ)
     const filterField = String(c.req.query('filterField') ?? 'all')
     const dateRangeFilter = String(c.req.query('dateRange') ?? 'all')
     const requestsFilterQ = String(c.req.query('requestsFilter') ?? 'all')
@@ -8619,8 +8634,8 @@ app.get('/api/customers/export-csv', async (c) => {
       query += ' AND 1 = 0'
     }
 
-    if (searchQ) {
-      const like = `%${searchQ}%`
+    if (searchQNormalized) {
+      const like = `%${searchQNormalized}%`
       if (filterField === 'name') { query += ' AND customers.full_name LIKE ?'; queryParams.push(like) }
       else if (filterField === 'phone') { query += ' AND customers.phone LIKE ?'; queryParams.push(like) }
       else if (filterField === 'email') { query += ' AND customers.email LIKE ?'; queryParams.push(like) }
@@ -21352,6 +21367,7 @@ app.get('/admin/customers', async (c) => {
       pageSize: c.req.query('pageSize'),
     })
     const searchQ = String(c.req.query('q') ?? '').trim()
+    const searchQNormalized = normalizeListSearchQuery(searchQ)
     const filterField = String(c.req.query('filterField') ?? 'all')
     const dateRangeFilter = String(c.req.query('dateRange') ?? 'all')
     const requestsFilterQ = String(c.req.query('requestsFilter') ?? 'all')
@@ -21489,8 +21505,8 @@ app.get('/admin/customers', async (c) => {
       query += ' AND 1 = 0';
     }
 
-    if (searchQ) {
-      const like = `%${searchQ}%`
+    if (searchQNormalized) {
+      const like = `%${searchQNormalized}%`
       if (filterField === 'name') {
         query += ' AND customers.full_name LIKE ?'
         queryParams.push(like)
@@ -25269,6 +25285,7 @@ app.get('/admin/requests', async (c) => {
       pageSize: c.req.query('pageSize'),
     })
     const requestsSearchQ = String(c.req.query('q') ?? '').trim()
+    const requestsSearchQNormalized = normalizeListSearchQuery(requestsSearchQ)
     const requestsFilterField = String(c.req.query('filterField') ?? 'all')
     const requestsStatusFilterQ = String(
       c.req.query('statusFilter') ?? c.req.query('requestStatusFilter') ?? 'all'
@@ -25418,8 +25435,8 @@ app.get('/admin/requests', async (c) => {
       )`
       queryParams.push(requestsBankAgentFilterQ, requestsBankAgentFilterQ)
     }
-    if (requestsSearchQ) {
-      const like = `%${requestsSearchQ}%`
+    if (requestsSearchQNormalized) {
+      const like = `%${requestsSearchQNormalized}%`
       if (requestsFilterField === 'customer') {
         query += ` AND IFNULL(c.full_name,'') LIKE ?`
         queryParams.push(like)
@@ -27180,7 +27197,7 @@ app.get('/admin/requests/new', async (c) => {
                     البنك المختار
                   </label>
                   <select name="selected_bank_id" id="newRequestSelectedBank" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
-                    <option value="">-- اختر البنك (اختياري) --</option>
+                    <option value="">-- اختر البنك --</option>
                     ${banks.results.map((bank: any) => `
                       <option value="${bank.id}">${bank.bank_name}</option>
                     `).join('')}

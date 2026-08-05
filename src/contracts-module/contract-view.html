@@ -19,7 +19,8 @@
     }
     .contract-actions-bar .btn { min-width: 120px; justify-content: center; }
     .status-change-wrap { margin-right: auto; display: flex; align-items: center; gap: 10px; }
-    .status-dropdown-wrap { display: flex; align-items: center; gap: 10px; }
+    .status-display-wrap { display: flex; align-items: center; gap: 8px; }
+    .status-display-wrap .status-label { font-size: 13px; color: var(--text-muted); }
 
     /* ===== A4 PREVIEW STAGE (stacked sheets) ===== */
     .contract-a4-stage {
@@ -832,17 +833,9 @@
           <i class="fas fa-money-check-alt"></i> عرض سند الأمر
         </a>
         <div class="status-change-wrap">
-          <div id="statusDropdownWrap" class="status-dropdown-wrap" hidden>
-            <label style="font-size:13px;color:var(--text-muted);">تغيير الحالة:</label>
-            <select class="form-control" id="statusSelect" onchange="updateStatus()" style="width:auto;padding:8px 14px;">
-              <option value="نشط">نشط</option>
-              <option value="بانتظار التمويل">بانتظار التمويل</option>
-              <option value="بانتظار موافقة ممثل البنك">بانتظار موافقة ممثل البنك</option>
-              <option value="بانتظار موافقة الإدارة">بانتظار موافقة الإدارة</option>
-              <option value="مكتمل">مكتمل ✓</option>
-              <option value="مؤرشف">مؤرشف</option>
-              <option value="ملغي">ملغي</option>
-            </select>
+          <div id="statusDisplayWrap" class="status-display-wrap">
+            <span class="status-label">الحالة:</span>
+            <span id="statusDisplay"></span>
           </div>
           <button class="btn btn-warning btn-sm" onclick="archiveContract()">
             <i class="fas fa-archive"></i> أرشفة
@@ -1564,7 +1557,7 @@
         }
         document.getElementById('topbarTitle').innerHTML =
           `<i class="fas fa-file-contract"></i> ${currentContract.contract_number || 'عرض العقد'}`;
-        document.getElementById('statusSelect').value = currentContract.status || 'نشط';
+        renderStatusDisplay(currentContract.status);
         if (currentContract.note_order_number) {
           const nl = document.getElementById('noteLink');
           nl.href = `notes.html?search=${currentContract.note_order_number}`;
@@ -1999,14 +1992,10 @@
     }
 
     // ======= ACTIONS =======
-    function canUseStatusDropdown() {
-      return getContractsRoleId() === 2;
-    }
-
-    function configureStatusDropdownVisibility() {
-      const wrap = document.getElementById('statusDropdownWrap');
-      if (!wrap) return;
-      wrap.hidden = !canUseStatusDropdown();
+    function renderStatusDisplay(status) {
+      const el = document.getElementById('statusDisplay');
+      if (!el) return;
+      el.innerHTML = getStatusBadge(status || 'نشط');
     }
 
     function isContractPendingApprovalForCurrentRole() {
@@ -2021,14 +2010,10 @@
       const approveBtn = document.getElementById('approveContractBtn');
       if (!approveBtn || !currentContract) return;
       const roleId = getContractsRoleId();
-      const statusSelect = document.getElementById('statusSelect');
-      configureStatusDropdownVisibility();
+      renderStatusDisplay(currentContract.status);
       approveBtn.style.display = isContractPendingApprovalForCurrentRole() ? 'inline-flex' : 'none';
 
-      if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
-        if (statusSelect) statusSelect.value = 'نشط';
-        approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
-      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+      if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد نهائي';
       } else if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
         approveBtn.innerHTML = '<i class="fas fa-check-circle"></i> اعتماد وإرسال للإدارة';
@@ -2062,39 +2047,19 @@
       sendWhatsApp(currentContract.party_two_phone, msg);
     }
 
-    async function updateStatus() {
-      if (!canUseStatusDropdown()) return;
-      if (isContractPendingApprovalForCurrentRole()) {
-        configureApprovalActions();
-        showToast('استخدم زر الاعتماد لإكمال خطوة الموافقة الحالية', 'warning');
-        return;
-      }
-      const newStatus = document.getElementById('statusSelect').value;
-      try {
-        await API.patch('contracts', currentContract.id, { status: newStatus });
-        currentContract.status = newStatus;
-        refreshContractDocumentView();
-        showToast(`✓ تم تغيير الحالة إلى: ${newStatus}`, 'success');
-      } catch (e) { showToast('خطأ في تحديث الحالة', 'error'); }
-    }
-
     async function approveContract() {
       if (!currentContract) return;
       const roleId = getContractsRoleId();
       let newStatus = null;
       if (roleId === 5 && currentContract.status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL) {
         newStatus = CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL;
-      } else if (roleId === 1 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
+      } else if ((roleId === 1 || roleId === 2) && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
         newStatus = 'نشط';
-      } else if (roleId === 2 && currentContract.status === CONTRACT_STATUS_AWAITING_ADMIN_APPROVAL) {
-        const selected = document.getElementById('statusSelect').value;
-        newStatus = ['نشط', 'بانتظار التمويل', 'مكتمل'].includes(selected) ? selected : 'نشط';
       }
       if (!newStatus) return;
       try {
         const updated = await API.patch('contracts', currentContract.id, { status: newStatus });
         currentContract = updated || { ...currentContract, status: newStatus };
-        document.getElementById('statusSelect').value = currentContract.status || newStatus;
         configureApprovalActions();
         refreshContractDocumentView();
         showToast('تم اعتماد العقد بنجاح', 'success');

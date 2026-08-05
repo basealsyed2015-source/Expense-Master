@@ -403,24 +403,67 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     let rowScopeSql = ''
     let rowScopeBinds: (number | string)[] = []
     if (table === 'contracts' && info.roleId === 4 && info.userId) {
-      rowScopeSql = ' AND created_by = ? '
+      rowScopeSql = ' AND contracts.created_by = ? '
       rowScopeBinds = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
       // Include contracts this bank agent created (e.g. customer_id null) plus FR-assigned customers
-      rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeSql =
+        ' AND (contracts.created_by = ? OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBinds = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
       // Role 6: contracts they created (employee column) OR customer assigned as bank agent
-      rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeSql =
+        ' AND (contracts.created_by = ? OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBinds = [info.userId, info.userId, info.tenantId]
     }
     // List cards never need full template HTML bodies (can be hundreds of KB each).
-    const selectCols =
-      table === 'contract_templates'
-        ? 'id, tenant_id, template_name, template_type, variables_list, is_active, court_city, render_mode, stamp_url, document_watermark_url, document_watermark_enabled, document_watermark_opacity, document_header_url, document_header_enabled, document_header_opacity, document_footer_url, document_footer_enabled, document_footer_opacity, created_at'
-        : '*'
+    if (table === 'contract_templates') {
+      const selectCols =
+        'id, tenant_id, template_name, template_type, variables_list, is_active, court_city, render_mode, stamp_url, document_watermark_url, document_watermark_enabled, document_watermark_opacity, document_header_url, document_header_enabled, document_header_opacity, document_footer_url, document_footer_enabled, document_footer_opacity, created_at'
+      const { results } = await c.env.DB.prepare(
+        `SELECT ${selectCols} FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
+      )
+        .bind(...tbinds, ...rowScopeBinds, limit)
+        .all()
+      return c.json({ data: results || [] })
+    }
+    if (table === 'contracts') {
+      // Enrich with creator (employee) and assigned bank-agent display names for the list table.
+      const enrichedSql = `SELECT contracts.*,
+                emp.full_name AS employee_name,
+                COALESCE(ba_fr.full_name, ba_cust.full_name, ba_appr.full_name) AS bank_agent_name
+         FROM contracts
+         LEFT JOIN users emp ON emp.id = contracts.created_by
+         LEFT JOIN financing_requests fr ON fr.id = contracts.financing_request_id
+         LEFT JOIN users ba_fr ON ba_fr.id = fr.assigned_bank_agent_id
+         LEFT JOIN customers cust ON cust.id = contracts.customer_id
+         LEFT JOIN users ba_cust ON ba_cust.id = cust.assigned_bank_agent_id
+         LEFT JOIN users ba_appr ON ba_appr.id = contracts.bank_agent_approved_by
+         WHERE 1=1 ${tsql} ${rowScopeSql}
+         ORDER BY contracts.id DESC LIMIT ?`
+      try {
+        const { results } = await c.env.DB.prepare(enrichedSql)
+          .bind(...tbinds, ...rowScopeBinds, limit)
+          .all()
+        return c.json({ data: results || [] })
+      } catch (e: unknown) {
+        const msg = String((e as { message?: string })?.message || e || '')
+        if (!/no such column/i.test(msg)) throw e
+        // Older schemas: still resolve employee name; bank agent may be unavailable.
+        const { results } = await c.env.DB.prepare(
+          `SELECT contracts.*, emp.full_name AS employee_name, NULL AS bank_agent_name
+           FROM contracts
+           LEFT JOIN users emp ON emp.id = contracts.created_by
+           WHERE 1=1 ${tsql} ${rowScopeSql}
+           ORDER BY contracts.id DESC LIMIT ?`
+        )
+          .bind(...tbinds, ...rowScopeBinds, limit)
+          .all()
+        return c.json({ data: results || [] })
+      }
+    }
     const { results } = await c.env.DB.prepare(
-      `SELECT ${selectCols} FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
+      `SELECT * FROM ${table} WHERE 1=1 ${tsql} ${rowScopeSql} ORDER BY id DESC LIMIT ?`
     )
       .bind(...tbinds, ...rowScopeBinds, limit)
       .all()

@@ -971,6 +971,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <th>نوع العقد</th>
                 <th>العميل</th>
                 <th>الجوال</th>
+                <th>الموظف</th>
+                <th>ممثل البنك</th>
                 <th>مبلغ التمويل</th>
                 <th>السعي</th>
                 <th>نوع التمويل</th>
@@ -981,7 +983,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               </tr>
             </thead>
             <tbody id="contractsBody">
-              <tr><td colspan="11" class="text-center"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
+              <tr><td colspan="13" class="text-center"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1034,7 +1036,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         if (tbody) {
           tbody.innerHTML = \`
             <tr>
-              <td colspan="11">
+              <td colspan="13">
                 <div class="empty-state">
                   <i class="fas fa-exclamation-triangle"></i>
                   <p>تعذر تحميل العقود. تحقق من تسجيل الدخول وصحة اتصال API.</p>
@@ -1059,7 +1061,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           (c.contract_number || '').toLowerCase().includes(q) ||
           (c.party_two_name || '').toLowerCase().includes(q) ||
           (c.note_order_number || '').toLowerCase().includes(q) ||
-          (c.party_two_id || '').toLowerCase().includes(q);
+          (c.party_two_id || '').toLowerCase().includes(q) ||
+          (c.employee_name || '').toLowerCase().includes(q) ||
+          (c.bank_agent_name || '').toLowerCase().includes(q);
         const matchSt = !st || c.status === st;
         const matchTp = !tp || c.template_name?.includes(tp);
         return matchQ && matchSt && matchTp;
@@ -1097,7 +1101,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         \`عرض \${Math.min(start+1, total)} - \${Math.min(end, total)} من \${total}\`;
 
       if (page.length === 0) {
-        tbody.innerHTML = \`<tr><td colspan="11"><div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد عقود مطابقة</p></div></td></tr>\`;
+        tbody.innerHTML = \`<tr><td colspan="13"><div class="empty-state"><i class="fas fa-file-alt"></i><p>لا توجد عقود مطابقة</p></div></td></tr>\`;
         buildPagination(total);
         return;
       }
@@ -1111,6 +1115,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <div style="font-size:11px;color:var(--text-muted);">\${c.party_two_id || ''}</div>
           </td>
           <td style="direction:ltr;text-align:right;">\${c.party_two_phone || '—'}</td>
+          <td>\${c.employee_name || '—'}</td>
+          <td>\${c.bank_agent_name || '—'}</td>
           <td><span class="amount-display" style="font-size:14px;">\${formatMoney(c.finance_amount)}</span></td>
           <td><strong class="text-secondary">\${formatMoney(c.commission_amount)}</strong></td>
           <td>\${c.finance_type || '—'}</td>
