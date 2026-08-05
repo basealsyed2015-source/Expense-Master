@@ -912,7 +912,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/contracts/list" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
       <a href="/admin/contracts/new" class="nav-item active"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
       <a href="/admin/contracts/templates" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
-      <!-- TEMPORARILY DISABLED: <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a> -->
+      <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
       
     </nav>
@@ -1142,23 +1142,18 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
           </div>
 
-          <!-- Promissory Note -->
-          <div class="form-section">
+          <!-- Promissory notes temporarily disabled (page + auto-create removed) -->
+          <div class="form-section" id="promissoryNoteSection" hidden>
             <div class="form-section-title"><i class="fas fa-money-check-alt"></i> سند الأمر</div>
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
-                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" required />
-                <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
+                <label class="form-label">رقم سند الأمر</label>
+                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" />
               </div>
               <div class="form-group">
                 <label class="form-label">تاريخ استحقاق السند</label>
                 <input type="date" class="form-control" id="note_due_date" />
               </div>
-            </div>
-            <div class="form-note" style="margin-top:12px;">
-              <i class="fas fa-gavel text-secondary"></i>
-              <strong>ملاحظة قانونية:</strong> يخضع سند الأمر لأحكام نظام الأوراق التجارية استناداً لقرار مجلس الوزراء رقم (692). مكان الدفع: <strong>الرياض</strong>
             </div>
           </div>
 
@@ -1363,6 +1358,23 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    function setFinanceTypeValue(typeName) {
+      if (!typeName) return;
+      const sel = document.getElementById('finance_type');
+      if (!sel) return;
+      let found = false;
+      for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === typeName) { found = true; break; }
+      }
+      if (!found) {
+        const o = document.createElement('option');
+        o.value = typeName;
+        o.textContent = typeName;
+        sel.appendChild(o);
+      }
+      sel.value = typeName;
+    }
+
     function fillFromFinancingRequest(requestId) {
       const hidden = document.getElementById('financing_request_id');
       if (hidden) hidden.value = requestId || '';
@@ -1375,7 +1387,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       const typeName = opt.getAttribute('data-type');
       const bankName = opt.getAttribute('data-bank');
       if (amount) document.getElementById('finance_amount').value = amount;
-      if (typeName) document.getElementById('finance_type').value = typeName;
+      if (typeName) setFinanceTypeValue(typeName);
       if (bankName) document.getElementById('bank_name').value = bankName;
     }
 
@@ -1592,8 +1604,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
         { id: 'property_description', msg: 'يرجى إدخال وصف العقار', check: v => v.trim().length > 0 },
         { id: 'property_location', msg: 'يرجى إدخال موقع العقار', check: v => v.trim().length > 0 },
-        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
-        { id: 'note_order_number', msg: 'يرجى إدخال رقم سند الأمر', check: v => v.trim().length > 0 }
+        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }
       ];
       fields.forEach(f => {
         const el = document.getElementById(f.id);
@@ -1656,8 +1667,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <div style="font-size:12px;font-weight:700;color:var(--secondary);margin-bottom:10px;text-transform:uppercase;">الشؤون المالية</div>
             <div class="info-row">
               <div class="info-item"><label>قيمة السعي</label><span class="amount-display">\${formatMoney(data.commission_amount)}</span></div>
-              <div class="info-item"><label>رقم سند الأمر</label><span><strong>\${data.note_order_number}</strong></span></div>
-              <div class="info-item"><label>تاريخ الاستحقاق</label><span>\${data.note_due_date || '—'}</span></div>
               <div class="info-item"><label>الحالة</label><span>\${getStatusBadge(data.status)}</span></div>
             </div>
           </div>
@@ -1665,8 +1674,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <i class="fas fa-gavel text-secondary"></i>
             <strong>الشروط القانونية الثابتة:</strong><br>
             • المحكمة المختصة: محاكم <strong>الرياض</strong><br>
-            • لا يستحق الطرف الأول أي مستحقات إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني<br>
-            • يخضع سند الأمر لأحكام نظام الأوراق التجارية (قرار مجلس الوزراء رقم 692)
+            • لا يستحق الطرف الأول أي مستحقات إلا بعد نزول مبلغ التمويل في حساب الطرف الثاني
           </div>
         </div>
       \`;
@@ -1811,13 +1819,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         commission_type: document.getElementById('commission_type').value,
         commission_rate: parseFloat(document.getElementById('commission_rate').value) || 0,
         commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
-        note_order_number: document.getElementById('note_order_number').value,
-        note_due_date: document.getElementById('note_due_date').value,
+        note_order_number: '',
+        note_due_date: '',
         status: statusValue,
         notes: document.getElementById('notes')?.value || '',
         location_id: (function() {
           const v = document.getElementById('contract_location_id')?.value;
-          return (v && /^\d+$/.test(v)) ? Number(v) : null;
+          return (v && /^\\d+$/.test(v)) ? Number(v) : null;
         })(),
         is_archived: false,
         financing_request_id: (function() {
@@ -1841,36 +1849,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         } else {
           contract = await API.create('contracts', data);
           createdContractId = contract?.id || null;
-          // Create linked promissory note
-          if (data.note_order_number) {
-            try {
-              await API.create('promissory_notes', {
-                note_number: data.note_order_number,
-                contract_id: contract.id,
-                debtor_name: data.party_two_name,
-                debtor_id: data.party_two_id,
-                amount: data.commission_amount,
-                due_date: data.note_due_date || '',
-                issue_date: data.date_gregorian,
-                payment_place: 'الرياض',
-                status: 'ساري'
-              });
-            } catch (noteErr) {
-              const noteMsg = noteErr instanceof Error ? noteErr.message : String(noteErr);
-              showToast(
-                noteMsg && noteMsg.length > 5
-                  ? \`تم حفظ العقد، لكن سند الأمر فشل: \${noteMsg}\`
-                  : 'تم حفظ العقد، لكن رقم سند الأمر مستخدم مسبقاً',
-                'warning'
-              );
-              setTimeout(() => { window.location.href = \`/admin/contracts/view?id=\${contract.id}\`; }, 1800);
-              return;
-            }
-          }
           showToast(
             (getContractsRoleId() === 4 || getContractsRoleId() === 6)
               ? 'تم إنشاء العقد وإرساله لاعتماد ممثل البنك'
-              : 'تم إنشاء العقد وسند الأمر بنجاح',
+              : 'تم إنشاء العقد بنجاح',
             'success'
           );
         }
@@ -1996,7 +1978,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           document.getElementById('party_two_id').value = c.party_two_id || '';
           document.getElementById('party_two_phone').value = normalizePhone(c.party_two_phone || '');
           document.getElementById('party_two_address').value = c.party_two_address || '';
-          document.getElementById('finance_type').value = c.finance_type || '';
+          setFinanceTypeValue(c.finance_type || '');
           document.getElementById('finance_amount').value = c.finance_amount || '';
           document.getElementById('bank_name').value = c.bank_name || '';
           document.getElementById('property_description').value = c.property_description || '';

@@ -411,6 +411,72 @@ async function resolveCustomerDisplayName(
   }
 }
 
+/** Task pass request/response — mirrors workflow alerts (customer_alarms + notifications). */
+export async function insertTaskPassNotification(
+  db: D1Database,
+  opts: {
+    recipientUserId: number
+    tenantId: number | null
+    title: string
+    message: string
+    notifType: 'info' | 'warning' | 'success'
+    category: 'task_pass_request' | 'task_pass_response'
+    passRequestId: number
+    linkUrl?: string
+  }
+): Promise<void> {
+  const { recipientUserId, tenantId, title, message, notifType, category, passRequestId } = opts
+  const linkUrl =
+    opts.linkUrl ??
+    (category === 'task_pass_request' ? '/admin/my-tasks#passes' : '/admin/my-tasks')
+  const ts = formatWorkflowActionTimestamp(new Date())
+  const note = message.includes('وقت الإجراء') ? message : `${message}\nوقت الإجراء: ${ts.label}`
+
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE notifications ADD COLUMN tenant_id INTEGER`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE notifications ADD COLUMN related_pass_request_id INTEGER`).run().catch(() => {})
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        null,
+        title,
+        ts.gregorianDate,
+        ts.hijriDate || null,
+        ts.time,
+        note,
+        recipientUserId,
+        tenantId,
+        'task_pass',
+        linkUrl
+      )
+      .run()
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (!/NOT NULL constraint failed:\s*customer_alarms\.customer_id/i.test(msg)) {
+      throw e
+    }
+    console.warn('[alarms] skipped customer_alarms insert for task pass (null customer_id); apply migration 0140', {
+      userId: recipientUserId,
+      tenantId,
+      passRequestId,
+    })
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id, is_read)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+    )
+    .bind(recipientUserId, tenantId, title, note, notifType, category, passRequestId)
+    .run()
+}
+
 export async function insertWorkflowCrossPartyAlarms(
   db: D1Database,
   opts: {
@@ -451,24 +517,36 @@ export async function insertWorkflowCrossPartyAlarms(
   await db.prepare(`ALTER TABLE notifications ADD COLUMN tenant_id INTEGER`).run().catch(() => {})
   const relatedRequestId = parseRequestIdFromWorkflowLink(linkUrl)
   for (const uid of targetUserIds) {
-    await db
-      .prepare(
-        `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .bind(
-        customerId,
-        customerName,
-        ts.gregorianDate,
-        ts.hijriDate || null,
-        ts.time,
-        note,
-        uid,
+    try {
+      await db
+        .prepare(
+          `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          customerId,
+          customerName,
+          ts.gregorianDate,
+          ts.hijriDate || null,
+          ts.time,
+          note,
+          uid,
+          tenantId,
+          'workflow',
+          linkUrl
+        )
+        .run()
+    } catch (e: unknown) {
+      // Pre-0140 schemas reject NULL customer_id — still deliver the notifications row.
+      const msg = String((e as { message?: string })?.message || e || '')
+      if (!(customerId == null && /NOT NULL constraint failed:\s*customer_alarms\.customer_id/i.test(msg))) {
+        throw e
+      }
+      console.warn('[alarms] skipped customer_alarms insert (null customer_id); apply migration 0140', {
+        userId: uid,
         tenantId,
-        'workflow',
-        linkUrl
-      )
-      .run()
+      })
+    }
     await db
       .prepare(
         `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_request_id, is_read)
@@ -492,74 +570,126 @@ export async function customerEligibleForContractCreate(
   db: D1Database,
   opts: { customerId: number; tenantId: number; userId: number; roleId: number }
 ): Promise<boolean> {
-  const { customerId, tenantId, userId, roleId } = opts
-  const noActiveContractSql = `NOT EXISTS (
-    SELECT 1 FROM contracts co
-    WHERE co.customer_id = customers.id AND co.tenant_id = ?
-      AND COALESCE(co.is_archived, 0) = 0
-      AND co.status NOT IN ('مكتمل', 'مؤرشف')
-  )`
+  return (await explainContractCreateDenial(db, opts)) == null
+}
 
-  const run = async (frActiveSql: string) => {
-    if (roleId === 4) {
+/** Arabic reason when contract create is denied for roles 4/5/6; null if allowed. */
+export async function explainContractCreateDenial(
+  db: D1Database,
+  opts: { customerId: number; tenantId: number; userId: number; roleId: number }
+): Promise<string | null> {
+  const { customerId, tenantId, userId, roleId } = opts
+
+  const customer = await db
+    .prepare('SELECT id, tenant_id FROM customers WHERE id = ?')
+    .bind(customerId)
+    .first<{ id: number; tenant_id: number | null }>()
+  if (!customer || Number(customer.tenant_id) !== Number(tenantId)) {
+    return 'العميل غير موجود أو لا يتبع شركتك'
+  }
+
+  const blocking = await db
+    .prepare(
+      `SELECT 1 AS ok FROM contracts
+       WHERE customer_id = ? AND tenant_id = ?
+         AND COALESCE(is_archived, 0) = 0
+         AND status NOT IN ('مكتمل', 'مؤرشف')
+       LIMIT 1`
+    )
+    .bind(customerId, tenantId)
+    .first<{ ok: number }>()
+  if (blocking) {
+    return 'يوجد عقد نشط لهذا العميل بالفعل. أكمل أو أرشف العقد السابق قبل إنشاء عقد جديد'
+  }
+
+  const hasActiveFr = async (agentOnly: boolean): Promise<boolean> => {
+    const run = async (frActiveSql: string) => {
+      if (agentOnly) {
+        return await db
+          .prepare(
+            `SELECT 1 AS ok FROM financing_requests
+             WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
+               AND ${frActiveSql}
+             LIMIT 1`
+          )
+          .bind(customerId, tenantId, userId)
+          .first<{ ok: number }>()
+      }
       return await db
         .prepare(
-          `SELECT 1 AS ok FROM customers
-           WHERE id = ? AND tenant_id = ?
-             AND EXISTS (
-               SELECT 1 FROM customer_assignments ca
-               WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-             )
-             AND EXISTS (
-               SELECT 1 FROM financing_requests fr
-               WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
-                 AND ${frActiveSql}
-             )
-             AND ${noActiveContractSql}`
+          `SELECT 1 AS ok FROM financing_requests
+           WHERE customer_id = ? AND tenant_id = ?
+             AND ${frActiveSql}
+           LIMIT 1`
         )
-        .bind(customerId, tenantId, userId, tenantId, tenantId)
+        .bind(customerId, tenantId)
         .first<{ ok: number }>()
     }
-    if (roleId === 6) {
-      return await db
-        .prepare(
-          `SELECT 1 AS ok FROM customers
-           WHERE id = ? AND tenant_id = ?
-             AND (
-               EXISTS (
-                 SELECT 1 FROM customer_assignments ca
-                 WHERE ca.customer_id = customers.id AND ca.employee_id = ?
-               )
-               OR customers.assigned_bank_agent_id = ?
-               OR EXISTS (
-                 SELECT 1 FROM financing_requests fr0
-                 WHERE fr0.customer_id = customers.id AND fr0.assigned_bank_agent_id = ?
-               )
-             )
-             AND EXISTS (
-               SELECT 1 FROM financing_requests fr
-               WHERE fr.customer_id = customers.id AND fr.tenant_id = ?
-                 AND ${frActiveSql}
-             )
-             AND ${noActiveContractSql}`
-        )
-        .bind(customerId, tenantId, userId, userId, userId, tenantId, tenantId)
-        .first<{ ok: number }>()
+    try {
+      return (await run('COALESCE(is_completed, 0) = 0')) != null
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || e || '')
+      if (/no such column:\s*is_completed/i.test(msg)) {
+        return (await run('1=1')) != null
+      }
+      throw e
+    }
+  }
+
+  if (roleId === 5) {
+    if (!(await hasActiveFr(true))) {
+      return 'لا يوجد طلب تمويل نشط مُسند إليك كممثل بنك لهذا العميل'
     }
     return null
   }
 
-  try {
-    const row = await run('COALESCE(fr.is_completed, 0) = 0')
-    return row != null
-  } catch (e: unknown) {
-    const msg = String((e as { message?: string })?.message || e || '')
-    if (/no such column:\s*is_completed/i.test(msg)) {
-      const row = await run('1=1')
-      return row != null
+  if (roleId === 4) {
+    const assigned = await db
+      .prepare(
+        `SELECT 1 AS ok FROM customer_assignments
+         WHERE customer_id = ? AND employee_id = ? LIMIT 1`
+      )
+      .bind(customerId, userId)
+      .first<{ ok: number }>()
+    if (!assigned) {
+      return 'هذا العميل غير مُسند إليك'
     }
-    throw e
+    if (!(await hasActiveFr(false))) {
+      return 'لا يوجد طلب تمويل نشط لهذا العميل'
+    }
+    return null
   }
+
+  if (roleId === 6) {
+    const inScope = await db
+      .prepare(
+        `SELECT 1 AS ok FROM customers
+         WHERE id = ? AND tenant_id = ?
+           AND (
+             EXISTS (
+               SELECT 1 FROM customer_assignments ca
+               WHERE ca.customer_id = customers.id AND ca.employee_id = ?
+             )
+             OR customers.assigned_bank_agent_id = ?
+             OR EXISTS (
+               SELECT 1 FROM financing_requests fr0
+               WHERE fr0.customer_id = customers.id AND fr0.assigned_bank_agent_id = ?
+             )
+           )
+         LIMIT 1`
+      )
+      .bind(customerId, tenantId, userId, userId, userId)
+      .first<{ ok: number }>()
+    if (!inScope) {
+      return 'غير مصرح لك بإنشاء عقد لهذا العميل (غير مُسند إليك كموظف أو ممثل بنك)'
+    }
+    if (!(await hasActiveFr(false))) {
+      return 'لا يوجد طلب تمويل نشط لهذا العميل'
+    }
+    return null
+  }
+
+  return null
 }
 
 export async function canUserAccessCustomerWorkflow(

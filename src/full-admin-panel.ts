@@ -5820,8 +5820,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 }
                 const filter = document.getElementById('alarmPanelFilter')?.value || 'all';
                 let alarms = data.data || [];
-                if (filter === 'scheduled') alarms = alarms.filter(function(a) { return !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder'); });
-                else if (filter === 'workflow') alarms = alarms.filter(function(a) { return a.alarm_type === 'workflow'; });
+                if (filter === 'scheduled') alarms = alarms.filter(function(a) { return !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder' && a.alarm_type !== 'task_pass'); });
+                else if (filter === 'workflow') alarms = alarms.filter(function(a) { return a.alarm_type === 'workflow' || a.alarm_type === 'task_pass'; });
                 else if (filter === 'reminder') alarms = alarms.filter(function(a) { return a.alarm_type === 'reminder'; });
                 if (!alarms.length) {
                     list.innerHTML = '<div class="text-center text-gray-400 py-10"><i class="fas fa-bell-slash text-4xl mb-3"></i><p class="text-sm">لا توجد تنبيهات</p></div>';
@@ -5829,7 +5829,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 }
                 list.innerHTML = alarms.map(function(a) {
                     const isUnread = !a.is_read;
-                    const isWorkflow = a.alarm_type === 'workflow';
+                    const isTaskPass = a.alarm_type === 'task_pass';
+                    const isWorkflow = a.alarm_type === 'workflow' || isTaskPass;
                     const isReminder = a.alarm_type === 'reminder';
                     let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
                     if (!dateStr && a.created_at) {
@@ -5857,7 +5858,9 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
                             : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
                     const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
-                    const icon = isWorkflow
+                    const icon = isTaskPass
+                        ? '<i class="fas fa-share text-violet-400 text-xs ml-1"></i>'
+                        : isWorkflow
                         ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
                         : isReminder
                             ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'

@@ -982,6 +982,32 @@ describe('notification access — unauthorized users must not receive alerts', (
 
   })
 
+  it('inserts contract approval alarms when customer_id is null', async () => {
+    const sqlite = createTestDb()
+    seedScenario(sqlite)
+    const d1 = createSqliteD1(sqlite)
+
+    await insertWorkflowCrossPartyAlarms(d1, {
+      customerId: null,
+      tenantId: TENANT,
+      targetUserIds: [2],
+      customerName: 'عقد #30',
+      note: 'أنشأ ممثل البنك عقد #30 بانتظار موافقة الإدارة',
+      linkUrl: '/admin/contracts/view?id=30',
+    })
+
+    const alarm = await d1
+      .prepare(`SELECT customer_id, customer_name, link_url, is_read FROM customer_alarms WHERE user_id = ? ORDER BY id DESC LIMIT 1`)
+      .bind(2)
+      .first<{ customer_id: number | null; customer_name: string; link_url: string; is_read: number }>()
+
+    assert.ok(alarm, 'alarm row created for admin')
+    assert.equal(alarm!.customer_id, null)
+    assert.equal(alarm!.customer_name, 'عقد #30')
+    assert.equal(alarm!.link_url, '/admin/contracts/view?id=30')
+    assert.equal(alarm!.is_read, 0)
+  })
+
 })
 
 

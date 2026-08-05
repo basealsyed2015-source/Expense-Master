@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import {
-  customerEligibleForContractCreate,
+  explainContractCreateDenial,
   resolveWorkflowNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
 } from './notification-access'
@@ -23,9 +23,10 @@ async function resolveContractAdminUserIds(
   tenantId: number,
   excludeUserId: number | null
 ): Promise<number[]> {
+  // Include legacy role ids 11/12 (normalizeRoleId maps them to 1/2).
   const rows = await db
     .prepare(
-      `SELECT id FROM users WHERE tenant_id = ? AND role_id IN (1, 2) AND is_active = 1`
+      `SELECT id FROM users WHERE tenant_id = ? AND role_id IN (1, 2, 11, 12) AND is_active = 1`
     )
     .bind(tenantId)
     .all<{ id: number }>()
@@ -405,8 +406,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       rowScopeSql = ' AND created_by = ? '
       rowScopeBinds = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
-      rowScopeSql = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
-      rowScopeBinds = [info.userId, info.tenantId]
+      // Include contracts this bank agent created (e.g. customer_id null) plus FR-assigned customers
+      rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeBinds = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
       // Role 6: contracts they created (employee column) OR customer assigned as bank agent
       rowScopeSql = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
@@ -441,8 +443,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       rowScopeSqlId = ' AND created_by = ? '
       rowScopeBindsId = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
-      rowScopeSqlId = ' AND customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?) '
-      rowScopeBindsId = [info.userId, info.tenantId]
+      rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
       rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
@@ -534,11 +536,33 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
 
       let role6IsBothColumns = false
 
-      // Role 5 (bank agent): validate customer scope (created by this user), active FR optional, no blocking contract.
+      // Role 5 (bank agent): must have active FR assigned to this agent + no blocking contract.
       if (info.roleId === 5 && info.userId) {
         const customerId = body.customer_id != null ? Number(body.customer_id) : null
         if (customerId) {
-          // Must be assigned as bank agent on an active financing request for this customer, with no blocking contract.
+          let denial: string | null = null
+          try {
+            denial = await explainContractCreateDenial(c.env.DB, {
+              customerId,
+              tenantId,
+              userId: info.userId,
+              roleId: 5,
+            })
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            return c.json({ error: 'database_error', detail: msg }, 500)
+          }
+          if (denial) {
+            console.warn('[contracts] create denied', {
+              roleId: 5,
+              userId: info.userId,
+              tenantId,
+              customerId,
+              reason: denial,
+            })
+            return c.json({ error: 'Forbidden', detail: denial }, 403)
+          }
+
           let frRow: { id: number } | null = null
           try {
             frRow = await c.env.DB.prepare(
@@ -563,21 +587,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
               return c.json({ error: 'database_error', detail: msg }, 500)
             }
           }
-          if (!frRow) return c.json({ error: 'Forbidden' }, 403)
-          // Check no blocking active contract already exists for this customer.
-          try {
-            const blocking = await c.env.DB.prepare(
-              `SELECT 1 FROM contracts WHERE customer_id = ? AND tenant_id = ?
-               AND COALESCE(is_archived, 0) = 0 AND status NOT IN ('مكتمل', 'مؤرشف') LIMIT 1`
-            )
-              .bind(customerId, tenantId)
-              .first()
-            if (blocking) return c.json({ error: 'Forbidden' }, 403)
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e)
-            return c.json({ error: 'database_error', detail: msg }, 500)
-          }
-          body.financing_request_id = frRow.id
+          if (frRow) body.financing_request_id = frRow.id
         }
       }
 
@@ -585,9 +595,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       if ((info.roleId === 4 || info.roleId === 6) && info.userId) {
         const customerId = body.customer_id != null ? Number(body.customer_id) : null
         if (customerId) {
-          let eligible = false
+          let denial: string | null = null
           try {
-            eligible = await customerEligibleForContractCreate(c.env.DB, {
+            denial = await explainContractCreateDenial(c.env.DB, {
               customerId,
               tenantId,
               userId: info.userId,
@@ -597,7 +607,16 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             const msg = e instanceof Error ? e.message : String(e)
             return c.json({ error: 'database_error', detail: msg }, 500)
           }
-          if (!eligible) return c.json({ error: 'Forbidden' }, 403)
+          if (denial) {
+            console.warn('[contracts] create denied', {
+              roleId: info.roleId,
+              userId: info.userId,
+              tenantId,
+              customerId,
+              reason: denial,
+            })
+            return c.json({ error: 'Forbidden', detail: denial }, 403)
+          }
 
           let frRow: { id: number } | null = null
           try {
@@ -727,7 +746,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         const frId = body.financing_request_id != null ? Number(body.financing_request_id) : null
         const actorName = await resolveActorName(c.env.DB, info.userId)
         const contractLabel = `عقد #${id}`
-        const linkUrl = `/admin/contracts/${id}`
+        const linkUrl = `/admin/contracts/view?id=${id}`
 
         if (initialStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL && customerId) {
           // Notify the assigned bank agent that a new contract needs their approval
@@ -746,7 +765,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             })
           }
         } else if (initialStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
-          // Role 6 both-column: bank step was skipped — notify admins directly
+          // Role 5 create / role 6 both-column: bank step skipped — notify admins
           const targets = await resolveContractAdminUserIds(c.env.DB, tenantId, info.userId)
           if (targets.length) {
             await insertWorkflowCrossPartyAlarms(c.env.DB, {
@@ -757,9 +776,13 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
               note: `أنشأ ${actorName} ${contractLabel} بانتظار موافقة الإدارة`,
               linkUrl,
             })
+          } else {
+            console.warn('[contracts] no admin targets for approval notify', { contractId: id, tenantId })
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('[contracts] create approval notify failed', e)
+      }
 
       return c.json({ ...row, id })
     }
@@ -1086,11 +1109,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           const currentStatus = String(existing.status ?? '')
           const requestedStatus = String(body.status ?? '')
           const customerId = (existing as any).customer_id ? Number((existing as any).customer_id) : null
-          const frId = (existing as any).financing_request_id ? Number((existing as any).financing_request_id) : null
           const effectiveTenantId = info.tenantId ?? existing.tenant_id
           const actorName = await resolveActorName(c.env.DB, info.userId)
           const contractLabel = `عقد #${id}`
-          const linkUrl = `/admin/contracts/${id}`
+          const linkUrl = `/admin/contracts/view?id=${id}`
 
           if (
             currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL &&
@@ -1106,6 +1128,11 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
                 customerName: contractLabel,
                 note: `اعتمد ${actorName} ${contractLabel} كممثل بنك — بانتظار موافقة الإدارة`,
                 linkUrl,
+              })
+            } else {
+              console.warn('[contracts] no admin targets after bank-agent approve', {
+                contractId: id,
+                tenantId: effectiveTenantId,
               })
             }
           } else if (
@@ -1125,7 +1152,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
               })
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          console.error('[contracts] status-change approval notify failed', e)
+        }
       }
 
       const row = await c.env.DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first()

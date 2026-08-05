@@ -69,6 +69,7 @@ import {
   canAccessMarketingModule,
   resolveWorkflowCrossPartyNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
+  insertTaskPassNotification,
   validateStaffRoleChange,
   isEmployeeAssignableRole,
   isBankAgentAssignableRole,
@@ -4887,6 +4888,7 @@ app.use('/admin/*', async (c, next) => {
       pathname === '/admin/my-profile' ||
       pathname.startsWith('/admin/contracts') ||
       pathname === '/admin/chat' ||
+      pathname === '/admin/notifications' ||
       pathname === '/calculator' ||
       pathname === '/'
     if (!ok) {
@@ -7565,6 +7567,8 @@ app.get('/api/packages', async (c) => {
 // Add new package
 app.post('/api/packages', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const formData = await c.req.formData()
     const package_name = formData.get('package_name')
     const description = formData.get('description')
@@ -7588,6 +7592,8 @@ app.post('/api/packages', async (c) => {
 // Update package
 app.put('/api/packages/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id')
     const { package_name, description, price, duration_months, max_calculations, max_users, is_active } = await c.req.json()
     await c.env.DB.prepare(`
@@ -7643,6 +7649,8 @@ app.get('/api/subscriptions', async (c) => {
 // Add subscription
 app.post('/api/subscriptions', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const formData = await c.req.formData()
     const company_name = formData.get('company_name')
     const package_id = formData.get('package_id')
@@ -7676,6 +7684,8 @@ app.post('/api/subscriptions', async (c) => {
 // Update subscription
 app.put('/api/subscriptions/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id')
     const { company_name, package_id, start_date, end_date, status } = await c.req.json()
     await c.env.DB.prepare(`
@@ -13127,27 +13137,15 @@ app.get('/api/notifications', async (c) => {
 // Get unread notifications count
 app.get('/api/notifications/unread-count', async (c) => {
   try {
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    let userId = 1
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      userId = parseInt(parts[0])
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
     }
-    
-    let query = `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`
-    
-    if (tenant_id) {
-      query += ` AND tenant_id = ${tenant_id}`
-    }
-    
-    const result = await c.env.DB.prepare(query).bind(userId).first()
-    
+
+    const result = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`
+    ).bind(userInfo.userId).first<{ count: number }>()
+
     return c.json({ success: true, count: result?.count || 0 })
   } catch (error: any) {
     console.error('Error fetching unread count:', error)
@@ -13501,6 +13499,8 @@ app.delete('/api/rates/:id', async (c) => {
 // Delete subscription
 app.delete('/api/subscriptions/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id')
     await c.env.DB.prepare('DELETE FROM subscriptions WHERE id = ?').bind(id).run()
     return c.json({ success: true, message: 'تم حذف الاشتراك بنجاح' })
@@ -13512,6 +13512,8 @@ app.delete('/api/subscriptions/:id', async (c) => {
 // Delete user
 app.delete('/api/users/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id')
     await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id).run()
     return c.json({ success: true, message: 'تم حذف المستخدم بنجاح' })
@@ -13523,6 +13525,8 @@ app.delete('/api/users/:id', async (c) => {
 // Delete package
 app.delete('/api/packages/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (normalizeRoleId(userInfo.roleId) !== 1) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id')
     await c.env.DB.prepare('DELETE FROM packages WHERE id = ?').bind(id).run()
     return c.json({ success: true, message: 'تم حذف الباقة بنجاح' })
@@ -24148,10 +24152,10 @@ app.get('/admin/notifications', async (c) => {
                   : (unreadCard ? 'notification-unread' : 'notification-read');
 
               var passRequestBtn = isPassRequest && notification.related_pass_request_id ? \`
-                <button onclick="openPassRequestPopup(\${notification.related_pass_request_id}, \${notification.id})"
-                  class="mt-3 inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition">
-                  <i class="fas fa-eye"></i> عرض طلب التمرير
-                </button>
+                <a href="/admin/my-tasks#passes"
+                  class="mt-3 inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition no-underline">
+                  <i class="fas fa-share"></i> فتح التمريرات الواردة
+                </a>
               \` : '';
 
               var categoryLabel = notification.category === 'request' ? 'طلب جديد' :
@@ -33493,6 +33497,9 @@ app.put('/api/hr/leaves/:id/reject', async (c) => {
 // Delete leave
 app.delete('/api/hr/leaves/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
 
     await c.env.DB.prepare('DELETE FROM hr_leaves WHERE id = ?').bind(id).run();
@@ -34011,6 +34018,9 @@ app.post('/api/hr/salaries', async (c) => {
 // Approve salary
 app.put('/api/hr/salaries/:id/approve', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
     
     await c.env.DB.prepare(`
@@ -34029,6 +34039,9 @@ app.put('/api/hr/salaries/:id/approve', async (c) => {
 // Pay salary
 app.put('/api/hr/salaries/:id/pay', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
     
     await c.env.DB.prepare(`
@@ -34119,8 +34132,11 @@ app.post('/api/hr/departments', async (c) => {
 // Delete department
 app.delete('/api/hr/departments/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
-    
+
     await c.env.DB.prepare('DELETE FROM hr_departments WHERE id = ?').bind(id).run();
     
     return c.json({ success: true });
@@ -34231,8 +34247,11 @@ app.post('/api/hr/performance', async (c) => {
 // Delete performance review
 app.delete('/api/hr/performance/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
-    
+
     await c.env.DB.prepare('DELETE FROM hr_performance_reviews WHERE id = ?').bind(id).run();
     
     return c.json({ success: true });
@@ -34283,6 +34302,8 @@ app.get('/api/hr/promotions', async (c) => {
 app.post('/api/hr/promotions', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const tenantId = userInfo.tenantId || 1;
     
     const data = await c.req.json();
@@ -34324,6 +34345,8 @@ app.put('/api/hr/promotions/:id/approve', async (c) => {
   try {
     const id = c.req.param('id');
     const userInfo = await getUserInfo(c);
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     
     // Get promotion data
     const promotion = await c.env.DB.prepare(`
@@ -34358,8 +34381,11 @@ app.put('/api/hr/promotions/:id/approve', async (c) => {
 // Reject promotion
 app.put('/api/hr/promotions/:id/reject', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
-    
+
     await c.env.DB.prepare(`
       UPDATE hr_promotions_transfers SET status = 'rejected' WHERE id = ?
     `).bind(id).run();
@@ -34374,8 +34400,11 @@ app.put('/api/hr/promotions/:id/reject', async (c) => {
 // Delete promotion
 app.delete('/api/hr/promotions/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
-    
+
     await c.env.DB.prepare('DELETE FROM hr_promotions_transfers WHERE id = ?').bind(id).run();
     
     return c.json({ success: true });
@@ -34434,6 +34463,8 @@ app.get('/api/hr/documents', async (c) => {
 app.post('/api/hr/documents', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const tenantId = userInfo?.tenantId || 1;
     
     const body = await c.req.json();
@@ -34454,8 +34485,11 @@ app.post('/api/hr/documents', async (c) => {
 // Delete document
 app.delete('/api/hr/documents/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    const r = normalizeRoleId(userInfo.roleId)
+    if (r !== 1 && r !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
     const id = c.req.param('id');
-    
+
     await c.env.DB.prepare('DELETE FROM hr_documents WHERE id = ?').bind(id).run();
     
     return c.json({ success: true });
@@ -34756,19 +34790,15 @@ app.get('/admin/contracts/new', async (c) => {
     }
   } catch (_) {}
 
+  // Same query as /admin/requests/new and /admin/rates/new so all three dropdowns match
   let financeTypeOptionsHtml = ''
   try {
-    let ftTenantId: number | null = userInfo.tenantId
-    if (ftTenantId == null && userInfo.roleId === 1) {
-      const q = c.req.query('tenant_id')
-      if (q != null && /^\d+$/.test(String(q))) ftTenantId = parseInt(String(q), 10)
-    }
-    const ftRows = ftTenantId
-      ? ((await c.env.DB.prepare(
-          `SELECT type_name FROM financing_types WHERE tenant_id = ? AND is_active = 1 ORDER BY id ASC`
-        ).bind(ftTenantId).all()).results as { type_name: string }[])
-      : []
-    financeTypeOptionsHtml = ftRows.map(ft => `<option value="${escAttr(ft.type_name)}">${escText(ft.type_name)}</option>`).join('\n')
+    const ftRows = (await c.env.DB.prepare(
+      'SELECT id, type_name FROM financing_types ORDER BY type_name'
+    ).all()).results as { id: number; type_name: string }[]
+    financeTypeOptionsHtml = ftRows
+      .map((ft) => `<option value="${escAttr(ft.type_name)}">${escText(ft.type_name)}</option>`)
+      .join('\n')
   } catch (_) {}
 
   let html = contractsNewPage
@@ -39253,16 +39283,15 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
     `).bind(taskId, userInfo.tenantId, userInfo.userId, passUserName, passNote).run()
 
     try {
-      await c.env.DB.prepare(`
-        INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
-        VALUES (?, ?, ?, ?, 'info', 'task_pass_request', ?)
-      `).bind(
-        toUserId,
-        userInfo.tenantId,
-        'طلب تمرير مهمة',
-        `${passUserName} يطلب تمرير مهمة إليك: ${task.task_title || ''}`,
-        passRequestId
-      ).run()
+      await insertTaskPassNotification(c.env.DB, {
+        recipientUserId: toUserId,
+        tenantId: recipientTenantId ?? userInfo.tenantId,
+        title: 'طلب تمرير مهمة',
+        message: `${passUserName} يطلب تمرير مهمة إليك: ${task.task_title || ''}`,
+        notifType: 'info',
+        category: 'task_pass_request',
+        passRequestId,
+      })
     } catch (notifErr) { console.error('pass_request notification insert failed:', notifErr) }
 
     return c.json({ success: true, message: 'تم إرسال طلب التمرير' })
@@ -39415,16 +39444,15 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
         WHERE id = ?
       `).bind(passId).run()
       try {
-        await c.env.DB.prepare(`
-          INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
-          VALUES (?, ?, ?, ?, 'warning', 'task_pass_response', ?)
-        `).bind(
-          row.from_user_id,
-          row.tenant_id,
-          'تم رفض طلب التمرير',
-          `${row.to_user_name || 'الموظف'} رفض طلب التمرير للمهمة: ${taskForPass?.task_title || ''}`,
-          passId
-        ).run()
+        await insertTaskPassNotification(c.env.DB, {
+          recipientUserId: row.from_user_id,
+          tenantId: row.tenant_id,
+          title: 'تم رفض طلب التمرير',
+          message: `${row.to_user_name || 'الموظف'} رفض طلب التمرير للمهمة: ${taskForPass?.task_title || ''}`,
+          notifType: 'warning',
+          category: 'task_pass_response',
+          passRequestId: passId,
+        })
       } catch (notifErr) { console.error('pass_reject notification insert failed:', notifErr) }
       return c.json({ success: true, message: 'تم رفض طلب التمرير' })
     }
@@ -39456,16 +39484,15 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
     `).bind(passId).run()
 
     try {
-      await c.env.DB.prepare(`
-        INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
-        VALUES (?, ?, ?, ?, 'success', 'task_pass_response', ?)
-      `).bind(
-        row.from_user_id,
-        row.tenant_id,
-        'تم قبول طلب التمرير',
-        `${row.to_user_name || 'الموظف'} قبل طلب التمرير للمهمة: ${taskForPass.task_title || ''}`,
-        passId
-      ).run()
+      await insertTaskPassNotification(c.env.DB, {
+        recipientUserId: row.from_user_id,
+        tenantId: row.tenant_id,
+        title: 'تم قبول طلب التمرير',
+        message: `${row.to_user_name || 'الموظف'} قبل طلب التمرير للمهمة: ${taskForPass.task_title || ''}`,
+        notifType: 'success',
+        category: 'task_pass_response',
+        passRequestId: passId,
+      })
     } catch (notifErr) { console.error('pass_accept notification insert failed:', notifErr) }
 
     return c.json({ success: true, message: 'تم قبول المهمة ونقلها إليك' })
@@ -39640,6 +39667,10 @@ app.get('/admin/my-tasks', async (c) => {
         let activeFilter = 'all';
         let activeSort = 'newest';
         let activePageTab = 'tasks';
+        (function applyInitialTabFromUrl() {
+          var hash = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+          if (hash === 'passes') activePageTab = 'passes';
+        })();
         let tenantStaff = [];
         let allTasks = [];
         let noteModalState = { open: false, required: false, resolve: null };

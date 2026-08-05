@@ -1005,7 +1005,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/contracts/list" class="nav-item"><i class="fas fa-file-alt"></i><span>العقود</span></a>
       <a href="/admin/contracts/new" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
       <a href="/admin/contracts/templates" class="nav-item active"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
-      <!-- TEMPORARILY DISABLED: <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a> -->
+      <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
       
     </nav>
@@ -1158,69 +1158,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <div style="margin-top:8px;">
                   <button type="button" class="btn btn-ghost btn-sm" id="tpl_stamp_clear"><i class="fas fa-times"></i> إزالة الختم</button>
                 </div>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top:16px;">
-              <label class="form-label">علامة مائية للمستند <small class="text-muted">(تظهر خلف نص العقد عند الطباعة)</small></label>
-              <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
-                <input type="checkbox" id="tpl_watermark_enabled" />
-                <span style="font-size:13px;">تفعيل العلامة المائية</span>
-              </label>
-              <input type="file" class="form-control notranslate" id="tpl_watermark_file" translate="no" accept="image/png,image/jpeg,image/webp,image/gif" />
-              <input type="hidden" id="tpl_watermark_url" />
-              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">PNG أو JPEG أو WebP أو GIF — حتى 2 ميجابايت</div>
-              <div id="tpl_watermark_preview" style="margin-top:10px;display:none;">
-                <img id="tpl_watermark_img" alt="" style="max-height:90px;max-width:180px;border-radius:8px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
-                <div style="margin-top:8px;">
-                  <button type="button" class="btn btn-ghost btn-sm" id="tpl_watermark_clear"><i class="fas fa-times"></i> إزالة الصورة</button>
-                </div>
-              </div>
-              <div style="margin-top:10px;">
-                <label style="font-size:13px;font-weight:600;">الشفافية: <span id="tpl_watermark_opacity_label">12%</span></label>
-                <input type="range" id="tpl_watermark_opacity" min="3" max="100" step="1" value="12" style="width:100%;margin-top:4px;" />
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top:16px;">
-              <label class="form-label">ترويسة الصفحة <small class="text-muted">(صورة أعلى كل صفحة مطبوعة)</small></label>
-              <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
-                <input type="checkbox" id="tpl_header_enabled" />
-                <span style="font-size:13px;">تفعيل ترويسة الصفحة</span>
-              </label>
-              <input type="file" class="form-control notranslate" id="tpl_header_file" translate="no" accept="image/png,image/jpeg,image/webp,image/gif" />
-              <input type="hidden" id="tpl_header_url" />
-              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">PNG أو JPEG أو WebP أو GIF — حتى 2 ميجابايت</div>
-              <div id="tpl_header_preview" style="margin-top:10px;display:none;">
-                <img id="tpl_header_img" alt="" style="max-height:90px;width:100%;border-radius:8px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
-                <div style="margin-top:8px;">
-                  <button type="button" class="btn btn-ghost btn-sm" id="tpl_header_clear"><i class="fas fa-times"></i> إزالة الصورة</button>
-                </div>
-              </div>
-              <div style="margin-top:10px;">
-                <label style="font-size:13px;font-weight:600;">الشفافية: <span id="tpl_header_opacity_label">100%</span></label>
-                <input type="range" id="tpl_header_opacity" min="10" max="100" step="1" value="100" style="width:100%;margin-top:4px;" />
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top:16px;">
-              <label class="form-label">تذييل الصفحة <small class="text-muted">(صورة أسفل كل صفحة مطبوعة)</small></label>
-              <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;">
-                <input type="checkbox" id="tpl_footer_enabled" />
-                <span style="font-size:13px;">تفعيل تذييل الصفحة</span>
-              </label>
-              <input type="file" class="form-control notranslate" id="tpl_footer_file" translate="no" accept="image/png,image/jpeg,image/webp,image/gif" />
-              <input type="hidden" id="tpl_footer_url" />
-              <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">PNG أو JPEG أو WebP أو GIF — حتى 2 ميجابايت</div>
-              <div id="tpl_footer_preview" style="margin-top:10px;display:none;">
-                <img id="tpl_footer_img" alt="" style="max-height:90px;width:100%;border-radius:8px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
-                <div style="margin-top:8px;">
-                  <button type="button" class="btn btn-ghost btn-sm" id="tpl_footer_clear"><i class="fas fa-times"></i> إزالة الصورة</button>
-                </div>
-              </div>
-              <div style="margin-top:10px;">
-                <label style="font-size:13px;font-weight:600;">الشفافية: <span id="tpl_footer_opacity_label">100%</span></label>
-                <input type="range" id="tpl_footer_opacity" min="10" max="100" step="1" value="100" style="width:100%;margin-top:4px;" />
               </div>
             </div>
           </form>
@@ -1628,63 +1565,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
-    function templateBrandingUploadUrl(kind) {
-      let path = '/api/contracts/template-' + kind + '-upload';
-      const t = new URLSearchParams(window.location.search).get('tenant_id');
-      if (t && /^\\d+$/.test(t)) path += '?tenant_id=' + encodeURIComponent(t);
-      return path;
-    }
-
-    function setTemplateBrandingPreview(kind, url) {
-      const hidden = document.getElementById('tpl_' + kind + '_url');
-      const prev = document.getElementById('tpl_' + kind + '_preview');
-      const img = document.getElementById('tpl_' + kind + '_img');
-      const fileInput = document.getElementById('tpl_' + kind + '_file');
-      if (hidden) hidden.value = url || '';
-      if (url && img && prev) {
-        img.src = url;
-        prev.style.display = 'block';
-      } else if (prev) {
-        prev.style.display = 'none';
-        if (img) img.removeAttribute('src');
-        if (fileInput) fileInput.value = '';
-      }
-    }
-
-    function syncBrandingOpacityLabel(kind, defaultPct) {
-      const el = document.getElementById('tpl_' + kind + '_opacity');
-      const label = document.getElementById('tpl_' + kind + '_opacity_label');
-      const pct = el ? parseInt(el.value, 10) : defaultPct;
-      if (label) label.textContent = pct + '%';
-    }
-
-    async function onTemplateBrandingFileChange(ev, kind) {
-      const input = ev?.target || document.getElementById('tpl_' + kind + '_file');
-      const file = input?.files?.[0];
-      if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-        showToast('الحد الأقصى للصورة 2 ميجابايت', 'warning');
-        input.value = '';
-        return;
-      }
-      try {
-        const fd = new FormData();
-        fd.append('file', file, file.name || kind + '.png');
-        const t = new URLSearchParams(window.location.search).get('tenant_id');
-        if (t && /^\\d+$/.test(t)) fd.append('tenant_id', t);
-        const res = await fetch(templateBrandingUploadUrl(kind), { method: 'POST', body: fd, credentials: 'same-origin' });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((j && (j.detail || j.error)) || ('HTTP ' + res.status));
-        if (!j.url) throw new Error('لم يُرجع الخادم رابط الصورة');
-        setTemplateBrandingPreview(kind, j.url);
-        showToast('تم رفع الصورة', 'success');
-      } catch (e) {
-        console.error(e);
-        showToast('تعذر رفع الصورة: ' + (e.message || e), 'error');
-        input.value = '';
-      }
-    }
-
     function openNewTemplateModal() {
       editingId = null;
       document.getElementById('templateForm').reset();
@@ -1693,12 +1573,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       document.getElementById('tpl_render_mode').value = 'structured';
       setDocFontSizeSelect('12px');
       setTemplateStampPreview('');
-      setTemplateBrandingPreview('watermark', '');
-      setTemplateBrandingPreview('header', '');
-      setTemplateBrandingPreview('footer', '');
-      syncBrandingOpacityLabel('watermark', 12);
-      syncBrandingOpacityLabel('header', 100);
-      syncBrandingOpacityLabel('footer', 100);
       showTemplateEditor(false);
       setTplBodyContent(getDefaultBody()).then(() => applyDocFontSizeToEditor('12px'));
     }
@@ -1746,21 +1620,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         document.getElementById('tpl_header').value = t.header_content || '';
         document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
         setTemplateStampPreview(t.stamp_url || '');
-        setTemplateBrandingPreview('watermark', t.document_watermark_url || '');
-        setTemplateBrandingPreview('header', t.document_header_url || '');
-        setTemplateBrandingPreview('footer', t.document_footer_url || '');
-        const wmEnabled = document.getElementById('tpl_watermark_enabled');
-        if (wmEnabled) wmEnabled.checked = !!t.document_watermark_enabled;
-        const hdrEnabled = document.getElementById('tpl_header_enabled');
-        if (hdrEnabled) hdrEnabled.checked = !!t.document_header_enabled;
-        const ftrEnabled = document.getElementById('tpl_footer_enabled');
-        if (ftrEnabled) ftrEnabled.checked = !!t.document_footer_enabled;
-        const wmOpacityEl = document.getElementById('tpl_watermark_opacity');
-        if (wmOpacityEl) { wmOpacityEl.value = String(Math.round((Number(t.document_watermark_opacity) || 0.12) * 100)); syncBrandingOpacityLabel('watermark', 12); }
-        const hdrOpacityEl = document.getElementById('tpl_header_opacity');
-        if (hdrOpacityEl) { hdrOpacityEl.value = String(Math.round((Number(t.document_header_opacity) || 1) * 100)); syncBrandingOpacityLabel('header', 100); }
-        const ftrOpacityEl = document.getElementById('tpl_footer_opacity');
-        if (ftrOpacityEl) { ftrOpacityEl.value = String(Math.round((Number(t.document_footer_opacity) || 1) * 100)); syncBrandingOpacityLabel('footer', 100); }
         const docSize = extractDocFontSize(t.body_content || '');
         setDocFontSizeSelect(docSize);
         showTemplateEditor(true);
@@ -1804,11 +1663,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         const vars = [...body.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);
         const uniqueVars = [...new Set(vars)];
 
-        const getOpacityFraction = (id, def) => {
-          const el = document.getElementById(id);
-          const pct = el ? parseInt(el.value, 10) : def;
-          return Math.min(1, Math.max(0.03, pct / 100));
-        };
         const data = {
           template_name: name,
           template_type: document.getElementById('tpl_type').value,
@@ -1819,15 +1673,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           body_content: body,
           footer_content: document.getElementById('tpl_footer').value,
           stamp_url: document.getElementById('tpl_stamp_url')?.value || '',
-          document_watermark_url: document.getElementById('tpl_watermark_url')?.value || '',
-          document_watermark_enabled: !!(document.getElementById('tpl_watermark_enabled')?.checked),
-          document_watermark_opacity: getOpacityFraction('tpl_watermark_opacity', 12),
-          document_header_url: document.getElementById('tpl_header_url')?.value || '',
-          document_header_enabled: !!(document.getElementById('tpl_header_enabled')?.checked),
-          document_header_opacity: getOpacityFraction('tpl_header_opacity', 100),
-          document_footer_url: document.getElementById('tpl_footer_url')?.value || '',
-          document_footer_enabled: !!(document.getElementById('tpl_footer_enabled')?.checked),
-          document_footer_opacity: getOpacityFraction('tpl_footer_opacity', 100),
           variables_list: uniqueVars
         };
 
@@ -1919,11 +1764,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       loadTemplates();
       document.getElementById('tpl_stamp_file')?.addEventListener('change', onTemplateStampFileChange);
       document.getElementById('tpl_stamp_clear')?.addEventListener('click', () => setTemplateStampPreview(''));
-      for (const kind of ['watermark', 'header', 'footer']) {
-        document.getElementById('tpl_' + kind + '_file')?.addEventListener('change', (ev) => onTemplateBrandingFileChange(ev, kind));
-        document.getElementById('tpl_' + kind + '_clear')?.addEventListener('click', () => setTemplateBrandingPreview(kind, ''));
-        document.getElementById('tpl_' + kind + '_opacity')?.addEventListener('input', () => syncBrandingOpacityLabel(kind, kind === 'watermark' ? 12 : 100));
-      }
     });
   </script>
 </body>
