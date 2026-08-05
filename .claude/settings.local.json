@@ -72,7 +72,9 @@
       "Bash(where mkvtoolnix *)",
       "PowerShell(Get-Command *)",
       "Bash(wrangler deployments *)",
-      "Bash(wrangler versions *)"
+      "Bash(wrangler versions *)",
+      "Bash(cat wrangler.toml)",
+      "Bash(cat wrangler.json)"
     ]
   }
 }

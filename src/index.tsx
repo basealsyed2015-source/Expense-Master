@@ -2816,28 +2816,11 @@ app.use('*', async (c, next) => {
   await next()
 })
 
-// Bank agents (role 5): scoped funding requests/customers (read + edit/delete within scope), attachment upload for edits, sidebar counts, auth.
+// Role 5 (bank agent) previously had a separate API whitelist here.
+// It now uses the same access as role 4 (employee) — handler-level checks enforce scoping.
 app.use('/api/*', async (c, next) => {
-  const p = c.req.path
-  if (
-    p === '/api/auth/login' ||
-    p === '/api/auth/logout' ||
-    p.startsWith('/api/auth/forgot') ||
-    p.startsWith('/api/auth/reset')
-  ) {
-    await next()
-    return
-  }
-  // Public tenant APIs (contact form, etc.) — no bank-agent API gate
-  if (p.startsWith('/api/public/')) {
-    await next()
-    return
-  }
-  const info = await getUserInfo(c)
-  if (normalizeRoleId(info.roleId) !== 5) {
-    await next()
-    return
-  }
+  await next()
+  return
   const method = c.req.method
   if (p === '/api/financing-requests' && method === 'GET') {
     await next()
@@ -3026,6 +3009,23 @@ app.use('/api/*', async (c, next) => {
   // is enforced inside the handlers (ensureConversationAccess), so allow
   // role 5 through this coarse outer middleware.
   if (p.startsWith('/api/chat/')) {
+    await next()
+    return
+  }
+  // Notification center: role 5 needs to read and mark notifications
+  if (p === '/api/notifications' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/notifications/unread-count' && method === 'GET') {
+    await next()
+    return
+  }
+  if (p === '/api/notifications/read-all' && method === 'PUT') {
+    await next()
+    return
+  }
+  if (/^\/api\/notifications\/\d+\/read$/.test(p) && method === 'PUT') {
     await next()
     return
   }
@@ -3931,37 +3931,13 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/admin/my-hr',
     '/admin/my-profile',
+    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/chat',
   ],
-  // Role 5: bank agent — keep in sync with /admin/* RBAC + full-admin-panel allowedLinks['5'].
-  // No marketing module (/admin/follow-ups, contact-affiliates, link-stats). My Tasks is separate.
+  // Role 5: same access as role 4 (employee).
   '5': [
-    '/admin/panel',
-    '/admin/customers',
-    '/admin/customers/completed',
-    '/admin/customers/archived',
-    '/admin/requests',
-    '/admin/requests/completed',
-    '/admin/contracts',
-    '/admin/contracts/list',
-    '/admin/contracts/view',
-    '/admin/my-tasks',
-    '/admin/my-archived-tasks',
-    '/admin/my-no-response-tasks',
-    '/my-tasks',
-    '/admin/my-leaves',
-    '/admin/my-hr',
-    '/admin/my-profile',
-    '/calculator',
-    '/',
-    '/admin/chat',
-  ],
-  // Role 6: dual agent — union of role 4 (employee) + role 5 (bank agent) access.
-  // No marketing module. My Tasks is a standalone nav item.
-  '6': [
-    '/admin/panel',
     '/admin/customers',
     '/admin/customers/completed',
     '/admin/customers/archived',
@@ -3970,7 +3946,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/contracts',
     '/admin/contracts/list',
     '/admin/contracts/new',
-    '/admin/contracts/view',
     '/admin/contracts/templates',
     '/admin/my-tasks',
     '/admin/my-archived-tasks',
@@ -3979,6 +3954,30 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/admin/my-hr',
     '/admin/my-profile',
+    '/admin/notifications',
+    '/calculator',
+    '/',
+    '/admin/chat',
+  ],
+  // Role 6: same access as role 4/5.
+  '6': [
+    '/admin/customers',
+    '/admin/customers/completed',
+    '/admin/customers/archived',
+    '/admin/requests',
+    '/admin/requests/completed',
+    '/admin/contracts',
+    '/admin/contracts/list',
+    '/admin/contracts/new',
+    '/admin/contracts/templates',
+    '/admin/my-tasks',
+    '/admin/my-archived-tasks',
+    '/admin/my-no-response-tasks',
+    '/my-tasks',
+    '/admin/my-leaves',
+    '/admin/my-hr',
+    '/admin/my-profile',
+    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/chat',
@@ -13102,44 +13101,25 @@ app.delete('/api/customer-alarms/:id', async (c) => {
 
 // NOTIFICATIONS APIs
 
-// Get all notifications for current user (for now, hardcoded user_id = 1)
 app.get('/api/notifications', async (c) => {
   try {
-    // Get tenant_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    let userId = 1
-    
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      userId = parseInt(parts[0])
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
-    }
-    
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+
     let query = `
-      SELECT 
+      SELECT
         n.*,
         fr.requested_amount,
         fr.status as request_status
       FROM notifications n
       LEFT JOIN financing_requests fr ON n.related_request_id = fr.id
       WHERE n.user_id = ?`
-    
-    if (tenant_id) {
-      query += ` AND n.tenant_id = ${tenant_id}`
-    }
-    
-    query += `
-      ORDER BY n.created_at DESC
-      LIMIT 50`
-    
-    const { results } = await c.env.DB.prepare(query).bind(userId).all()
-    
+
+    query += ` ORDER BY n.created_at DESC LIMIT 50`
+
+    const { results } = await c.env.DB.prepare(query).bind(userInfo.userId).all()
     return c.json({ success: true, data: results })
   } catch (error: any) {
-    console.error('Error fetching notifications:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -13178,18 +13158,15 @@ app.get('/api/notifications/unread-count', async (c) => {
 // Mark notification as read
 app.put('/api/notifications/:id/read', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
-    const userId = 1 // TODO: Get from session/auth
-    
     await c.env.DB.prepare(`
-      UPDATE notifications
-      SET is_read = 1, read_at = CURRENT_TIMESTAMP
+      UPDATE notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
-    `).bind(id, userId).run()
-    
+    `).bind(id, userInfo.userId).run()
     return c.json({ success: true })
   } catch (error: any) {
-    console.error('Error marking notification as read:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -13197,17 +13174,14 @@ app.put('/api/notifications/:id/read', async (c) => {
 // Mark all notifications as read
 app.put('/api/notifications/read-all', async (c) => {
   try {
-    const userId = 1 // TODO: Get from session/auth
-    
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     await c.env.DB.prepare(`
-      UPDATE notifications
-      SET is_read = 1, read_at = CURRENT_TIMESTAMP
+      UPDATE notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE user_id = ? AND is_read = 0
-    `).bind(userId).run()
-    
+    `).bind(userInfo.userId).run()
     return c.json({ success: true })
   } catch (error: any) {
-    console.error('Error marking all as read:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -13215,17 +13189,14 @@ app.put('/api/notifications/read-all', async (c) => {
 // Delete notification
 app.delete('/api/notifications/:id', async (c) => {
   try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
     const id = c.req.param('id')
-    const userId = 1 // TODO: Get from session/auth
-    
     await c.env.DB.prepare(`
-      DELETE FROM notifications
-      WHERE id = ? AND user_id = ?
-    `).bind(id, userId).run()
-    
+      DELETE FROM notifications WHERE id = ? AND user_id = ?
+    `).bind(id, userInfo.userId).run()
     return c.json({ success: true })
   } catch (error: any) {
-    console.error('Error deleting notification:', error)
     return c.json({ success: false, error: error.message }, 500)
   }
 })
@@ -18195,6 +18166,7 @@ app.get('/admin/customers/add', async (c) => {
                 لا يرد
               </button>
               ${!prefillTaskIsCompleted ? `<button type="button" id="btn-review-task" class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-6 py-3 rounded-lg font-bold flex items-center gap-2"><i class="fas fa-star ml-1"></i>تقييم العميل</button>` : ''}
+              ${!prefillTaskIsCompleted ? `<button type="button" id="btn-pass-task" class="bg-violet-600 hover:bg-violet-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2"><i class="fas fa-share ml-1"></i>تمرير المهمة</button>` : ''}
             </div>
             ` : ''}
             <div id="customer-create-message" class="mt-6 pt-4 border-t border-gray-200 text-right" dir="rtl" aria-live="polite"></div>
@@ -18202,6 +18174,35 @@ app.get('/admin/customers/add', async (c) => {
         </div>
       </div>
       ${prefillTaskId && !prefillTaskIsCompleted ? `
+      <div id="taskPassModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div class="bg-gradient-to-r from-violet-600 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-share ml-2"></i>تمرير المهمة لزميل</h2>
+            <button type="button" id="taskPassCloseBtn" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">اختر الموظف</label>
+              <select id="taskPassStaffSelect" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 bg-white">
+                <option value="">جاري التحميل...</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">
+                <i class="fas fa-note-sticky text-violet-600 ml-1"></i>ملاحظة التمرير <span class="text-red-500">*</span>
+              </label>
+              <textarea id="taskPassNote" rows="4" placeholder="الملاحظة مطلوبة وسيشاهدها زميلك عند استلام الطلب..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 resize-none"></textarea>
+            </div>
+            <p id="taskPassError" class="text-sm text-red-600 hidden"></p>
+          </div>
+          <div class="px-6 pb-6 flex gap-3 justify-end">
+            <button type="button" id="taskPassCancelBtn" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">إلغاء</button>
+            <button type="button" id="taskPassSubmitBtn" class="px-5 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm">
+              <i class="fas fa-share ml-1"></i>إرسال طلب التمرير
+            </button>
+          </div>
+        </div>
+      </div>
       <div id="taskReviewModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-visible">
           <div id="taskReviewModalHeader" class="bg-gradient-to-r from-yellow-400 to-green-500 px-6 py-4 flex items-center justify-between transition-all duration-300 rounded-t-2xl">
@@ -18456,10 +18457,83 @@ app.get('/admin/customers/add', async (c) => {
             });
           })();
 
+          var _passTaskId = ${prefillTaskId || 0};
+          var _passStaffLoaded = false;
+
+          function closeTaskPassModal() {
+            var m = document.getElementById('taskPassModal');
+            if (m) { m.classList.add('hidden'); m.style.display = ''; }
+            var err = document.getElementById('taskPassError');
+            if (err) { err.classList.add('hidden'); err.textContent = ''; }
+          }
+
+          async function openTaskPassModal() {
+            var m = document.getElementById('taskPassModal');
+            if (!m) return;
+            m.classList.remove('hidden');
+            m.style.display = 'flex';
+            document.getElementById('taskPassNote').value = '';
+            var err = document.getElementById('taskPassError');
+            if (err) { err.classList.add('hidden'); err.textContent = ''; }
+            if (!_passStaffLoaded) {
+              var sel = document.getElementById('taskPassStaffSelect');
+              sel.innerHTML = '<option value="">جاري التحميل...</option>';
+              try {
+                var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+                var headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+                var res = await fetch('/api/my-tenant-followup-staff', { headers: headers });
+                var data = await res.json().catch(function() { return {}; });
+                var staff = Array.isArray(data && data.data) ? data.data : [];
+                if (!staff.length) {
+                  sel.innerHTML = '<option value="">لا يوجد موظفون آخرون</option>';
+                } else {
+                  sel.innerHTML = '<option value="">— اختر موظفاً —</option>' +
+                    staff.map(function(u) {
+                      return '<option value="' + u.id + '">' + String(u.full_name || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</option>';
+                    }).join('');
+                  _passStaffLoaded = true;
+                }
+              } catch(e) {
+                document.getElementById('taskPassStaffSelect').innerHTML = '<option value="">تعذر تحميل الموظفين</option>';
+              }
+            }
+          }
+
+          async function submitTaskPass() {
+            var toUserId = document.getElementById('taskPassStaffSelect').value;
+            var note = document.getElementById('taskPassNote').value.trim();
+            var err = document.getElementById('taskPassError');
+            if (!toUserId) { err.textContent = 'يرجى اختيار موظف'; err.classList.remove('hidden'); return; }
+            if (!note) { err.textContent = 'الملاحظة مطلوبة'; err.classList.remove('hidden'); return; }
+            err.classList.add('hidden');
+            var submitBtn = document.getElementById('taskPassSubmitBtn');
+            submitBtn.disabled = true;
+            try {
+              var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              var headers = { 'Content-Type': 'application/json' };
+              if (token) headers['Authorization'] = 'Bearer ' + token;
+              var res = await fetch('/api/my-followup-tasks/' + _passTaskId + '/pass', {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ to_user_id: parseInt(toUserId, 10), note_text: note })
+              });
+              var data = await res.json().catch(function() { return {}; });
+              if (!res.ok || !data.success) throw new Error(data.error || 'تعذر إرسال طلب التمرير');
+              closeTaskPassModal();
+              window.location.href = '/admin/my-tasks';
+            } catch(e) {
+              err.textContent = e.message || 'حدث خطأ';
+              err.classList.remove('hidden');
+              submitBtn.disabled = false;
+            }
+          }
+
           (function taskActionButtons() {
             var archiveBtn = document.getElementById('btn-archive-task');
             var noResponseBtn = document.getElementById('btn-no-response-task');
             var reviewBtn = document.getElementById('btn-review-task');
+            var passBtn = document.getElementById('btn-pass-task');
             var taskId = ${prefillTaskId || 0};
             if (!taskId) return;
             if (archiveBtn) {
@@ -18502,6 +18576,19 @@ app.get('/admin/customers/add', async (c) => {
                 openTaskReviewModal(${prefillTaskData?.rating ?? 0}, ${JSON.stringify(prefillTaskData?.rating_note ?? '')});
               });
             }
+            if (passBtn) {
+              passBtn.addEventListener('click', function () { openTaskPassModal(); });
+            }
+            var passModal = document.getElementById('taskPassModal');
+            if (passModal) {
+              passModal.addEventListener('click', function(e) { if (e.target === passModal) closeTaskPassModal(); });
+            }
+            var passCloseBtn = document.getElementById('taskPassCloseBtn');
+            if (passCloseBtn) passCloseBtn.addEventListener('click', function () { closeTaskPassModal(); });
+            var passCancelBtn = document.getElementById('taskPassCancelBtn');
+            if (passCancelBtn) passCancelBtn.addEventListener('click', function () { closeTaskPassModal(); });
+            var passSubmitBtn = document.getElementById('taskPassSubmitBtn');
+            if (passSubmitBtn) passSubmitBtn.addEventListener('click', function () { submitTaskPass(); });
           })();
 
           (function jobTypeToggle() {
@@ -23946,6 +24033,13 @@ app.get('/admin/notifications', async (c) => {
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script>
+          (function setupAuth() {
+            var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+            if (token && window.axios) {
+              axios.defaults.headers.common['Authorization'] = 'Bearer ' + token;
+            }
+          })();
+
           let allNotifications = [];
           let currentFilter = 'all';
 
@@ -39147,22 +39241,29 @@ app.post('/api/my-followup-tasks/:taskId/pass', async (c) => {
     `).bind(userInfo.userId).first<{ full_name: string }>()
     const passUserName = passUserRow?.full_name || ''
 
+    const recipientRow = await c.env.DB.prepare(`
+      SELECT tenant_id FROM users WHERE id = ? LIMIT 1
+    `).bind(toUserId).first<{ tenant_id: number | null }>()
+    const recipientTenantId = recipientRow?.tenant_id ?? userInfo.tenantId
+
     await c.env.DB.prepare(`
       INSERT INTO company_contact_followup_task_notes
         (task_id, tenant_id, user_id, user_name, note_text, note_type)
       VALUES (?, ?, ?, ?, ?, 'pass_note')
     `).bind(taskId, userInfo.tenantId, userInfo.userId, passUserName, passNote).run()
 
-    await c.env.DB.prepare(`
-      INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
-      VALUES (?, ?, ?, 'info', 'task_pass_request', ?, ?)
-    `).bind(
-      toUserId,
-      'طلب تمرير مهمة',
-      `${passUserName} يطلب تمرير مهمة إليك: ${task.task_title || ''}`,
-      passRequestId,
-      userInfo.tenantId
-    ).run()
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
+        VALUES (?, ?, ?, ?, 'info', 'task_pass_request', ?)
+      `).bind(
+        toUserId,
+        userInfo.tenantId,
+        'طلب تمرير مهمة',
+        `${passUserName} يطلب تمرير مهمة إليك: ${task.task_title || ''}`,
+        passRequestId
+      ).run()
+    } catch (notifErr) { console.error('pass_request notification insert failed:', notifErr) }
 
     return c.json({ success: true, message: 'تم إرسال طلب التمرير' })
   } catch (error: any) {
@@ -39313,16 +39414,18 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
         SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).bind(passId).run()
-      await c.env.DB.prepare(`
-        INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
-        VALUES (?, ?, ?, 'warning', 'task_pass_response', ?, ?)
-      `).bind(
-        row.from_user_id,
-        'تم رفض طلب التمرير',
-        `${row.to_user_name || 'الموظف'} رفض طلب التمرير للمهمة: ${taskForPass?.task_title || ''}`,
-        passId,
-        userInfo.tenantId
-      ).run()
+      try {
+        await c.env.DB.prepare(`
+          INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
+          VALUES (?, ?, ?, ?, 'warning', 'task_pass_response', ?)
+        `).bind(
+          row.from_user_id,
+          row.tenant_id,
+          'تم رفض طلب التمرير',
+          `${row.to_user_name || 'الموظف'} رفض طلب التمرير للمهمة: ${taskForPass?.task_title || ''}`,
+          passId
+        ).run()
+      } catch (notifErr) { console.error('pass_reject notification insert failed:', notifErr) }
       return c.json({ success: true, message: 'تم رفض طلب التمرير' })
     }
 
@@ -39352,16 +39455,18 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
       WHERE id = ?
     `).bind(passId).run()
 
-    await c.env.DB.prepare(`
-      INSERT INTO notifications (user_id, title, message, type, category, related_pass_request_id, tenant_id)
-      VALUES (?, ?, ?, 'success', 'task_pass_response', ?, ?)
-    `).bind(
-      row.from_user_id,
-      'تم قبول طلب التمرير',
-      `${row.to_user_name || 'الموظف'} قبل طلب التمرير للمهمة: ${taskForPass.task_title || ''}`,
-      passId,
-      userInfo.tenantId
-    ).run()
+    try {
+      await c.env.DB.prepare(`
+        INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_pass_request_id)
+        VALUES (?, ?, ?, ?, 'success', 'task_pass_response', ?)
+      `).bind(
+        row.from_user_id,
+        row.tenant_id,
+        'تم قبول طلب التمرير',
+        `${row.to_user_name || 'الموظف'} قبل طلب التمرير للمهمة: ${taskForPass.task_title || ''}`,
+        passId
+      ).run()
+    } catch (notifErr) { console.error('pass_accept notification insert failed:', notifErr) }
 
     return c.json({ success: true, message: 'تم قبول المهمة ونقلها إليك' })
   } catch (error: any) {
@@ -39925,15 +40030,6 @@ app.get('/admin/my-tasks', async (c) => {
                 '<div class="mb-2"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' +
                 escapeHtml(task.outgoing_pass_to_name || '') + '</strong> (ما زلت المعيّن حتى يقبل زميلك)</div>' +
                 '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-sm font-medium text-violet-800 underline">إلغاء طلب التمرير</button></div>';
-            } else {
-              passBlock =
-                '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
-                '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-share ml-1 text-violet-600"></i>تمرير المهمة لزميل</div>' +
-                '<div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">' +
-                '<select data-pass-select="' + task.id + '" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">' +
-                staffOptionsHtml() + '</select>' +
-                '<button type="button" data-pass-submit="' + task.id + '" class="whitespace-nowrap bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50" ' +
-                (tenantStaff.length ? '' : 'disabled ') + '>إرسال طلب التمرير</button></div></div>';
             }
             var taskRating = Number(task.rating) || 0;
             var CARD_RATING_CFG = {
