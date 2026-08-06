@@ -74,7 +74,8 @@
       "Bash(wrangler deployments *)",
       "Bash(wrangler versions *)",
       "Bash(cat wrangler.toml)",
-      "Bash(cat wrangler.json)"
+      "Bash(cat wrangler.json)",
+      "Bash(python -c ' *)"
     ]
   }
 }

@@ -70,6 +70,7 @@ import {
   resolveWorkflowCrossPartyNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
   insertTaskPassNotification,
+  insertCustomerTransferNotification,
   validateStaffRoleChange,
   isEmployeeAssignableRole,
   isBankAgentAssignableRole,
@@ -21700,6 +21701,10 @@ app.get('/admin/customers', async (c) => {
     const canEdit = userInfo.roleId !== 3;
     const canReviewCustomers = true
     const showWorkflowNoteShortcut = canAddWorkflowNote(userInfo.roleId)
+    const callerRoleNormalized = normalizeRoleId(userInfo.roleId)
+    const canTransferCustomers =
+      callerRoleNormalized === 4 || callerRoleNormalized === 5 || callerRoleNormalized === 6
+    const callerUserIdForTransfer = Number(userInfo.userId || 0)
 
     // Customer auto-assign is now automatic on calculator intake,
     // so we remove the button from the customers list page UI.
@@ -22086,6 +22091,29 @@ app.get('/admin/customers', async (c) => {
                           <i class="fas fa-edit"></i> تعديل
                         </a>
                         ` : ''}
+                        ${(() => {
+                          if (!canTransferCustomers || !callerUserIdForTransfer) return ''
+                          const assignedEmpId = Number(customer.assigned_employee_id || 0)
+                          const assignedAgentId = Number((customer as any).assigned_bank_agent_id || 0)
+                          const isEmp = assignedEmpId === callerUserIdForTransfer
+                          const isAgent = assignedAgentId === callerUserIdForTransfer
+                          if (isEmp && isAgent) return ''
+                          let assignmentType = ''
+                          if (callerRoleNormalized === 4 && isEmp) assignmentType = 'employee'
+                          else if (callerRoleNormalized === 5 && isAgent) assignmentType = 'bank_agent'
+                          else if (callerRoleNormalized === 6 && isEmp) assignmentType = 'employee'
+                          else if (callerRoleNormalized === 6 && isAgent) assignmentType = 'bank_agent'
+                          if (!assignmentType) return ''
+                          return `
+                        <button type="button" class="actions-dropdown-item"
+                                data-customer-id="${customer.id}"
+                                data-customer-name="${escapeHtmlAttr(String(customer.full_name || ''))}"
+                                data-assignment-type="${assignmentType}"
+                                onclick="openCustomerTransferModal(this)"
+                                style="color:#0e7490;">
+                          <i class="fas fa-exchange-alt"></i> تمرير العميل
+                        </button>`
+                        })()}
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-900">${customer.tenant_customer_number != null ? customer.tenant_customer_number : '—'}</td>
@@ -22258,6 +22286,62 @@ app.get('/admin/customers', async (c) => {
                   <i class="fas fa-save ml-1"></i> حفظ التقييم
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Customer Transfer — Sender Modal ===== -->
+        <div id="customerTransferModal" class="modal-backdrop hidden">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-visible">
+            <div class="bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-exchange-alt ml-2"></i> تمرير العميل</h2>
+              <button onclick="closeCustomerTransferModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                <div class="text-sm text-gray-600">العميل</div>
+                <div id="ctxCustomerName" class="text-lg font-bold text-gray-900">—</div>
+                <div id="ctxAssignmentTypeLabel" class="text-xs text-gray-500 mt-1"></div>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">المستلم</label>
+                <select id="ctxRecipient" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent">
+                  <option value="">— جاري التحميل —</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">الملاحظة</label>
+                <textarea id="ctxNote" rows="3" placeholder="سبب التمرير..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-400 focus:border-transparent resize-none"></textarea>
+              </div>
+              <div id="ctxError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+            </div>
+            <div class="px-6 pb-6 flex gap-3 justify-end">
+              <button onclick="closeCustomerTransferModal()" class="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors">إلغاء</button>
+              <button onclick="submitCustomerTransfer()" id="ctxSubmitBtn" class="px-6 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-bold transition-all shadow-md">
+                <i class="fas fa-paper-plane ml-1"></i> إرسال طلب التمرير
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Customer Transfer — Recipient Popup ===== -->
+        <div id="customerTransferIncomingModal" class="modal-backdrop hidden">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-visible">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-inbox ml-2"></i> طلب تمرير عميل</h2>
+              <button onclick="closeCustomerTransferIncomingModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 space-y-3">
+              <div id="ctxInBody" class="text-sm text-gray-800 space-y-2"></div>
+              <div id="ctxInError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+            </div>
+            <div class="px-6 pb-6 flex gap-3 justify-end" id="ctxInActions">
+              <button onclick="respondCustomerTransfer('reject')" class="px-5 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-bold transition-colors">
+                <i class="fas fa-times ml-1"></i> رفض
+              </button>
+              <button onclick="respondCustomerTransfer('accept')" class="px-5 py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold transition-all shadow-md">
+                <i class="fas fa-check ml-1"></i> قبول
+              </button>
             </div>
           </div>
         </div>
@@ -22647,6 +22731,196 @@ app.get('/admin/customers', async (c) => {
               }
             } catch(e) { showToast('فشل الاتصال بالخادم', 'error'); }
           }
+
+          // ==================== Customer Transfer ====================
+          var ctxCurrent = { customerId: null, customerName: '', assignmentType: '' };
+
+          function openCustomerTransferModal(btn) {
+            var cid = Number(btn.getAttribute('data-customer-id'));
+            var name = btn.getAttribute('data-customer-name') || '';
+            var at = btn.getAttribute('data-assignment-type') || 'employee';
+            ctxCurrent = { customerId: cid, customerName: name, assignmentType: at };
+            document.getElementById('ctxCustomerName').textContent = name;
+            document.getElementById('ctxAssignmentTypeLabel').textContent =
+              at === 'employee' ? 'نوع التمرير: تعيين الموظف' : 'نوع التمرير: تعيين وكيل البنك';
+            document.getElementById('ctxNote').value = '';
+            var errEl = document.getElementById('ctxError');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            var sel = document.getElementById('ctxRecipient');
+            sel.innerHTML = '<option value="">— جاري التحميل —</option>';
+            document.getElementById('customerTransferModal').classList.remove('hidden');
+            fetch('/api/customer-transfer-candidates?assignment_type=' + encodeURIComponent(at))
+              .then(function(r){ return r.json(); })
+              .then(function(data){
+                if (!data || !data.success) {
+                  sel.innerHTML = '<option value="">— لا يمكن التحميل —</option>';
+                  return;
+                }
+                var list = data.data || [];
+                if (list.length === 0) {
+                  sel.innerHTML = '<option value="">— لا يوجد مستلمون مؤهلون —</option>';
+                  return;
+                }
+                sel.innerHTML = '<option value="">— اختر المستلم —</option>' +
+                  list.map(function(u){
+                    var lbl = (u.full_name || '') + ' (' + (u.role_id === 4 ? 'موظف' : u.role_id === 5 ? 'وكيل بنك' : u.role_id === 6 ? 'موظف/وكيل' : 'مستخدم') + ')';
+                    return '<option value="' + u.id + '">' + lbl.replace(/</g,'&lt;') + '</option>';
+                  }).join('');
+              })
+              .catch(function(){ sel.innerHTML = '<option value="">— فشل التحميل —</option>'; });
+          }
+
+          function closeCustomerTransferModal() {
+            document.getElementById('customerTransferModal').classList.add('hidden');
+          }
+
+          async function submitCustomerTransfer() {
+            var errEl = document.getElementById('ctxError');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            var recip = Number(document.getElementById('ctxRecipient').value || 0);
+            var note = document.getElementById('ctxNote').value.trim();
+            if (!recip) { errEl.textContent = 'يرجى اختيار مستلم'; errEl.classList.remove('hidden'); return; }
+            if (!note) { errEl.textContent = 'يرجى كتابة ملاحظة'; errEl.classList.remove('hidden'); return; }
+            var btn = document.getElementById('ctxSubmitBtn');
+            btn.disabled = true;
+            try {
+              var resp = await fetch('/api/customers/' + ctxCurrent.customerId + '/transfer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to_user_id: recip, note_text: note, assignment_type: ctxCurrent.assignmentType })
+              });
+              var data = await resp.json();
+              if (data && data.success) {
+                closeCustomerTransferModal();
+                showToast('تم إرسال طلب التمرير', 'success');
+              } else {
+                errEl.textContent = (data && data.error) || 'حدث خطأ';
+                errEl.classList.remove('hidden');
+              }
+            } catch(e) {
+              errEl.textContent = 'فشل الاتصال بالخادم';
+              errEl.classList.remove('hidden');
+            } finally {
+              btn.disabled = false;
+            }
+          }
+
+          document.getElementById('customerTransferModal').addEventListener('click', function(e){
+            if (e.target === this) closeCustomerTransferModal();
+          });
+
+          // ------- Recipient popup (opened from ?customer_transfer=<id>) -------
+          var ctxIncomingId = null;
+
+          function closeCustomerTransferIncomingModal() {
+            document.getElementById('customerTransferIncomingModal').classList.add('hidden');
+            ctxIncomingId = null;
+            // Clean the query param so a refresh doesn't re-open the modal.
+            try {
+              var url = new URL(window.location.href);
+              if (url.searchParams.has('customer_transfer')) {
+                url.searchParams.delete('customer_transfer');
+                window.history.replaceState({}, '', url.toString());
+              }
+            } catch(e) {}
+          }
+
+          document.getElementById('customerTransferIncomingModal').addEventListener('click', function(e){
+            if (e.target === this) closeCustomerTransferIncomingModal();
+          });
+
+          async function openCustomerTransferIncoming(id) {
+            ctxIncomingId = Number(id);
+            var body = document.getElementById('ctxInBody');
+            var actions = document.getElementById('ctxInActions');
+            var errEl = document.getElementById('ctxInError');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            body.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+            actions.style.display = 'none';
+            document.getElementById('customerTransferIncomingModal').classList.remove('hidden');
+            try {
+              var resp = await fetch('/api/customer-transfers/' + ctxIncomingId);
+              var data = await resp.json();
+              if (!data || !data.success) {
+                body.innerHTML = '<div class="text-red-700">' + ((data && data.error) || 'لم يتم العثور على الطلب') + '</div>';
+                return;
+              }
+              var r = data.data;
+              var atLabel = r.assignment_type === 'employee' ? 'كموظف' : 'كوكيل بنك';
+              var statusLabel = r.status === 'pending' ? '' :
+                '<div class="mt-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900">هذا الطلب لم يعد معلّقاً (الحالة: ' + r.status + ')</div>';
+              body.innerHTML =
+                '<div><span class="text-gray-500">العميل:</span> <span class="font-bold">' + escHtml(r.customer_name || ('#' + r.customer_id)) + '</span></div>' +
+                '<div><span class="text-gray-500">من:</span> <span class="font-bold">' + escHtml(r.from_user_name || '—') + '</span></div>' +
+                '<div><span class="text-gray-500">نوع التمرير:</span> ' + atLabel + '</div>' +
+                '<div class="mt-2"><span class="text-gray-500">الملاحظة:</span><div class="mt-1 p-2 bg-gray-50 border border-gray-200 rounded whitespace-pre-wrap">' + escHtml(r.note_text || '') + '</div></div>' +
+                statusLabel;
+              if (r.status === 'pending') actions.style.display = '';
+            } catch(e) {
+              body.innerHTML = '<div class="text-red-700">فشل الاتصال بالخادم</div>';
+            }
+          }
+
+          function escHtml(s) {
+            return String(s == null ? '' : s)
+              .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+          }
+
+          async function respondCustomerTransfer(action) {
+            if (!ctxIncomingId) return;
+            var errEl = document.getElementById('ctxInError');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            try {
+              var resp = await fetch('/api/customer-transfers/' + ctxIncomingId, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: action })
+              });
+              var data = await resp.json();
+              if (data && data.success) {
+                closeCustomerTransferIncomingModal();
+                showToast(action === 'accept' ? 'تم قبول التمرير' : 'تم رفض التمرير', 'success');
+                setTimeout(function(){ window.location.reload(); }, 600);
+              } else {
+                errEl.textContent = (data && data.error) || 'حدث خطأ';
+                errEl.classList.remove('hidden');
+              }
+            } catch(e) {
+              errEl.textContent = 'فشل الاتصال بالخادم';
+              errEl.classList.remove('hidden');
+            }
+          }
+
+          // Auto-open recipient popup when ?customer_transfer=<id> is present.
+          (function(){
+            try {
+              var params = new URLSearchParams(window.location.search);
+              var tid = params.get('customer_transfer');
+              if (tid && /^[0-9]+$/.test(tid)) {
+                openCustomerTransferIncoming(tid);
+              }
+            } catch(e) {}
+          })();
+
+          // Decorate rows where the current caller has a pending outgoing transfer.
+          (async function markPendingTransfers(){
+            try {
+              var resp = await fetch('/api/customer-transfers/my-pending');
+              var data = await resp.json();
+              if (!data || !data.success) return;
+              (data.data || []).forEach(function(pt){
+                var row = document.querySelector('#tableBody tr[data-customer-id="' + pt.customer_id + '"]');
+                if (!row) return;
+                var nameCell = row.querySelector('td:nth-child(3)');
+                if (!nameCell || nameCell.querySelector('.ctx-pending-badge')) return;
+                var badge = document.createElement('span');
+                badge.className = 'ctx-pending-badge inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200 mr-1';
+                badge.title = 'طلب تمرير معلّق (' + (pt.assignment_type === 'employee' ? 'موظف' : 'وكيل بنك') + ')';
+                badge.innerHTML = '<i class="fas fa-exchange-alt"></i> معلّق';
+                nameCell.appendChild(badge);
+              });
+            } catch(e) {}
+          })();
 
           async function openNotifPanel() {
             document.getElementById('notifPanel').classList.add('open');
@@ -39513,6 +39787,368 @@ app.patch('/api/my-followup-task-passes/:id', async (c) => {
     } catch (notifErr) { console.error('pass_accept notification insert failed:', notifErr) }
 
     return c.json({ success: true, message: 'تم قبول المهمة ونقلها إليك' })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+// ============================================================================
+// Customer transfer feature — roles 4/5/6 hand off their assignment on a
+// customer to another user in the same tenant (with recipient approval).
+// Plan: CUSTOMER_TRANSFER_FEATURE_PLAN.md
+// ============================================================================
+
+type CustomerAssignmentContext = {
+  employeeAssignedIds: number[]
+  bankAgentId: number | null
+}
+
+async function loadCustomerAssignmentContext(
+  db: D1Database,
+  customerId: number
+): Promise<CustomerAssignmentContext> {
+  const cust = await db
+    .prepare(`SELECT assigned_bank_agent_id FROM customers WHERE id = ? LIMIT 1`)
+    .bind(customerId)
+    .first<{ assigned_bank_agent_id: number | null }>()
+  const { results } = await db
+    .prepare(`SELECT employee_id FROM customer_assignments WHERE customer_id = ?`)
+    .bind(customerId)
+    .all<{ employee_id: number }>()
+  return {
+    employeeAssignedIds: (results || []).map((r) => Number(r.employee_id)).filter(Number.isFinite),
+    bankAgentId: cust?.assigned_bank_agent_id != null ? Number(cust.assigned_bank_agent_id) : null,
+  }
+}
+
+function callerHoldsAssignment(
+  ctx: CustomerAssignmentContext,
+  userId: number,
+  assignmentType: 'employee' | 'bank_agent'
+): boolean {
+  if (assignmentType === 'employee') return ctx.employeeAssignedIds.includes(userId)
+  return ctx.bankAgentId === userId
+}
+
+app.get('/api/customer-transfers/my-pending', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+    const { results } = await c.env.DB.prepare(
+      `SELECT id, customer_id, assignment_type, to_user_id
+       FROM customer_transfer_requests
+       WHERE tenant_id = ? AND from_user_id = ? AND status = 'pending'`
+    ).bind(userInfo.tenantId, userInfo.userId).all()
+    return c.json({ success: true, data: results || [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/customer-transfer-candidates', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const callerRole = normalizeRoleId(userInfo.roleId)
+    if (callerRole !== 4 && callerRole !== 5 && callerRole !== 6) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    if (!userInfo.tenantId) return c.json({ success: true, data: [] })
+
+    const assignmentType = String(c.req.query('assignment_type') || '').trim()
+    if (assignmentType !== 'employee' && assignmentType !== 'bank_agent') {
+      return c.json({ success: false, error: 'assignment_type invalid' }, 400)
+    }
+
+    const staff = await listFollowupAssignableStaff(c.env.DB, userInfo.tenantId)
+    const filtered = staff.filter((u) => {
+      if (u.id === userInfo.userId) return false
+      return assignmentType === 'employee'
+        ? isEmployeeAssignableRole(u.role_id)
+        : isBankAgentAssignableRole(u.role_id)
+    })
+    return c.json({
+      success: true,
+      data: filtered.map((u) => ({ id: u.id, full_name: u.full_name, role_id: u.role_id })),
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.post('/api/customers/:customerId/transfer', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const callerRole = normalizeRoleId(userInfo.roleId)
+    if (callerRole !== 4 && callerRole !== 5 && callerRole !== 6) {
+      return c.json({ success: false, error: 'Forbidden' }, 403)
+    }
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const customerId = parseInt(c.req.param('customerId'), 10)
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      return c.json({ success: false, error: 'Invalid customer id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const toUserId = parseInt(String(payload?.to_user_id ?? ''), 10)
+    const assignmentType = String(payload?.assignment_type ?? '').trim()
+    const noteText = String(payload?.note_text ?? '').trim()
+
+    if (!Number.isFinite(toUserId) || toUserId <= 0) {
+      return c.json({ success: false, error: 'يرجى اختيار مستلم' }, 400)
+    }
+    if (toUserId === userInfo.userId) {
+      return c.json({ success: false, error: 'لا يمكن التمرير إلى نفسك' }, 400)
+    }
+    if (assignmentType !== 'employee' && assignmentType !== 'bank_agent') {
+      return c.json({ success: false, error: 'assignment_type invalid' }, 400)
+    }
+    if (!noteText) {
+      return c.json({ success: false, error: 'يرجى كتابة ملاحظة مع طلب التمرير' }, 400)
+    }
+
+    const cust = await c.env.DB.prepare(
+      `SELECT id, tenant_id, full_name FROM customers WHERE id = ? LIMIT 1`
+    ).bind(customerId).first<{ id: number; tenant_id: number; full_name: string | null }>()
+    if (!cust?.id) return c.json({ success: false, error: 'Customer not found' }, 404)
+    if (cust.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const assignRoleForType: 'employee' | 'bank_agent' =
+      assignmentType === 'employee' ? 'employee' : 'bank_agent'
+    if (assignRoleForType === 'employee' && callerRole !== 4 && callerRole !== 6) {
+      return c.json({ success: false, error: 'الدور لا يسمح بتمرير تعيين الموظف' }, 403)
+    }
+    if (assignRoleForType === 'bank_agent' && callerRole !== 5 && callerRole !== 6) {
+      return c.json({ success: false, error: 'الدور لا يسمح بتمرير تعيين وكيل البنك' }, 403)
+    }
+
+    const ctx = await loadCustomerAssignmentContext(c.env.DB, customerId)
+    if (!callerHoldsAssignment(ctx, userInfo.userId, assignRoleForType)) {
+      return c.json({ success: false, error: 'أنت لست الشخص المعيّن على هذا العميل' }, 403)
+    }
+    if (
+      callerRole === 6 &&
+      ctx.employeeAssignedIds.includes(userInfo.userId) &&
+      ctx.bankAgentId === userInfo.userId
+    ) {
+      return c.json({
+        success: false,
+        error: 'أنت معيّن كموظف ووكيل بنك في هذا العميل — لا يمكن التمرير حالياً',
+      }, 400)
+    }
+
+    const recipient = await c.env.DB.prepare(
+      `SELECT id, tenant_id, role_id, full_name, is_active FROM users WHERE id = ? LIMIT 1`
+    ).bind(toUserId).first<{
+      id: number; tenant_id: number | null; role_id: number | null; full_name: string | null; is_active: number | null
+    }>()
+    if (!recipient?.id) return c.json({ success: false, error: 'المستلم غير موجود' }, 404)
+    if (recipient.tenant_id !== userInfo.tenantId) {
+      return c.json({ success: false, error: 'المستلم من شركة أخرى' }, 400)
+    }
+    if (recipient.is_active === 0) {
+      return c.json({ success: false, error: 'المستلم غير نشط' }, 400)
+    }
+    const recipientRole = normalizeRoleId(recipient.role_id)
+    const recipientOk = assignRoleForType === 'employee'
+      ? isEmployeeAssignableRole(recipientRole)
+      : isBankAgentAssignableRole(recipientRole)
+    if (!recipientOk) {
+      return c.json({ success: false, error: 'دور المستلم غير مناسب لنوع التمرير' }, 400)
+    }
+
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM customer_transfer_requests
+       WHERE customer_id = ? AND assignment_type = ? AND status = 'pending' LIMIT 1`
+    ).bind(customerId, assignRoleForType).first<{ id: number }>()
+    if (existing?.id) {
+      return c.json({ success: false, error: 'يوجد طلب تمرير معلّق بالفعل لهذا العميل' }, 400)
+    }
+
+    const insertRes = await c.env.DB.prepare(
+      `INSERT INTO customer_transfer_requests
+        (customer_id, tenant_id, assignment_type, from_user_id, to_user_id, note_text, status)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending')`
+    ).bind(customerId, userInfo.tenantId, assignRoleForType, userInfo.userId, toUserId, noteText).run()
+    const transferRequestId = Number(insertRes.meta.last_row_id)
+
+    const senderRow = await c.env.DB.prepare(
+      `SELECT full_name FROM users WHERE id = ? LIMIT 1`
+    ).bind(userInfo.userId).first<{ full_name: string | null }>()
+    const senderName = senderRow?.full_name || ''
+    const typeLabel = assignRoleForType === 'employee' ? 'كموظف' : 'كوكيل بنك'
+
+    try {
+      await insertCustomerTransferNotification(c.env.DB, {
+        recipientUserId: toUserId,
+        tenantId: userInfo.tenantId,
+        customerId,
+        title: 'طلب تمرير عميل',
+        message: `${senderName} يطلب تمرير العميل ${cust.full_name || `#${customerId}`} إليك ${typeLabel}`,
+        notifType: 'info',
+        category: 'customer_transfer_request',
+        transferRequestId,
+      })
+    } catch (notifErr) { console.error('customer_transfer_request notification insert failed:', notifErr) }
+
+    return c.json({ success: true, message: 'تم إرسال طلب التمرير', id: transferRequestId })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.get('/api/customer-transfers/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const transferId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(transferId) || transferId <= 0) {
+      return c.json({ success: false, error: 'Invalid id' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(`
+      SELECT tr.id, tr.customer_id, tr.assignment_type, tr.from_user_id, tr.to_user_id,
+             tr.note_text, tr.status, tr.created_at, tr.resolved_at,
+             fu.full_name AS from_user_name, tu.full_name AS to_user_name,
+             c.full_name AS customer_name
+      FROM customer_transfer_requests tr
+      LEFT JOIN users fu ON fu.id = tr.from_user_id
+      LEFT JOIN users tu ON tu.id = tr.to_user_id
+      LEFT JOIN customers c ON c.id = tr.customer_id
+      WHERE tr.id = ? AND tr.tenant_id = ?
+        AND (tr.from_user_id = ? OR tr.to_user_id = ?)
+      LIMIT 1
+    `).bind(transferId, userInfo.tenantId, userInfo.userId, userInfo.userId).first()
+
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
+    return c.json({ success: true, data: row })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
+app.patch('/api/customer-transfers/:id', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    if (!userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    const transferId = parseInt(c.req.param('id'), 10)
+    if (!Number.isFinite(transferId) || transferId <= 0) {
+      return c.json({ success: false, error: 'Invalid id' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const action = String(payload?.action ?? '').trim().toLowerCase()
+    if (!['accept', 'reject', 'cancel'].includes(action)) {
+      return c.json({ success: false, error: 'إجراء غير صالح' }, 400)
+    }
+
+    const row = await c.env.DB.prepare(`
+      SELECT tr.id, tr.customer_id, tr.tenant_id, tr.assignment_type, tr.from_user_id,
+             tr.to_user_id, tr.status,
+             fu.full_name AS from_user_name, tu.full_name AS to_user_name,
+             c.full_name AS customer_name
+      FROM customer_transfer_requests tr
+      LEFT JOIN users fu ON fu.id = tr.from_user_id
+      LEFT JOIN users tu ON tu.id = tr.to_user_id
+      LEFT JOIN customers c ON c.id = tr.customer_id
+      WHERE tr.id = ? LIMIT 1
+    `).bind(transferId).first<{
+      id: number; customer_id: number; tenant_id: number
+      assignment_type: 'employee' | 'bank_agent'
+      from_user_id: number; to_user_id: number; status: string
+      from_user_name: string | null; to_user_name: string | null; customer_name: string | null
+    }>()
+
+    if (!row?.id) return c.json({ success: false, error: 'Not found' }, 404)
+    if (row.tenant_id !== userInfo.tenantId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (row.status !== 'pending') {
+      return c.json({ success: false, error: 'لم يعد هذا الطلب قابلاً للمعالجة' }, 400)
+    }
+
+    if (action === 'cancel') {
+      if (row.from_user_id !== userInfo.userId) return c.json({ success: false, error: 'Forbidden' }, 403)
+      await c.env.DB.prepare(
+        `UPDATE customer_transfer_requests SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(transferId).run()
+      return c.json({ success: true, message: 'تم إلغاء طلب التمرير' })
+    }
+
+    if (row.to_user_id !== userInfo.userId) return c.json({ success: false, error: 'Forbidden' }, 403)
+
+    if (action === 'reject') {
+      await c.env.DB.prepare(
+        `UPDATE customer_transfer_requests SET status = 'rejected', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(transferId).run()
+      try {
+        await insertCustomerTransferNotification(c.env.DB, {
+          recipientUserId: row.from_user_id,
+          tenantId: row.tenant_id,
+          customerId: row.customer_id,
+          title: 'تم رفض طلب التمرير',
+          message: `${row.to_user_name || 'المستلم'} رفض طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`}`,
+          notifType: 'warning',
+          category: 'customer_transfer_response',
+          transferRequestId: transferId,
+        })
+      } catch (notifErr) { console.error('customer_transfer_reject notification failed:', notifErr) }
+      return c.json({ success: true, message: 'تم رفض طلب التمرير' })
+    }
+
+    // action === 'accept'
+    // Re-verify sender still holds the assignment (guard against stale requests
+    // if role 2 reassigned the customer between request and acceptance).
+    const ctx = await loadCustomerAssignmentContext(c.env.DB, row.customer_id)
+    if (!callerHoldsAssignment(ctx, row.from_user_id, row.assignment_type)) {
+      await c.env.DB.prepare(
+        `UPDATE customer_transfer_requests SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(transferId).run()
+      return c.json({ success: false, error: 'تغيّر تعيين العميل — لم يعد الطلب صالحاً' }, 400)
+    }
+
+    if (row.assignment_type === 'employee') {
+      await c.env.DB.prepare(
+        `DELETE FROM customer_assignments WHERE customer_id = ? AND employee_id = ?`
+      ).bind(row.customer_id, row.from_user_id).run()
+      await c.env.DB.prepare(
+        `INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+         VALUES (?, ?, ?, ?)`
+      ).bind(row.customer_id, row.to_user_id, userInfo.userId, 'transfer accepted').run()
+    } else {
+      await c.env.DB.prepare(
+        `UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`
+      ).bind(row.to_user_id, row.customer_id).run()
+      // Keep financing_requests.assigned_bank_agent_id aligned — matches the
+      // sync role 2's customer edit already does. Without this, role 5 workflow
+      // access checks (which read fr.assigned_bank_agent_id directly) would
+      // leave the old agent still owning the FR.
+      await syncFinancingRequestsBankAgentForCustomer(c.env.DB, row.customer_id, row.to_user_id)
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE customer_transfer_requests SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
+    ).bind(transferId).run()
+
+    try {
+      await insertCustomerTransferNotification(c.env.DB, {
+        recipientUserId: row.from_user_id,
+        tenantId: row.tenant_id,
+        customerId: row.customer_id,
+        title: 'تم قبول طلب التمرير',
+        message: `${row.to_user_name || 'المستلم'} قبل طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`}`,
+        notifType: 'success',
+        category: 'customer_transfer_response',
+        transferRequestId: transferId,
+      })
+    } catch (notifErr) { console.error('customer_transfer_accept notification failed:', notifErr) }
+
+    return c.json({ success: true, message: 'تم قبول العميل ونقله إليك' })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }

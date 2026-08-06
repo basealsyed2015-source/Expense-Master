@@ -477,6 +477,87 @@ export async function insertTaskPassNotification(
     .run()
 }
 
+/** Customer transfer request/response — mirrors task-pass notification shape. */
+export async function insertCustomerTransferNotification(
+  db: D1Database,
+  opts: {
+    recipientUserId: number
+    tenantId: number | null
+    customerId: number | null
+    title: string
+    message: string
+    notifType: 'info' | 'warning' | 'success'
+    category: 'customer_transfer_request' | 'customer_transfer_response'
+    transferRequestId: number
+    linkUrl?: string
+  }
+): Promise<void> {
+  const {
+    recipientUserId,
+    tenantId,
+    customerId,
+    title,
+    message,
+    notifType,
+    category,
+    transferRequestId,
+  } = opts
+  const linkUrl =
+    opts.linkUrl ??
+    (category === 'customer_transfer_request'
+      ? `/admin/customers?customer_transfer=${transferRequestId}`
+      : `/admin/customers`)
+  const ts = formatWorkflowActionTimestamp(new Date())
+  const note = message.includes('وقت الإجراء') ? message : `${message}\nوقت الإجراء: ${ts.label}`
+
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE notifications ADD COLUMN tenant_id INTEGER`).run().catch(() => {})
+  await db
+    .prepare(`ALTER TABLE notifications ADD COLUMN related_transfer_request_id INTEGER`)
+    .run()
+    .catch(() => {})
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        customerId,
+        title,
+        ts.gregorianDate,
+        ts.hijriDate || null,
+        ts.time,
+        note,
+        recipientUserId,
+        tenantId,
+        'customer_transfer',
+        linkUrl
+      )
+      .run()
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (!/NOT NULL constraint failed:\s*customer_alarms\.customer_id/i.test(msg)) {
+      throw e
+    }
+    console.warn('[alarms] skipped customer_alarms insert for customer transfer (null customer_id); apply migration 0140', {
+      userId: recipientUserId,
+      tenantId,
+      transferRequestId,
+    })
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_transfer_request_id, is_read)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+    )
+    .bind(recipientUserId, tenantId, title, note, notifType, category, transferRequestId)
+    .run()
+}
+
 export async function insertWorkflowCrossPartyAlarms(
   db: D1Database,
   opts: {
