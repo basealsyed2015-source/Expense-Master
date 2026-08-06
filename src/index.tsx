@@ -3622,8 +3622,14 @@ async function syncFinancingRequestsBankAgentForCustomer(
       )
       .bind(agentId, customerId)
       .run()
-  } catch (_) {
-    /* column may not exist on very old DBs */
+  } catch (e: unknown) {
+    // Only swallow the specific legacy case: the column doesn't exist yet.
+    // Any other failure (constraint, IO) must propagate so callers can decide
+    // — e.g. customer-transfer accept fails cleanly instead of ending up
+    // half-applied (customer swapped, FR still on old agent).
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (/no such column:\s*assigned_bank_agent_id/i.test(msg)) return
+    throw e
   }
 }
 
@@ -22903,8 +22909,9 @@ app.get('/admin/customers', async (c) => {
           })();
 
           // Decorate rows where the current caller has a pending outgoing transfer.
-          (async function markPendingTransfers(){
+          async function markPendingTransfers(){
             try {
+              document.querySelectorAll('.ctx-pending-badge').forEach(function(n){ n.remove(); });
               var resp = await fetch('/api/customer-transfers/my-pending');
               var data = await resp.json();
               if (!data || !data.success) return;
@@ -22913,14 +22920,42 @@ app.get('/admin/customers', async (c) => {
                 if (!row) return;
                 var nameCell = row.querySelector('td:nth-child(3)');
                 if (!nameCell || nameCell.querySelector('.ctx-pending-badge')) return;
-                var badge = document.createElement('span');
-                badge.className = 'ctx-pending-badge inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200 mr-1';
-                badge.title = 'طلب تمرير معلّق (' + (pt.assignment_type === 'employee' ? 'موظف' : 'وكيل بنك') + ')';
-                badge.innerHTML = '<i class="fas fa-exchange-alt"></i> معلّق';
+                var badge = document.createElement('button');
+                badge.type = 'button';
+                badge.className = 'ctx-pending-badge inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800 border border-cyan-200 mr-1 hover:bg-cyan-200 cursor-pointer';
+                badge.title = 'طلب تمرير معلّق — اضغط للإلغاء';
+                badge.setAttribute('data-transfer-id', String(pt.id));
+                badge.setAttribute('data-assignment-type', pt.assignment_type);
+                badge.innerHTML = '<i class="fas fa-exchange-alt"></i> معلّق (' + (pt.assignment_type === 'employee' ? 'موظف' : 'وكيل بنك') + ')';
+                badge.addEventListener('click', function(e){
+                  e.preventDefault(); e.stopPropagation();
+                  cancelPendingTransfer(pt.id, badge);
+                });
                 nameCell.appendChild(badge);
               });
             } catch(e) {}
-          })();
+          }
+          markPendingTransfers();
+
+          async function cancelPendingTransfer(transferId, badgeEl) {
+            if (!confirm('هل تريد إلغاء طلب التمرير المعلّق؟')) return;
+            try {
+              var resp = await fetch('/api/customer-transfers/' + transferId, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'cancel' })
+              });
+              var data = await resp.json();
+              if (data && data.success) {
+                if (badgeEl && badgeEl.parentNode) badgeEl.parentNode.removeChild(badgeEl);
+                showToast('تم إلغاء طلب التمرير', 'success');
+              } else {
+                showToast((data && data.error) || 'تعذر الإلغاء', 'error');
+              }
+            } catch(e) {
+              showToast('فشل الاتصال بالخادم', 'error');
+            }
+          }
 
           async function openNotifPanel() {
             document.getElementById('notifPanel').classList.add('open');
@@ -22955,6 +22990,9 @@ app.get('/admin/customers', async (c) => {
                 const isUnread = !a.is_read;
                 const isWorkflow = a.alarm_type === 'workflow';
                 const isReminder = a.alarm_type === 'reminder';
+                const isTransfer = a.alarm_type === 'customer_transfer';
+                // Any alarm with an explicit link_url (workflow, customer_transfer) uses it directly.
+                const useLinkUrl = isWorkflow || isTransfer;
                 let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
                 if (!dateStr && a.created_at) {
                   try {
@@ -22969,27 +23007,33 @@ app.get('/admin/customers', async (c) => {
                   } catch(e) {}
                 }
                 const cid = a.customer_id;
-                const customerHref = isWorkflow ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
+                const customerHref = useLinkUrl ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
                 const borderClass = isWorkflow
                   ? (isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white')
-                  : isReminder
-                    ? (isUnread ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white')
-                    : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
+                  : isTransfer
+                    ? (isUnread ? 'border-cyan-300 bg-cyan-50' : 'border-gray-200 bg-white')
+                    : isReminder
+                      ? (isUnread ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white')
+                      : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
                 const sideBgClass = isWorkflow
                   ? (isUnread ? 'bg-blue-50/80' : 'bg-gray-50/80')
-                  : isReminder
-                    ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
-                    : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
-                const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
+                  : isTransfer
+                    ? (isUnread ? 'bg-cyan-50/80' : 'bg-gray-50/80')
+                    : isReminder
+                      ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
+                      : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
+                const dotColor = isWorkflow ? 'bg-blue-500' : isTransfer ? 'bg-cyan-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
                 const icon = isWorkflow
                   ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
-                  : isReminder
-                    ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
-                    : '';
-                const clockColor = isWorkflow ? 'text-blue-400' : isReminder ? 'text-green-400' : 'text-orange-400';
-                const nameColor = isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
-                const noteColor = isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-600';
-                const linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                  : isTransfer
+                    ? '<i class="fas fa-exchange-alt text-cyan-500 text-xs ml-1"></i>'
+                    : isReminder
+                      ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
+                      : '';
+                const clockColor = isWorkflow ? 'text-blue-400' : isTransfer ? 'text-cyan-500' : isReminder ? 'text-green-400' : 'text-orange-400';
+                const nameColor = isWorkflow ? 'text-blue-800' : isTransfer ? 'text-cyan-800' : isReminder ? 'text-green-800' : 'text-gray-800';
+                const noteColor = isWorkflow ? 'text-blue-700' : isTransfer ? 'text-cyan-700' : isReminder ? 'text-green-700' : 'text-gray-600';
+                const linkTitle = isWorkflow ? 'سير العمل' : isTransfer ? 'فتح طلب التمرير' : 'بيانات العميل';
                 return \`<div id="alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
                   <a href="\${customerHref}" title="\${linkTitle}"
                      class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-s-xl">
@@ -23403,6 +23447,19 @@ app.get('/admin/customers', async (c) => {
             el.value = current;
           }
 
+          function hydrateSalaryBankFilter() {
+            const el = document.getElementById('salaryBankFilter');
+            if (!el) return;
+            const banks = Array.isArray(TENANT_SALARY_BANKS) ? TENANT_SALARY_BANKS : [];
+            banks.forEach(function(b) {
+              const opt = document.createElement('option');
+              opt.value = String(b.id);
+              opt.textContent = b.bank_name;
+              el.appendChild(opt);
+            });
+            el.value = CUSTOMERS_FILTER_STATE.salaryBankFilter || 'all';
+          }
+
           function hydrateCustomersRoleFilters() {
             const empEl = document.getElementById('employeeFilter');
             const agentEl = document.getElementById('bankAgentFilter');
@@ -23593,18 +23650,7 @@ app.get('/admin/customers', async (c) => {
           // (filterTable navigates and was causing perpetual reloads).
           hydrateCustomersRoleFilters();
           hydrateSourceFilter();
-          (function hydrateSalaryBankFilter() {
-            const el = document.getElementById('salaryBankFilter');
-            if (!el) return;
-            const banks = Array.isArray(TENANT_SALARY_BANKS) ? TENANT_SALARY_BANKS : [];
-            banks.forEach(function(b) {
-              const opt = document.createElement('option');
-              opt.value = String(b.id);
-              opt.textContent = b.bank_name;
-              el.appendChild(opt);
-            });
-            el.value = CUSTOMERS_FILTER_STATE.salaryBankFilter || 'all';
-          })();
+          hydrateSalaryBankFilter();
           applyPresetFiltersFromUrl();
           applyCustomersPagination();
           loadCustomerRatings();
@@ -23740,10 +23786,11 @@ app.get('/admin/customers', async (c) => {
                     var note = (a.note || a.message || '').toString().replace(/[<>&]/g, function(ch){ return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[ch]; });
                     var when = a.created_at || '';
                     var isWorkflow = a.alarm_type === 'workflow';
-                    var href = isWorkflow
+                    var isTransfer = a.alarm_type === 'customer_transfer';
+                    var href = (isWorkflow || isTransfer)
                       ? (a.link_url || '#')
                       : ((a.customer_id != null && a.customer_id !== '') ? '/admin/customers/' + String(a.customer_id) : '#');
-                    var linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                    var linkTitle = isWorkflow ? 'سير العمل' : isTransfer ? 'فتح طلب التمرير' : 'بيانات العميل';
                     return '<div class="border border-red-100 bg-red-50 rounded-lg p-3" data-alarm-id="'+a.id+'">'
                       + '<div class="text-xs text-gray-500 mb-1">'+when+'</div>'
                       + '<a href="'+href+'" title="'+linkTitle+'" class="block text-sm text-gray-800 whitespace-pre-line no-underline hover:bg-red-100/60 rounded p-1 -m-1 cursor-pointer">'+note+'</a>'
@@ -24299,6 +24346,10 @@ app.get('/admin/notifications', async (c) => {
                 <i class="fas fa-share ml-2"></i>
                 طلبات التمرير
               </button>
+              <button type="button" data-notification-filter="customer_transfer_request" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
+                <i class="fas fa-exchange-alt ml-2"></i>
+                طلبات تمرير العملاء
+              </button>
             </div>
           </div>
 
@@ -24394,7 +24445,7 @@ app.get('/admin/notifications', async (c) => {
               filtered = allNotifications.filter(function (n) { return notificationIsUnread(n); });
             } else if (currentFilter === 'read') {
               filtered = allNotifications.filter(function (n) { return !notificationIsUnread(n); });
-            } else if (['request', 'status_change', 'workflow_action', 'task_pass_request'].includes(currentFilter)) {
+            } else if (['request', 'status_change', 'workflow_action', 'task_pass_request', 'customer_transfer_request'].includes(currentFilter)) {
               filtered = allNotifications.filter(n => n.category === currentFilter);
             }
 
@@ -24412,6 +24463,9 @@ app.get('/admin/notifications', async (c) => {
               const isWorkflow = notification.category === 'workflow_action';
               const isPassRequest = notification.category === 'task_pass_request';
               const isPassResponse = notification.category === 'task_pass_response';
+              const isTransferRequest = notification.category === 'customer_transfer_request';
+              const isTransferResponse = notification.category === 'customer_transfer_response';
+              const isTransfer = isTransferRequest || isTransferResponse;
 
               const typeIcons = {
                 info: 'fa-info-circle text-blue-600',
@@ -24427,19 +24481,24 @@ app.get('/admin/notifications', async (c) => {
                 general: 'fa-bell',
                 workflow_action: 'fa-route',
                 task_pass_request: 'fa-share',
-                task_pass_response: 'fa-reply'
+                task_pass_response: 'fa-reply',
+                customer_transfer_request: 'fa-exchange-alt',
+                customer_transfer_response: 'fa-reply'
               };
 
               var passTypeIcon = isPassRequest ? 'fa-share text-violet-600' : isPassResponse ? 'fa-reply text-violet-600' : null;
-              const typeIcon = passTypeIcon || typeIcons[notification.type] || typeIcons.info;
+              var transferTypeIcon = isTransferRequest ? 'fa-exchange-alt text-cyan-600' : isTransferResponse ? 'fa-reply text-cyan-600' : null;
+              const typeIcon = transferTypeIcon || passTypeIcon || typeIcons[notification.type] || typeIcons.info;
               const categoryIcon = categoryIcons[notification.category] || categoryIcons.general;
 
               var unreadCard = notificationIsUnread(notification);
-              var cardClass = (isPassRequest || isPassResponse)
-                ? (unreadCard ? 'bg-violet-50 border border-violet-200 border-r-4 border-r-violet-500' : 'bg-white border border-gray-200 opacity-85')
-                : isWorkflow
-                  ? (unreadCard ? 'notification-workflow-unread' : 'notification-workflow-read')
-                  : (unreadCard ? 'notification-unread' : 'notification-read');
+              var cardClass = isTransfer
+                ? (unreadCard ? 'bg-cyan-50 border border-cyan-200 border-r-4 border-r-cyan-500' : 'bg-white border border-gray-200 opacity-85')
+                : (isPassRequest || isPassResponse)
+                  ? (unreadCard ? 'bg-violet-50 border border-violet-200 border-r-4 border-r-violet-500' : 'bg-white border border-gray-200 opacity-85')
+                  : isWorkflow
+                    ? (unreadCard ? 'notification-workflow-unread' : 'notification-workflow-read')
+                    : (unreadCard ? 'notification-unread' : 'notification-read');
 
               var passRequestBtn = isPassRequest && notification.related_pass_request_id ? \`
                 <a href="/admin/my-tasks#passes"
@@ -24448,15 +24507,24 @@ app.get('/admin/notifications', async (c) => {
                 </a>
               \` : '';
 
+              var transferBtn = isTransfer && notification.related_transfer_request_id ? \`
+                <a href="/admin/customers?customer_transfer=\${notification.related_transfer_request_id}"
+                  class="mt-3 inline-flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition no-underline">
+                  <i class="fas fa-exchange-alt"></i> فتح طلب تمرير العميل
+                </a>
+              \` : '';
+
               var categoryLabel = notification.category === 'request' ? 'طلب جديد' :
                 notification.category === 'status_change' ? 'تحديث حالة' :
                 notification.category === 'workflow_action' ? 'سير العمل' :
                 notification.category === 'task_pass_request' ? 'طلب تمرير مهمة' :
                 notification.category === 'task_pass_response' ? 'رد على طلب التمرير' :
+                notification.category === 'customer_transfer_request' ? 'طلب تمرير عميل' :
+                notification.category === 'customer_transfer_response' ? 'رد على طلب تمرير العميل' :
                 notification.category === 'system' ? 'نظام' : 'عام';
 
-              var titleColor = (isPassRequest || isPassResponse) ? 'text-violet-900' : isWorkflow ? 'text-amber-800' : 'text-gray-800';
-              var msgColor = (isPassRequest || isPassResponse) ? 'text-violet-800' : isWorkflow ? 'text-amber-900' : 'text-gray-700';
+              var titleColor = isTransfer ? 'text-cyan-900' : (isPassRequest || isPassResponse) ? 'text-violet-900' : isWorkflow ? 'text-amber-800' : 'text-gray-800';
+              var msgColor = isTransfer ? 'text-cyan-800' : (isPassRequest || isPassResponse) ? 'text-violet-800' : isWorkflow ? 'text-amber-900' : 'text-gray-700';
 
               return \`
                 <div class="notification-card \${cardClass} rounded-lg p-4 shadow-sm">
@@ -24480,6 +24548,7 @@ app.get('/admin/notifications', async (c) => {
                       </div>
                       <p class="\${msgColor} mb-2">\${notification.message}</p>
                       \${passRequestBtn}
+                      \${transferBtn}
                       <div class="flex items-center gap-4 text-sm text-gray-600 mt-3">
                         <span>
                           <i class="fas \${categoryIcon} ml-1"></i>
@@ -24489,7 +24558,7 @@ app.get('/admin/notifications', async (c) => {
                           <i class="fas fa-clock ml-1"></i>
                           \${new Date(notification.created_at).toLocaleString('ar-SA')}
                         </span>
-                        \${notification.related_request_id && !isPassRequest && !isPassResponse ? \`
+                        \${notification.related_request_id && !isPassRequest && !isPassResponse && !isTransfer ? \`
                           <a href="/admin/requests/\${notification.related_request_id}/workflow" class="\${isWorkflow ? 'text-amber-700 hover:text-amber-900' : 'text-blue-600 hover:text-blue-800'} font-bold">
                             <i class="fas fa-external-link-alt ml-1"></i>
                             عرض سير العمل #\${notification.related_request_id}
@@ -27171,10 +27240,11 @@ app.get('/admin/requests', async (c) => {
                     var note = (a.note || a.message || '').toString().replace(/[<>&]/g, function(ch){ return ({'<':'&lt;','>':'&gt;','&':'&amp;'})[ch]; });
                     var when = a.created_at || '';
                     var isWorkflow = a.alarm_type === 'workflow';
-                    var href = isWorkflow
+                    var isTransfer = a.alarm_type === 'customer_transfer';
+                    var href = (isWorkflow || isTransfer)
                       ? (a.link_url || '#')
                       : ((a.customer_id != null && a.customer_id !== '') ? '/admin/customers/' + String(a.customer_id) : '#');
-                    var linkTitle = isWorkflow ? 'سير العمل' : 'بيانات العميل';
+                    var linkTitle = isWorkflow ? 'سير العمل' : isTransfer ? 'فتح طلب التمرير' : 'بيانات العميل';
                     return '<div class="border border-red-100 bg-red-50 rounded-lg p-3" data-alarm-id="'+a.id+'">'
                       + '<div class="text-xs text-gray-500 mb-1">'+when+'</div>'
                       + '<a href="'+href+'" title="'+linkTitle+'" class="block text-sm text-gray-800 whitespace-pre-line no-underline hover:bg-red-100/60 rounded p-1 -m-1 cursor-pointer">'+note+'</a>'
@@ -40112,28 +40182,48 @@ app.patch('/api/customer-transfers/:id', async (c) => {
       return c.json({ success: false, error: 'تغيّر تعيين العميل — لم يعد الطلب صالحاً' }, 400)
     }
 
-    if (row.assignment_type === 'employee') {
-      await c.env.DB.prepare(
-        `DELETE FROM customer_assignments WHERE customer_id = ? AND employee_id = ?`
-      ).bind(row.customer_id, row.from_user_id).run()
-      await c.env.DB.prepare(
-        `INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
-         VALUES (?, ?, ?, ?)`
-      ).bind(row.customer_id, row.to_user_id, userInfo.userId, 'transfer accepted').run()
-    } else {
-      await c.env.DB.prepare(
-        `UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`
-      ).bind(row.to_user_id, row.customer_id).run()
-      // Keep financing_requests.assigned_bank_agent_id aligned — matches the
-      // sync role 2's customer edit already does. Without this, role 5 workflow
-      // access checks (which read fr.assigned_bank_agent_id directly) would
-      // leave the old agent still owning the FR.
-      await syncFinancingRequestsBankAgentForCustomer(c.env.DB, row.customer_id, row.to_user_id)
-    }
-
-    await c.env.DB.prepare(
+    // Atomic accept: assignment mutation + status update run in a batch so a
+    // partial failure can't leave the customer swapped while the request row
+    // stays 'pending' (or vice versa).
+    const statusUpdate = c.env.DB.prepare(
       `UPDATE customer_transfer_requests SET status = 'accepted', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
-    ).bind(transferId).run()
+    ).bind(transferId)
+
+    const transferNote = `تمرير عميل #${transferId}`
+    if (row.assignment_type === 'employee') {
+      await c.env.DB.batch([
+        c.env.DB.prepare(
+          `DELETE FROM customer_assignments WHERE customer_id = ? AND employee_id = ?`
+        ).bind(row.customer_id, row.from_user_id),
+        c.env.DB.prepare(
+          `INSERT INTO customer_assignments (customer_id, employee_id, assigned_by, notes)
+           VALUES (?, ?, ?, ?)`
+        ).bind(row.customer_id, row.to_user_id, userInfo.userId, transferNote),
+        statusUpdate,
+      ])
+      // Mirror role 2's reassignment path — record the handoff in the history
+      // table so audit views show transfer accepts alongside admin reassignments.
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO assignment_history (customer_id, old_employee_id, new_employee_id, changed_by, notes)
+           VALUES (?, ?, ?, ?, ?)`
+        ).bind(row.customer_id, row.from_user_id, row.to_user_id, userInfo.userId, transferNote).run()
+      } catch (_) { /* legacy DBs without assignment_history */ }
+    } else {
+      // Bank-agent accept must sync financing_requests.assigned_bank_agent_id
+      // in the same batch — role 5 workflow access reads it directly and would
+      // otherwise leave the old agent still owning the FR. If the FR-column
+      // update fails, the whole accept rolls back (see 1.4 in the plan).
+      await c.env.DB.batch([
+        c.env.DB.prepare(
+          `UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`
+        ).bind(row.to_user_id, row.customer_id),
+        c.env.DB.prepare(
+          `UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE customer_id = ?`
+        ).bind(row.to_user_id, row.customer_id),
+        statusUpdate,
+      ])
+    }
 
     try {
       await insertCustomerTransferNotification(c.env.DB, {

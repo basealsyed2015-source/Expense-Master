@@ -3,7 +3,7 @@ import {
   explainContractCreateDenial,
   resolveWorkflowNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
-} from './notification-access'
+} from './notification-access.ts'
 
 type UserInfo = {
   userId: number | null
@@ -33,6 +33,22 @@ async function resolveContractAdminUserIds(
   return (rows.results || [])
     .map((r) => Number(r.id))
     .filter((id) => id !== excludeUserId)
+}
+
+// Role 4/6 employee scope on contracts follows the *current* customer_assignments
+// row, not contracts.created_by. A transferred customer takes its contracts with
+// it — the old employee loses access when they lose the assignment.
+async function role46EmployeeHoldsContractCustomer(
+  db: D1Database,
+  contractCustomerId: number | null | undefined,
+  userId: number | null,
+): Promise<boolean> {
+  if (!contractCustomerId || !userId) return false
+  const row = await db
+    .prepare(`SELECT 1 FROM customer_assignments WHERE customer_id = ? AND employee_id = ? LIMIT 1`)
+    .bind(contractCustomerId, userId)
+    .first()
+  return !!row
 }
 
 async function resolveActorName(db: D1Database, userId: number | null): Promise<string> {
@@ -403,7 +419,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     let rowScopeSql = ''
     let rowScopeBinds: (number | string)[] = []
     if (table === 'contracts' && info.roleId === 4 && info.userId) {
-      rowScopeSql = ' AND contracts.created_by = ? '
+      // Employee scope = current customer_assignments (not created_by). Transfer
+      // hands the contract to the new assignee; the old employee loses access.
+      rowScopeSql =
+        ' AND contracts.customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?) '
       rowScopeBinds = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
       // Include contracts this bank agent created (e.g. customer_id null) plus FR-assigned customers
@@ -411,9 +430,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         ' AND (contracts.created_by = ? OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBinds = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
-      // Role 6: contracts they created (employee column) OR customer assigned as bank agent
+      // Role 6: employee path via current customer_assignments, OR bank-agent path via FR.
       rowScopeSql =
-        ' AND (contracts.created_by = ? OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+        ' AND (contracts.customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?)' +
+        ' OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBinds = [info.userId, info.userId, info.tenantId]
     }
     // List cards never need full template HTML bodies (can be hundreds of KB each).
@@ -483,13 +503,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     let rowScopeSqlId = ''
     let rowScopeBindsId: (number | string)[] = []
     if (table === 'contracts' && info.roleId === 4 && info.userId) {
-      rowScopeSqlId = ' AND created_by = ? '
+      rowScopeSqlId = ' AND customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?) '
       rowScopeBindsId = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
       rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
-      rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeSqlId =
+        ' AND (customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?)' +
+        ' OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     }
     const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSqlId}`)
@@ -897,13 +919,19 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       tenant_id: number
       created_by?: number | null
       status?: string | null
+      customer_id?: number | null
     }>()
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6) && existing.created_by !== info.userId) {
-      // Role 6 may still approve via bank-agent path without being the creator — allow that below
-      if (info.roleId === 4) return c.json({ error: 'Forbidden' }, 403)
+    // Role 4 employee access = currently assigned to the contract's customer.
+    // Role 6 employee path uses the same rule; the bank-agent path is validated
+    // downstream in the approval logic, so we let role 6 through here.
+    const isRole46EmployeeAssignedContract = (info.roleId === 4 || info.roleId === 6)
+      ? await role46EmployeeHoldsContractCustomer(c.env.DB, existing.customer_id, info.userId)
+      : false
+    if (table === 'contracts' && info.roleId === 4 && !isRole46EmployeeAssignedContract) {
+      return c.json({ error: 'Forbidden' }, 403)
     }
 
     if (table === 'contract_templates') {
@@ -1004,8 +1032,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         if (!logoNorm.ok) return logoNorm.response
         body.party_one_logo = logoNorm.value
       }
-      // Creators (role 4/6) save form fields via PUT; do not treat workflow status dropdown drift as approval actions.
-      if ((info.roleId === 4 || info.roleId === 6) && existing.created_by === info.userId && body.status !== undefined) {
+      // Assigned employees (role 4/6) save form fields via PUT; do not treat workflow status dropdown drift as approval actions.
+      if ((info.roleId === 4 || info.roleId === 6) && isRole46EmployeeAssignedContract && body.status !== undefined) {
         const requestedStatus = String(body.status ?? '')
         const currentStatus = String(existing.status ?? '')
         const isArchiveRequest = requestedStatus === 'مؤرشف' && body.is_archived
@@ -1024,9 +1052,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         if (info.roleId === 4) {
           if (!isArchiveRequest) return c.json({ error: 'Forbidden' }, 403)
         } else if (info.roleId === 6) {
-          const isCreator = existing.created_by === info.userId
-          if (isArchiveRequest && isCreator) {
-            // Role 6 creator can archive their own contract — fall through to field update
+          if (isArchiveRequest && isRole46EmployeeAssignedContract) {
+            // Role 6 assigned employee can archive the contract — fall through to field update
           } else if (currentStatus === STATUS_AWAITING_BANK_AGENT_APPROVAL && requestedStatus === STATUS_AWAITING_ADMIN_APPROVAL) {
             // Role 6 as bank agent must be assigned as bank agent on the financing request —
             // same verification as role 5 (inlined here because the else-if chain won't reach the role 5 block)
@@ -1438,13 +1465,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     const existing = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ?`).bind(id).first<{
       tenant_id: number
       created_by?: number | null
+      customer_id?: number | null
     }>()
     if (!existing) return c.json({ error: 'Not found' }, 404)
     if (info.tenantId && existing.tenant_id !== info.tenantId) return c.json({ error: 'Forbidden' }, 403)
     if (!info.tenantId && !isSuperAdmin(info)) return c.json({ error: 'Forbidden' }, 403)
     if (table === 'contract_templates' && (info.roleId === 4 || info.roleId === 5 || info.roleId === 6)) return c.json({ error: 'Forbidden' }, 403)
-    if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6) && existing.created_by !== info.userId) {
-      return c.json({ error: 'Forbidden' }, 403)
+    if (table === 'contracts' && (info.roleId === 4 || info.roleId === 6)) {
+      const canDelete = await role46EmployeeHoldsContractCustomer(c.env.DB, existing.customer_id, info.userId)
+      if (!canDelete) return c.json({ error: 'Forbidden' }, 403)
     }
     await c.env.DB.prepare(`DELETE FROM ${table} WHERE id = ?`).bind(id).run()
     return new Response(null, { status: 204 })
