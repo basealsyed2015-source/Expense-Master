@@ -6746,8 +6746,8 @@ var Ja=(e,t,a)=>(n,r)=>{let s=-1;return o(0);async function o(i){if(i<=s)throw n
                     const filterDateFrom = document.getElementById('filterDateFrom')?.value;
                     const filterDateTo = document.getElementById('filterDateTo')?.value;
                     const searchQueryRaw = (document.getElementById('searchCustomers')?.value || '').trim().toLowerCase();
-                    const searchQueryDigits = searchQueryRaw.replace(/[s-().+]/g, '');
-                    const searchQuery = (/^d+$/.test(searchQueryDigits) && searchQueryDigits.startsWith('0'))
+                    const searchQueryDigits = searchQueryRaw.replace(/[\\s\\-().+]/g, '');
+                    const searchQuery = (/^\\d+$/.test(searchQueryDigits) && searchQueryDigits.startsWith('0'))
                         ? (searchQueryDigits.replace(/^0+/, '') || searchQueryRaw)
                         : searchQueryRaw;
                     const filterCustomerEmployee = document.getElementById('filterCustomerEmployee')?.value || '';
