@@ -8835,10 +8835,10 @@ app.get('/api/dashboard-search', async (c) => {
     // Role 2 (company admin) can access both; we keep them on /admin/follow-ups since that's
     // the marketing module they normally work in.
     const usesMarketingModule = (roleNorm === 1 || roleNorm === 2 || roleNorm === 3)
-    // Deep-link by phone so the destination page can prefill its search filter.
-    // (Task id alone is not enough — follow-ups / my-tasks lists are phone/name searchable.)
+    // Deep-link by local phone (5XXXXXXXX) — storage is 966…, but destination pages
+    // display/search as 05… / 5…, so a raw 966 q would never match the client filter.
     function taskHrefFor(state: 'archived' | 'no_response' | 'active', phone: string | null | undefined): string {
-      const phoneQ = String(phone || '').trim()
+      const phoneQ = customerPhoneInputValue(phone)
       const qs = phoneQ ? `q=${encodeURIComponent(phoneQ)}` : ''
       const withQs = (base: string) => (qs ? `${base}${base.includes('?') ? '&' : '?'}${qs}` : base)
       if (usesMarketingModule) {
@@ -42406,10 +42406,24 @@ app.get('/admin/my-tasks', async (c) => {
             renderTasks(allTasks);
             return;
           }
+          function localPhoneDigits(raw) {
+            var d = String(raw || '').replace(/[^\\d]/g, '');
+            if (!d) return '';
+            if (d.indexOf('00966') === 0) d = d.slice(5);
+            else if (d.indexOf('966') === 0) d = d.slice(3);
+            else if (d.charAt(0) === '0') d = d.replace(/^0+/, '');
+            return d;
+          }
+          var qDigits = localPhoneDigits(q);
           var filtered = allTasks.filter(function(t) {
-            return (String(t.task_title || '').toLowerCase().includes(q)) ||
-                   (String(t.customer_name || '').toLowerCase().includes(q)) ||
-                   (String(t.customer_phone || '').toLowerCase().includes(q));
+            if (String(t.task_title || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_name || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_phone || '').toLowerCase().includes(q)) return true;
+            if (qDigits.length >= 4) {
+              var pDigits = localPhoneDigits(t.customer_phone);
+              if (pDigits && (pDigits.includes(qDigits) || qDigits.includes(pDigits))) return true;
+            }
+            return false;
           });
           renderTasks(filtered);
         }
@@ -42791,10 +42805,24 @@ app.get('/admin/my-no-response-tasks', async (c) => {
         function applySearch() {
           var q = (document.getElementById('nrSearchInput').value || '').trim().toLowerCase();
           if (!q) { renderCards(allNrTasks); return; }
+          function localPhoneDigits(raw) {
+            var d = String(raw || '').replace(/[^\\d]/g, '');
+            if (!d) return '';
+            if (d.indexOf('00966') === 0) d = d.slice(5);
+            else if (d.indexOf('966') === 0) d = d.slice(3);
+            else if (d.charAt(0) === '0') d = d.replace(/^0+/, '');
+            return d;
+          }
+          var qDigits = localPhoneDigits(q);
           var filtered = allNrTasks.filter(function(t) {
-            return (String(t.task_title || '').toLowerCase().includes(q)) ||
-                   (String(t.customer_name || '').toLowerCase().includes(q)) ||
-                   (String(t.customer_phone || '').toLowerCase().includes(q));
+            if (String(t.task_title || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_name || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_phone || '').toLowerCase().includes(q)) return true;
+            if (qDigits.length >= 4) {
+              var pDigits = localPhoneDigits(t.customer_phone);
+              if (pDigits && (pDigits.includes(qDigits) || qDigits.includes(pDigits))) return true;
+            }
+            return false;
           });
           renderCards(filtered);
         }
@@ -43037,13 +43065,25 @@ app.get('/admin/my-archived-tasks', async (c) => {
         function applySearch() {
           var q = (document.getElementById('archivedSearchInput').value || '').trim().toLowerCase();
           if (!q) { renderCards(allArchivedTasks); return; }
+          function localPhoneDigits(raw) {
+            var d = String(raw || '').replace(/[^\\d]/g, '');
+            if (!d) return '';
+            if (d.indexOf('00966') === 0) d = d.slice(5);
+            else if (d.indexOf('966') === 0) d = d.slice(3);
+            else if (d.charAt(0) === '0') d = d.replace(/^0+/, '');
+            return d;
+          }
+          var qDigits = localPhoneDigits(q);
           renderCards(allArchivedTasks.filter(function (t) {
-            return (
-              String(t.task_title || '').toLowerCase().includes(q) ||
-              String(t.customer_name || '').toLowerCase().includes(q) ||
-              String(t.customer_phone || '').toLowerCase().includes(q) ||
-              (IS_ADMIN_VIEW && String(t.assigned_user_name || '').toLowerCase().includes(q))
-            );
+            if (String(t.task_title || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_name || '').toLowerCase().includes(q)) return true;
+            if (String(t.customer_phone || '').toLowerCase().includes(q)) return true;
+            if (IS_ADMIN_VIEW && String(t.assigned_user_name || '').toLowerCase().includes(q)) return true;
+            if (qDigits.length >= 4) {
+              var pDigits = localPhoneDigits(t.customer_phone);
+              if (pDigits && (pDigits.includes(qDigits) || qDigits.includes(pDigits))) return true;
+            }
+            return false;
           }));
         }
 
@@ -47940,13 +47980,24 @@ app.get('/admin/follow-ups', async (c) => {
 
         function applyFollowupClientFilters() {
           const searchVal = ((document.getElementById('followupSearchInput') || {}).value || '').trim().toLowerCase();
-          const searchDigits = searchVal.replace(/[^\\d]/g, '');
           const empVal = ((document.getElementById('followupEmployeeFilter') || {}).value || 'all');
+
+          // Local Saudi mobile core (strip 966 / leading 0) so 9665…, 05…, and 5… all match.
+          function localPhoneDigits(raw) {
+            let d = String(raw || '').replace(/[^\\d]/g, '');
+            if (!d) return '';
+            if (d.startsWith('00966')) d = d.slice(5);
+            else if (d.startsWith('966')) d = d.slice(3);
+            else if (d.startsWith('0')) d = d.replace(/^0+/, '');
+            return d;
+          }
 
           function matchesSearch(name, phone, source) {
             if (!searchVal) return true;
             if (name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal)) return true;
-            if (searchDigits.length >= 4 && phone.replace(/[^\\d]/g, '').includes(searchDigits)) return true;
+            const qDigits = localPhoneDigits(searchVal);
+            const pDigits = localPhoneDigits(phone);
+            if (qDigits.length >= 4 && pDigits && (pDigits.includes(qDigits) || qDigits.includes(pDigits))) return true;
             return false;
           }
 
