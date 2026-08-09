@@ -190,6 +190,21 @@ export const reportsPage = `<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- Staff Active Time (company admin only) -->
+            <div id="staffActiveTimeReportCard" class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
+                <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white p-6">
+                    <i class="fas fa-stopwatch text-3xl mb-2"></i>
+                    <h3 class="text-xl font-bold">وقت النشاط للموظفين</h3>
+                    <p class="text-sm text-indigo-100 mt-2">مجموع وقت التفاعل مع المنظومة لموظفي الشركة</p>
+                </div>
+                <div class="p-6">
+                    <a href="/admin/reports/staff-active-time" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg font-bold transition-all block text-center">
+                        <i class="fas fa-file-alt ml-2"></i>
+                        عرض التقرير
+                    </a>
+                </div>
+            </div>
+
             <!-- HR Report -->
             <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all transform hover:scale-105">
                 <div class="bg-gradient-to-r from-green-500 to-green-600 text-white p-6">
@@ -302,6 +317,10 @@ export const reportsPage = `<!DOCTYPE html>
             return r === 1 || r === 2 || r === 3;
         }
 
+        function canAccessStaffActiveTimeReport(roleId) {
+            return normalizeReportRoleId(roleId) === 2;
+        }
+
         // Apply report permissions based on role
         function applyReportPermissions() {
             const roleId = userData.role_id != null ? Number(userData.role_id) : null;
@@ -317,6 +336,10 @@ export const reportsPage = `<!DOCTYPE html>
             const followupCard = document.getElementById('requestsFollowupReport');
             if (followupCard && !canAccessRequestsFollowup(roleId)) {
                 followupCard.style.display = 'none';
+            }
+            const staffActiveCard = document.getElementById('staffActiveTimeReportCard');
+            if (staffActiveCard && !canAccessStaffActiveTimeReport(roleId)) {
+                staffActiveCard.style.display = 'none';
             }
         }
 

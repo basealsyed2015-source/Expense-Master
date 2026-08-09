@@ -52,6 +52,11 @@ function seed(): Database.Database {
       changed_by INTEGER,
       notes TEXT
     );
+    CREATE TABLE financing_requests (
+      id INTEGER PRIMARY KEY,
+      customer_id INTEGER,
+      assigned_bank_agent_id INTEGER
+    );
     CREATE TABLE tenant_customer_auto_assign_state (
       tenant_id INTEGER PRIMARY KEY,
       last_auto_assigned_user_id INTEGER,
@@ -262,6 +267,21 @@ describe('distributeCustomersToBankAgents', () => {
 
     await distributeCustomersToBankAgents(createSqliteD1(db), TENANT, [101])
     assert.equal(getBankAgent(db, 101), 21)
+  })
+
+  it('syncs financing_requests.assigned_bank_agent_id when customer has FRs', async () => {
+    const db = seed()
+    addUser(db, 20, 5)
+    addCustomer(db, 101)
+    // Pre-existing FR pointing at a stale agent
+    db.prepare('INSERT INTO financing_requests (id, customer_id, assigned_bank_agent_id) VALUES (?, ?, ?)').run(500, 101, 99)
+    db.prepare('INSERT INTO financing_requests (id, customer_id, assigned_bank_agent_id) VALUES (?, ?, ?)').run(501, 101, 99)
+
+    await distributeCustomersToBankAgents(createSqliteD1(db), TENANT, [101])
+
+    assert.equal(getBankAgent(db, 101), 20)
+    const frRows = db.prepare('SELECT id, assigned_bank_agent_id FROM financing_requests WHERE customer_id = ? ORDER BY id').all(101) as { id: number; assigned_bank_agent_id: number }[]
+    assert.deepEqual(frRows.map((r) => r.assigned_bank_agent_id), [20, 20], 'all FRs for the customer synced to new agent')
   })
 
   it('returns 0 and assigns nothing when no agents available', async () => {

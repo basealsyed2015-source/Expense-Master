@@ -147,6 +147,7 @@ export const usersManagementPage = () => `
                 <th class="px-6 py-4 text-right">#</th>
                 <th class="px-6 py-4 text-right">الاسم الكامل</th>
                 <th class="px-6 py-4 text-right">البريد الإلكتروني</th>
+                <th class="px-6 py-4 text-right">البريد الثانوي</th>
                 <th class="px-6 py-4 text-right">رقم الجوال</th>
                 <th class="px-6 py-4 text-right">الدور</th>
                 <th class="px-6 py-4 text-right">الحالة</th>
@@ -156,7 +157,7 @@ export const usersManagementPage = () => `
             </thead>
             <tbody id="usersTableBody">
               <tr>
-                <td colspan="8" class="text-center py-12">
+                <td colspan="9" class="text-center py-12">
                   <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
                   <p class="text-gray-600 font-bold">جاري تحميل المستخدمين...</p>
                 </td>
@@ -265,6 +266,11 @@ export const usersManagementPage = () => `
             <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
             <input type="email" name="email" id="editUserEmail" required
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني الثانوي</label>
+            <input type="email" id="editUserSecondaryEmail" readonly
+                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-600 cursor-not-allowed">
           </div>
         </div>
         
@@ -415,7 +421,7 @@ export const usersManagementPage = () => `
       if (users.length === 0) {
         tbody.innerHTML = \`
           <tr>
-            <td colspan="8" class="text-center py-12">
+            <td colspan="9" class="text-center py-12">
               <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
               <p class="text-gray-600 font-bold">لا توجد مستخدمين</p>
             </td>
@@ -446,6 +452,7 @@ export const usersManagementPage = () => `
               </div>
             </td>
             <td class="px-6 py-4 text-gray-600">\${user.email}</td>
+            <td class="px-6 py-4 text-gray-600">\${user.secondary_email || '-'}</td>
             <td class="px-6 py-4 text-gray-600 font-english">\${user.phone || '-'}</td>
             <td class="px-6 py-4">
               <span class="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-bold">
@@ -592,6 +599,7 @@ export const usersManagementPage = () => `
       document.getElementById('editUserId').value = user.id;
       document.getElementById('editUserName').value = user.full_name;
       document.getElementById('editUserEmail').value = user.email;
+      document.getElementById('editUserSecondaryEmail').value = user.secondary_email || '';
       document.getElementById('editUserPhone').value = user.phone || '';
       document.getElementById('editUserRole').value = user.role_id || '';
       document.getElementById('editUserStatus').value = user.is_active ? '1' : '0';

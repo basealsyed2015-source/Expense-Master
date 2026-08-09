@@ -75,7 +75,8 @@
       "Bash(wrangler versions *)",
       "Bash(cat wrangler.toml)",
       "Bash(cat wrangler.json)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(npx --yes tsc --noEmit --allowJs false --skipLibCheck --target ES2022 --module ESNext --moduleResolution bundler --jsx react-jsx --allowImportingTsExtensions src/index.tsx)"
     ]
   }
 }

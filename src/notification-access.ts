@@ -357,11 +357,15 @@ export function formatWorkflowActionTimestamp(when: Date = new Date()): {
   time: string
   label: string
 } {
+  // Workers run in UTC by default. Notifications are shown to Saudi users, so
+  // always format the stored display timestamp in Riyadh time (UTC+3).
+  const timeZone = 'Asia/Riyadh'
   const gregorianDate = when.toLocaleDateString('ar-SA', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     calendar: 'gregory',
+    timeZone,
   })
   let hijriDate = ''
   try {
@@ -369,6 +373,7 @@ export function formatWorkflowActionTimestamp(when: Date = new Date()): {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+      timeZone,
     })
   } catch {
     hijriDate = ''
@@ -377,6 +382,7 @@ export function formatWorkflowActionTimestamp(when: Date = new Date()): {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
+    timeZone,
   })
   const label = hijriDate ? `${gregorianDate} — ${time} (${hijriDate} هـ)` : `${gregorianDate} — ${time}`
   return { gregorianDate, hijriDate, time, label }
@@ -477,6 +483,73 @@ export async function insertTaskPassNotification(
     .run()
 }
 
+/** Auto-transfer after 48 h on no-response tab — notifies both previous and new assignee. */
+export async function insertFollowupNoResponseTransferNotification(
+  db: D1Database,
+  opts: {
+    recipientUserId: number
+    tenantId: number | null
+    title: string
+    message: string
+    notifType: 'info' | 'warning' | 'success'
+    category: 'followup_no_response_transfer_out' | 'followup_no_response_transfer_in'
+    taskId: number
+    linkUrl?: string
+  }
+): Promise<void> {
+  const { recipientUserId, tenantId, title, message, notifType, category, taskId } = opts
+  const linkUrl = opts.linkUrl ?? '/admin/my-no-response-tasks'
+  const ts = formatWorkflowActionTimestamp(new Date())
+  const note = message.includes('وقت الإجراء') ? message : `${message}\nوقت الإجراء: ${ts.label}`
+
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE notifications ADD COLUMN tenant_id INTEGER`).run().catch(() => {})
+  await db
+    .prepare(`ALTER TABLE notifications ADD COLUMN related_followup_task_id INTEGER`)
+    .run()
+    .catch(() => {})
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        null,
+        title,
+        ts.gregorianDate,
+        ts.hijriDate || null,
+        ts.time,
+        note,
+        recipientUserId,
+        tenantId,
+        'task_pass',
+        linkUrl
+      )
+      .run()
+  } catch (e: unknown) {
+    const msg = String((e as { message?: string })?.message || e || '')
+    if (!/NOT NULL constraint failed:\s*customer_alarms\.customer_id/i.test(msg)) {
+      throw e
+    }
+    console.warn('[alarms] skipped customer_alarms insert for no-response transfer (null customer_id); apply migration 0140', {
+      userId: recipientUserId,
+      tenantId,
+      taskId,
+    })
+  }
+
+  await db
+    .prepare(
+      `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, related_followup_task_id, is_read)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+    )
+    .bind(recipientUserId, tenantId, title, note, notifType, category, taskId)
+    .run()
+}
+
 /** Customer transfer request/response — mirrors task-pass notification shape. */
 export async function insertCustomerTransferNotification(
   db: D1Database,
@@ -506,7 +579,7 @@ export async function insertCustomerTransferNotification(
     opts.linkUrl ??
     (category === 'customer_transfer_request'
       ? `/admin/customers?customer_transfer=${transferRequestId}`
-      : `/admin/customers`)
+      : `/admin/customers?requestsFilter=all`)
   const ts = formatWorkflowActionTimestamp(new Date())
   const note = message.includes('وقت الإجراء') ? message : `${message}\nوقت الإجراء: ${ts.label}`
 

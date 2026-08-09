@@ -222,6 +222,7 @@ ${REPORT_FLATPICKR_HEAD}
         }
 
         window.addEventListener('load', () => {
+            refreshReportFilterYearLabels();
             const d = getPeriodDates('year');
             _startDate = d.s; _endDate = d.e;
             setBadge(d.label, d.range);

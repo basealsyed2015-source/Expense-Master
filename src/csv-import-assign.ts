@@ -4,6 +4,8 @@
  * the full Hono application bundle.
  */
 
+import { assignBankAgentToCustomer } from './bank-agent-assignment.ts'
+
 /**
  * Insert or replace a customer assignment row. Mirrors the inline logic in
  * assignNewCustomerToEmployee from index.tsx (duplicated here to avoid
@@ -167,9 +169,7 @@ export async function distributeCustomersToBankAgents(
   for (let i = 0; i < customerIds.length; i++) {
     const agentId = agents[i % agents.length]
     try {
-      await db.prepare(
-        `UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`
-      ).bind(agentId, customerIds[i]).run()
+      await assignBankAgentToCustomer(db, customerIds[i], agentId)
       assigned++
     } catch { /* best-effort */ }
   }

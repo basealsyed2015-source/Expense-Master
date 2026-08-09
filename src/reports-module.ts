@@ -28,7 +28,8 @@ export function reportPdfButtonHtml(btnClass = 'bg-red-600 hover:bg-red-700 text
   </button>`
 }
 
-function buildFilterBar(hex: string, year: number): string {
+function buildFilterBar(hex: string, year: number, selectedPeriod: string = 'year'): string {
+  const sel = (value: string) => (selectedPeriod === value ? ' selected' : '')
   return `
   <!-- RTL + flatpickr overrides -->
   <style>
@@ -76,14 +77,14 @@ function buildFilterBar(hex: string, year: number): string {
             style="padding-right:2rem;border-color:#e2e8f0;min-width:210px;appearance:none;-webkit-appearance:none"
             class="pl-4 py-2.5 border-2 rounded-lg text-gray-800 font-semibold bg-white cursor-pointer
                    focus:outline-none transition-colors hover:border-gray-400 text-sm">
-            <option value="year">السنة الحالية ${year}</option>
-            <option value="month">الشهر الحالي</option>
-            <option value="week">الأسبوع الحالي</option>
-            <option value="q1">الربع الأول ${year} · يناير – مارس</option>
-            <option value="q2">الربع الثاني ${year} · أبريل – يونيو</option>
-            <option value="q3">الربع الثالث ${year} · يوليو – سبتمبر</option>
-            <option value="q4">الربع الرابع ${year} · أكتوبر – ديسمبر</option>
-            <option value="custom">تاريخ مخصص…</option>
+            <option value="year"${sel('year')}>السنة الحالية ${year}</option>
+            <option value="month"${sel('month')}>الشهر الحالي</option>
+            <option value="week"${sel('week')}>الأسبوع الحالي</option>
+            <option value="q1"${sel('q1')}>الربع الأول ${year} · يناير – مارس</option>
+            <option value="q2"${sel('q2')}>الربع الثاني ${year} · أبريل – يونيو</option>
+            <option value="q3"${sel('q3')}>الربع الثالث ${year} · يوليو – سبتمبر</option>
+            <option value="q4"${sel('q4')}>الربع الرابع ${year} · أكتوبر – ديسمبر</option>
+            <option value="custom"${sel('custom')}>تاريخ مخصص…</option>
           </select>
         </div>
 
@@ -278,7 +279,26 @@ const DATE_FILTER_SCRIPT = `
     a.download = filename; a.click();
   }
 
+  function refreshReportFilterYearLabels() {
+    var y = new Date().getFullYear();
+    if (!Number.isFinite(y) || y < 2000) return;
+    var sel = document.getElementById('periodSelect');
+    if (!sel) return;
+    var labels = {
+      year: 'السنة الحالية ' + y,
+      q1: 'الربع الأول ' + y + ' · يناير – مارس',
+      q2: 'الربع الثاني ' + y + ' · أبريل – يونيو',
+      q3: 'الربع الثالث ' + y + ' · يوليو – سبتمبر',
+      q4: 'الربع الرابع ' + y + ' · أكتوبر – ديسمبر'
+    };
+    for (var i = 0; i < sel.options.length; i++) {
+      var opt = sel.options[i];
+      if (labels[opt.value]) opt.textContent = labels[opt.value];
+    }
+  }
+
   window.addEventListener('load', () => {
+    refreshReportFilterYearLabels();
     const y = new Date().getFullYear();
     const d = getPeriodDates('year');
     _startDate = d.s; _endDate = d.e;
@@ -900,8 +920,8 @@ export const REPORT_FLATPICKR_HEAD = `  <link rel="stylesheet" href="${FLATPICKR
   <script src="${FLATPICKR_JS}"></script>
   <script src="${FLATPICKR_AR}"></script>`
 
-export function reportFilterBarHtml(hex: string): string {
-  return buildFilterBar(hex, new Date().getFullYear())
+export function reportFilterBarHtml(hex: string, selectedPeriod: string = 'year'): string {
+  return buildFilterBar(hex, new Date().getFullYear(), selectedPeriod)
 }
 
 /** Date filter for /admin/link-stats — same flatpickr UX as reports, uses from/to query params. */
@@ -1167,4 +1187,22 @@ export const REPORT_FILTER_BASE_JS = `
 
   function n(v) { return (v == null ? 0 : Number(v)).toLocaleString('ar-SA'); }
   function money(v) { return n(v) + ' ريال'; }
+
+  function refreshReportFilterYearLabels() {
+    var y = new Date().getFullYear();
+    if (!Number.isFinite(y) || y < 2000) return;
+    var sel = document.getElementById('periodSelect');
+    if (!sel) return;
+    var labels = {
+      year: 'السنة الحالية ' + y,
+      q1: 'الربع الأول ' + y + ' · يناير – مارس',
+      q2: 'الربع الثاني ' + y + ' · أبريل – يونيو',
+      q3: 'الربع الثالث ' + y + ' · يوليو – سبتمبر',
+      q4: 'الربع الرابع ' + y + ' · أكتوبر – ديسمبر'
+    };
+    for (var i = 0; i < sel.options.length; i++) {
+      var opt = sel.options[i];
+      if (labels[opt.value]) opt.textContent = labels[opt.value];
+    }
+  }
 `

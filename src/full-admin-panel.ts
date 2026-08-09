@@ -277,9 +277,78 @@ export const fullAdminPanel = `<!DOCTYPE html>
     <!-- Main Content بدون Sidebar -->
     <div class="min-h-screen bg-gray-50">
         <div class="w-full px-6 py-6 2xl:px-10">
-            
+
+            <!-- Global search bar: searches customers + follow-up tasks (all statuses, tenant-scoped) -->
+            <div class="bg-white rounded-xl shadow-lg p-4 mb-6" id="panelGlobalSearchBar">
+                <form id="panelGlobalSearchForm" class="flex flex-col md:flex-row gap-3 items-stretch md:items-center" autocomplete="off">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                        <input
+                            type="search"
+                            id="panelGlobalSearchInput"
+                            name="q"
+                            inputmode="search"
+                            enterkeyhint="search"
+                            placeholder="ابحث عن عميل أو إعلان (الاسم، الهاتف، البريد، الرقم الوطني...)"
+                            class="w-full pr-12 pl-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                        <button
+                            type="button"
+                            id="panelGlobalSearchClear"
+                            class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 hidden"
+                            title="مسح البحث"
+                            aria-label="مسح البحث"
+                        ><i class="fas fa-times-circle"></i></button>
+                    </div>
+                    <button
+                        type="submit"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                        <i class="fas fa-search"></i>
+                        <span>بحث</span>
+                    </button>
+                </form>
+                <p class="text-xs text-gray-500 mt-2">
+                    <i class="fas fa-info-circle ml-1"></i>
+                    يشمل البحث جميع الحالات (نشط، مؤرشف، مكتمل) للعملاء والإعلانات. اضغط Enter أو زر البحث.
+                </p>
+            </div>
+
+            <!-- Search results container: replaces the default panel content while a search is active -->
+            <div id="panelSearchResults" class="hidden">
+                <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-search text-blue-600 ml-3"></i>
+                            <span>نتائج البحث</span>
+                            <span id="panelSearchResultsMeta" class="text-sm font-normal text-gray-500 mr-3"></span>
+                        </h2>
+                        <button
+                            type="button"
+                            id="panelSearchExit"
+                            class="inline-flex items-center gap-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors self-start sm:self-auto"
+                        >
+                            <i class="fas fa-arrow-right"></i>
+                            <span>العودة للوحة</span>
+                        </button>
+                    </div>
+                    <div id="panelSearchResultsList" class="divide-y divide-gray-100"></div>
+                    <div id="panelSearchPagination" class="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 hidden">
+                        <button type="button" id="panelSearchPrev" class="inline-flex items-center gap-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fas fa-chevron-right"></i>
+                            <span>السابق</span>
+                        </button>
+                        <span id="panelSearchPageInfo" class="text-sm text-gray-600"></span>
+                        <button type="button" id="panelSearchNext" class="inline-flex items-center gap-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span>التالي</span>
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- لوحة الوصول السريع -->
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8" id="quickAccessPanel" data-panel-default="1">
                 <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
                     <i class="fas fa-th-large text-blue-600 ml-3"></i>
                     لوحة الوصول السريع
@@ -312,6 +381,11 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     <a href="/admin/my-archived-tasks" class="quick-access-btn bg-gradient-to-br from-amber-600 to-orange-700 hover:from-amber-700 hover:to-orange-800 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
                         <i class="fas fa-archive text-3xl mb-2"></i>
                         <div class="text-sm font-bold">ارشيف الإعلانات</div>
+                    </a>
+
+                    <a href="/admin/my-no-response-tasks" class="quick-access-btn bg-gradient-to-br from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
+                        <i class="fas fa-phone-slash text-3xl mb-2"></i>
+                        <div class="text-sm font-bold">لا يرد</div>
                     </a>
 
                     <!-- زر التقارير -->
@@ -424,7 +498,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 </div>
             </div>
             <!-- Dashboard Section -->
-            <div id="dashboard-section" class="content-section active">
+            <div id="dashboard-section" class="content-section active" data-panel-default="1">
                 <div id="dashboardCustomerSummarySection">
                 <h1 class="text-3xl font-bold mb-6 text-gray-800">
                     <i class="fas fa-tachometer-alt text-blue-600 ml-2"></i>
@@ -1133,6 +1207,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">م</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الاسم</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">البريد الإلكتروني</th>
+                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">البريد الثانوي</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">اسم المستخدم</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الدور</th>
                                     <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">الصلاحيات</th>
@@ -1142,7 +1217,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             </thead>
                             <tbody id="usersTable">
                                 <tr>
-                                    <td colspan="7" class="text-center py-8">
+                                    <td colspan="9" class="text-center py-8">
                                         <i class="fas fa-spinner fa-spin text-3xl text-gray-400"></i>
                                     </td>
                                 </tr>
@@ -1766,6 +1841,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <input type="email" name="email" id="editUserEmail" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">البريد الإلكتروني الثانوي</label>
+                            <input type="email" id="editUserSecondaryEmail" readonly class="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed">
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">رقم الجوال</label>
                             <input type="text" name="phone" id="editUserPhone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                         </div>
@@ -2177,6 +2256,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/company-settings',
                         '/admin/company-settings/locations',
                         '/admin/my-archived-tasks',
+                        '/admin/my-no-response-tasks',
                         '/calculator',
                     ],
                     '3': [ // Supervisor (Read-only)
@@ -2206,6 +2286,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
                         '/admin/my-archived-tasks',
+                        '/admin/my-no-response-tasks',
                         '/my-tasks',
                         '/calculator',
                     ],
@@ -2222,6 +2303,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
                         '/admin/my-archived-tasks',
+                        '/admin/my-no-response-tasks',
                         '/my-tasks',
                         '/admin/my-leaves',
                         '/admin/my-hr',
@@ -2243,6 +2325,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/contracts/templates',
                         '/admin/my-tasks',
                         '/admin/my-archived-tasks',
+                        '/admin/my-no-response-tasks',
                         '/my-tasks',
                         '/admin/my-leaves',
                         '/admin/my-hr',
@@ -4343,7 +4426,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                     const tbody = document.getElementById('usersTable');
                     
                     if (users.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-500">لا توجد مستخدمين</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-500">لا توجد مستخدمين</td></tr>';
                         return;
                     }
                     
@@ -4352,6 +4435,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                             <td class="px-4 py-3">\${index + 1}</td>
                             <td class="px-4 py-3 font-medium"><span class="truncate-cell">\${user.full_name}</span></td>
                             <td class="px-4 py-3">\${user.email}</td>
+                            <td class="px-4 py-3">\${user.secondary_email || '-'}</td>
                             <td class="px-4 py-3">\${user.username}</td>
                             <td class="px-4 py-3">
                                 <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
@@ -4495,6 +4579,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         document.getElementById('editUserId').value = user.id;
                         document.getElementById('editUserFullName').value = user.full_name;
                         document.getElementById('editUserEmail').value = user.email;
+                        document.getElementById('editUserSecondaryEmail').value = user.secondary_email || '';
                         document.getElementById('editUserPhone').value = user.phone || '';
                         document.getElementById('editUserRole').value = user.role_id;
                         document.getElementById('editUserActive').value = user.is_active;
@@ -5801,6 +5886,20 @@ export const fullAdminPanel = `<!DOCTYPE html>
         </div>
     </div>
 
+    <!-- Customer transfer Accept/Reject popup (from alarm panel) -->
+    <div id="panelTransferModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[1200] p-4" style="display:none">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-white text-xl font-bold"><i class="fas fa-exchange-alt ml-2"></i>طلب تمرير عميل</h2>
+                <button type="button" id="panelTransferCloseBtn" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="panelTransferBody" class="p-6 text-sm text-gray-800 space-y-2"></div>
+            <div id="panelTransferSuccess" class="hidden mx-6 mb-2 text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2 font-medium"></div>
+            <div id="panelTransferError" class="hidden mx-6 mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+            <div id="panelTransferFooter" class="px-6 pb-5 flex justify-end gap-3"></div>
+        </div>
+    </div>
+
     <script>
         async function openAlarmPanel() {
             document.getElementById('alarm-panel').classList.add('open');
@@ -5811,6 +5910,169 @@ export const fullAdminPanel = `<!DOCTYPE html>
             document.getElementById('alarm-panel').classList.remove('open');
             document.getElementById('alarm-panel-overlay').classList.remove('open');
         }
+
+        function parsePanelTransferId(linkUrl) {
+            if (!linkUrl) return null;
+            var m = String(linkUrl).match(/[?&]customer_transfer=([0-9]+)/);
+            return m ? Number(m[1]) : null;
+        }
+
+        function panelTransferAuthHeaders(jsonBody) {
+            var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+            var headers = {};
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            if (jsonBody) headers['Content-Type'] = 'application/json';
+            return headers;
+        }
+
+        function escapePanelHtml(v) {
+            return String(v == null ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        var panelTransferId = null;
+        var panelTransferAlarmId = null;
+        var panelTransferBusy = false;
+
+        function closePanelTransferModal(force) {
+            if (panelTransferBusy && !force) return;
+            var modal = document.getElementById('panelTransferModal');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+            // Closing does not mark the alarm read — user can reopen later.
+            panelTransferId = null;
+            panelTransferAlarmId = null;
+            panelTransferBusy = false;
+        }
+
+        async function openPanelTransferModal(transferId, alarmId) {
+            panelTransferId = Number(transferId);
+            panelTransferAlarmId = alarmId != null && Number.isFinite(Number(alarmId)) ? Number(alarmId) : null;
+            panelTransferBusy = false;
+            var modal = document.getElementById('panelTransferModal');
+            var body = document.getElementById('panelTransferBody');
+            var footer = document.getElementById('panelTransferFooter');
+            var errEl = document.getElementById('panelTransferError');
+            var okEl = document.getElementById('panelTransferSuccess');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            okEl.classList.add('hidden'); okEl.textContent = '';
+            footer.innerHTML = '';
+            body.innerHTML = '<div class="text-gray-500"><i class="fas fa-spinner fa-spin ml-1"></i> جاري التحميل...</div>';
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            try { closeAlarmPanel(); } catch (_) {}
+            try {
+                var resp = await fetch('/api/customer-transfers/' + panelTransferId, {
+                    credentials: 'same-origin',
+                    headers: panelTransferAuthHeaders(false)
+                });
+                var data = await resp.json().catch(function() { return null; });
+                if (!resp.ok || !data || !data.success || !data.data) {
+                    body.innerHTML = '<div class="text-red-700">' + escapePanelHtml((data && data.error) || ('فشل التحميل (' + resp.status + ')')) + '</div>';
+                    return;
+                }
+                var r = data.data;
+                var atLabel = r.assignment_type === 'employee' ? 'كموظف' : 'كوكيل بنك';
+                var statusHtml = r.status === 'pending' ? '' :
+                    '<div class="mt-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900">هذا الطلب لم يعد معلّقاً (الحالة: ' + escapePanelHtml(r.status) + ')</div>';
+                body.innerHTML =
+                    '<div><span class="text-gray-500">العميل:</span> <span class="font-bold">' + escapePanelHtml(r.customer_name || ('#' + r.customer_id)) + '</span></div>' +
+                    '<div><span class="text-gray-500">من:</span> <span class="font-bold">' + escapePanelHtml(r.from_user_name || '—') + '</span></div>' +
+                    '<div><span class="text-gray-500">نوع التمرير:</span> ' + atLabel + '</div>' +
+                    '<div class="mt-2"><span class="text-gray-500">الملاحظة:</span><div class="mt-1 p-2 bg-gray-50 border border-gray-200 rounded whitespace-pre-wrap">' + escapePanelHtml(r.note_text || '') + '</div></div>' +
+                    statusHtml;
+                if (r.status === 'pending') {
+                    footer.innerHTML =
+                        '<button type="button" data-panel-transfer-action="reject" class="px-5 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-bold text-sm">رفض</button>' +
+                        '<button type="button" data-panel-transfer-action="accept" class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">قبول</button>';
+                } else if (panelTransferAlarmId) {
+                    try { await markPanelAlarmRead(panelTransferAlarmId); } catch (_) {}
+                    panelTransferAlarmId = null;
+                }
+            } catch (e) {
+                body.innerHTML = '<div class="text-red-700">فشل الاتصال بالخادم</div>';
+            }
+        }
+
+        async function submitPanelTransferAction(action) {
+            if (!panelTransferId || panelTransferBusy) return;
+            var footer = document.getElementById('panelTransferFooter');
+            var errEl = document.getElementById('panelTransferError');
+            var okEl = document.getElementById('panelTransferSuccess');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            okEl.classList.add('hidden'); okEl.textContent = '';
+            panelTransferBusy = true;
+            footer.querySelectorAll('button').forEach(function(b) {
+                b.disabled = true;
+                if (b.getAttribute('data-panel-transfer-action') === action) {
+                    b.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جاري المعالجة...';
+                }
+            });
+            try {
+                var resp = await fetch('/api/customer-transfers/' + panelTransferId, {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: panelTransferAuthHeaders(true),
+                    body: JSON.stringify({ action: action })
+                });
+                var data = await resp.json().catch(function() { return null; });
+                if (!resp.ok || !data || !data.success || (data.data && !data.message)) {
+                    throw new Error((data && data.error) || ('فشل الطلب (رمز ' + resp.status + ')'));
+                }
+                var msg = data.message || (action === 'accept' ? 'تم قبول التمرير بنجاح' : 'تم رفض التمرير');
+                okEl.innerHTML = '<i class="fas fa-check-circle ml-1"></i> ' + escapePanelHtml(msg);
+                okEl.classList.remove('hidden');
+                footer.innerHTML = '';
+                var alarmToMark = panelTransferAlarmId;
+                panelTransferBusy = false;
+                if (alarmToMark) {
+                    try { await markPanelAlarmRead(alarmToMark); } catch (_) {}
+                }
+                setTimeout(function() {
+                    closePanelTransferModal(true);
+                    if (action === 'accept') {
+                        window.location.href = '/admin/customers?requestsFilter=all';
+                    } else {
+                        loadPanelAlarms();
+                    }
+                }, 1200);
+            } catch (e) {
+                panelTransferBusy = false;
+                errEl.textContent = e.message || 'حدث خطأ';
+                errEl.classList.remove('hidden');
+                footer.querySelectorAll('button').forEach(function(b) {
+                    b.disabled = false;
+                    var act = b.getAttribute('data-panel-transfer-action');
+                    b.textContent = act === 'accept' ? 'قبول' : 'رفض';
+                });
+            }
+        }
+
+        document.getElementById('panelTransferModal').addEventListener('click', function(e) {
+            if (e.target === this) closePanelTransferModal();
+        });
+        document.getElementById('panelTransferCloseBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            closePanelTransferModal();
+        });
+        document.getElementById('panelTransferFooter').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest ? e.target.closest('[data-panel-transfer-action]') : null;
+            if (!button) return;
+            e.preventDefault();
+            var action = button.getAttribute('data-panel-transfer-action');
+            if (action === 'accept' || action === 'reject') submitPanelTransferAction(action);
+        });
+        document.getElementById('alarm-panel-list').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest ? e.target.closest('[data-open-panel-transfer]') : null;
+            if (!button) return;
+            e.preventDefault();
+            var transferId = Number(button.getAttribute('data-open-panel-transfer'));
+            var alarmId = Number(button.getAttribute('data-alarm-id'));
+            if (Number.isFinite(transferId) && transferId > 0) {
+                openPanelTransferModal(transferId, Number.isFinite(alarmId) ? alarmId : null);
+            }
+        });
 
         async function loadPanelAlarms() {
             const list = document.getElementById('alarm-panel-list');
@@ -5824,7 +6086,7 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 }
                 const filter = document.getElementById('alarmPanelFilter')?.value || 'all';
                 let alarms = data.data || [];
-                if (filter === 'scheduled') alarms = alarms.filter(function(a) { return !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder' && a.alarm_type !== 'task_pass'); });
+                if (filter === 'scheduled') alarms = alarms.filter(function(a) { return !a.alarm_type || (a.alarm_type !== 'workflow' && a.alarm_type !== 'reminder' && a.alarm_type !== 'task_pass' && a.alarm_type !== 'customer_transfer'); });
                 else if (filter === 'workflow') alarms = alarms.filter(function(a) { return a.alarm_type === 'workflow' || a.alarm_type === 'task_pass'; });
                 else if (filter === 'reminder') alarms = alarms.filter(function(a) { return a.alarm_type === 'reminder'; });
                 if (!alarms.length) {
@@ -5834,8 +6096,10 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 list.innerHTML = alarms.map(function(a) {
                     const isUnread = !a.is_read;
                     const isTaskPass = a.alarm_type === 'task_pass';
+                    const isTransfer = a.alarm_type === 'customer_transfer';
                     const isWorkflow = a.alarm_type === 'workflow' || isTaskPass;
                     const isReminder = a.alarm_type === 'reminder';
+                    const transferId = isTransfer ? parsePanelTransferId(a.link_url) : null;
                     let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
                     if (!dateStr && a.created_at) {
                         try {
@@ -5850,40 +6114,69 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         } catch(e) {}
                     }
                     const cid = a.customer_id;
-                    const customerHref = isWorkflow ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
-                    const borderClass = isWorkflow
+                    const customerHref = (isWorkflow || isTransfer) ? (a.link_url || '#') : ((cid != null && cid !== '') ? '/admin/customers/' + String(cid) : '#');
+                    const borderClass = isTransfer
+                        ? (isUnread ? 'border-cyan-300 bg-cyan-50' : 'border-gray-200 bg-white')
+                        : isWorkflow
                         ? (isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white')
                         : isReminder
                             ? (isUnread ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white')
                             : (isUnread ? 'border-orange-300 bg-orange-50' : 'border-gray-200 bg-white');
-                    const sideBgClass = isWorkflow
+                    const sideBgClass = isTransfer
+                        ? (isUnread ? 'bg-cyan-50/80' : 'bg-gray-50/80')
+                        : isWorkflow
                         ? (isUnread ? 'bg-blue-50/80' : 'bg-gray-50/80')
                         : isReminder
                             ? (isUnread ? 'bg-green-50/80' : 'bg-gray-50/80')
                             : (isUnread ? 'bg-orange-50/80' : 'bg-gray-50/80');
-                    const dotColor = isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
-                    const icon = isTaskPass
+                    const dotColor = isTransfer ? 'bg-cyan-500' : isWorkflow ? 'bg-blue-500' : isReminder ? 'bg-green-500' : 'bg-red-500';
+                    const icon = isTransfer
+                        ? '<i class="fas fa-exchange-alt text-cyan-500 text-xs ml-1"></i>'
+                        : isTaskPass
                         ? '<i class="fas fa-share text-violet-400 text-xs ml-1"></i>'
                         : isWorkflow
                         ? '<i class="fas fa-route text-blue-400 text-xs ml-1"></i>'
                         : isReminder
                             ? '<i class="fas fa-rotate text-green-400 text-xs ml-1"></i>'
                             : '';
-                    const clockColor = isWorkflow ? 'text-blue-400' : isReminder ? 'text-green-400' : 'text-orange-400';
-                    const nameColor = isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
-                    const noteColor = isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-600';
+                    const clockColor = isTransfer ? 'text-cyan-500' : isWorkflow ? 'text-blue-400' : isReminder ? 'text-green-400' : 'text-orange-400';
+                    const nameColor = isTransfer ? 'text-cyan-800' : isWorkflow ? 'text-blue-800' : isReminder ? 'text-green-800' : 'text-gray-800';
+                    const noteColor = isTransfer ? 'text-cyan-700' : isWorkflow ? 'text-blue-700' : isReminder ? 'text-green-700' : 'text-gray-600';
+                    const transferOpenBtn = (isTransfer && transferId && isUnread)
+                        ? \`<button type="button" data-open-panel-transfer="\${transferId}" data-alarm-id="\${a.id}" title="قبول أو رفض التمرير" class="px-2 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold leading-tight whitespace-nowrap">قبول / رفض</button>\`
+                        : '';
+                    const markReadBtn = (!isTransfer && isUnread)
+                        ? \`<button type="button" onclick="markPanelAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\`
+                        : '';
+                    const transferCardInner =
+                        '<div class="flex items-center gap-2 mb-1">' +
+                            (isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : '') +
+                            icon +
+                            '<p class="font-bold ' + nameColor + ' text-sm truncate">' + a.customer_name + '</p>' +
+                        '</div>' +
+                        (dateStr ? '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock ' + clockColor + ' ml-1"></i>' + dateStr + timeStr + '</p>' : '') +
+                        (a.note ? '<p class="text-sm ' + noteColor + ' mt-1 line-clamp-4 whitespace-pre-line text-right">' + a.note + '</p>' : '');
+                    const mainBody = (isTransfer && transferId && isUnread)
+                        ? \`<button type="button" data-open-panel-transfer="\${transferId}" data-alarm-id="\${a.id}"
+                               class="flex-1 min-w-0 p-4 block text-right border-0 bg-transparent cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
+                                \${transferCardInner}
+                            </button>\`
+                        : isTransfer
+                        ? \`<div class="flex-1 min-w-0 p-4 text-right rounded-s-xl">\${transferCardInner}</div>\`
+                        : \`<a href="\${customerHref}" class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
+                                <div class="flex items-center gap-2 mb-1">
+                                    \${isUnread ? \`<span class="inline-block w-2.5 h-2.5 rounded-full \${dotColor} flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>\` : ''}
+                                    \${icon}
+                                    <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
+                                </div>
+                                \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                                \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
+                            </a>\`;
                     return \`<div id="ap-alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
-                        <a href="\${customerHref}" class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none rounded-s-xl">
-                            <div class="flex items-center gap-2 mb-1">
-                                \${isUnread ? \`<span class="inline-block w-2.5 h-2.5 rounded-full \${dotColor} flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>\` : ''}
-                                \${icon}
-                                <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
-                            </div>
-                            \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
-                            \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
-                        </a>
+                        \${mainBody}
                         <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${sideBgClass}">
-                            \${isUnread ? \`<button type="button" onclick="markPanelAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
+                            \${transferOpenBtn}
+                            \${markReadBtn}
                             <button type="button" onclick="deletePanelAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
                         </div>
                     </div>\`;
@@ -5897,14 +6190,26 @@ export const fullAdminPanel = `<!DOCTYPE html>
             await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT', credentials: 'same-origin' });
             const el = document.getElementById('ap-alarm-' + id);
             if (el) {
-                el.classList.remove('border-orange-300', 'bg-orange-50', 'border-blue-300', 'bg-blue-50', 'border-green-300', 'bg-green-50');
+                el.classList.remove('border-orange-300', 'bg-orange-50', 'border-blue-300', 'bg-blue-50', 'border-green-300', 'bg-green-50', 'border-cyan-300', 'bg-cyan-50');
                 el.classList.add('border-gray-200', 'bg-white');
-                const dot = el.querySelector('.bg-red-500, .bg-blue-500, .bg-green-500');
+                const dot = el.querySelector('.bg-red-500, .bg-blue-500, .bg-green-500, .bg-cyan-500');
                 if (dot) dot.remove();
                 const readBtn = el.querySelector('button[onclick^="markPanelAlarmRead"]');
                 if (readBtn) readBtn.remove();
+                el.querySelectorAll('[data-open-panel-transfer]').forEach(function(node) {
+                    if (node.tagName === 'BUTTON' && node.closest('.flex.flex-col')) {
+                        node.remove();
+                    } else {
+                        node.removeAttribute('data-open-panel-transfer');
+                        node.removeAttribute('data-alarm-id');
+                        if (node.tagName === 'BUTTON') {
+                            node.disabled = true;
+                            node.classList.remove('cursor-pointer', 'hover:bg-black/5');
+                        }
+                    }
+                });
                 const sideDiv = el.querySelector('.flex.flex-col');
-                if (sideDiv) { sideDiv.classList.remove('bg-orange-50\\/80', 'bg-blue-50\\/80', 'bg-green-50\\/80'); sideDiv.classList.add('bg-gray-50\\/80'); }
+                if (sideDiv) { sideDiv.classList.remove('bg-orange-50\\/80', 'bg-blue-50\\/80', 'bg-green-50\\/80', 'bg-cyan-50\\/80'); sideDiv.classList.add('bg-gray-50\\/80'); }
             }
             loadNotifCount();
             try { if (typeof refreshVisibleCustomerTables === 'function') refreshVisibleCustomerTables(); } catch(_) {}
@@ -6046,6 +6351,207 @@ export const fullAdminPanel = `<!DOCTYPE html>
             </div>
         </div>
     </div>
+
+    <script>
+        // Global panel search: unified customer + task search that replaces the panel's
+        // default content while active. State lives in the URL (?q=&page=) so a refresh
+        // preserves the search, and browser Back exits the search entirely.
+        (function () {
+            const form = document.getElementById('panelGlobalSearchForm');
+            if (!form) return;
+            const input = document.getElementById('panelGlobalSearchInput');
+            const clearBtn = document.getElementById('panelGlobalSearchClear');
+            const resultsWrap = document.getElementById('panelSearchResults');
+            const resultsList = document.getElementById('panelSearchResultsList');
+            const resultsMeta = document.getElementById('panelSearchResultsMeta');
+            const pagerWrap = document.getElementById('panelSearchPagination');
+            const prevBtn = document.getElementById('panelSearchPrev');
+            const nextBtn = document.getElementById('panelSearchNext');
+            const pageInfo = document.getElementById('panelSearchPageInfo');
+            const exitBtn = document.getElementById('panelSearchExit');
+            const defaults = Array.from(document.querySelectorAll('[data-panel-default="1"]'));
+            const PAGE_SIZE = 20;
+            let currentQ = '';
+            let currentPage = 1;
+
+            function escapeHtml(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            function setDefaultsVisible(visible) {
+                defaults.forEach(function (el) { el.style.display = visible ? '' : 'none'; });
+                if (resultsWrap) resultsWrap.classList.toggle('hidden', visible);
+            }
+
+            function updateClearBtn() {
+                if (!clearBtn || !input) return;
+                clearBtn.classList.toggle('hidden', !input.value);
+            }
+
+            function renderLoading() {
+                if (!resultsList) return;
+                resultsList.innerHTML = '<div class="py-10 text-center text-gray-500"><i class="fas fa-spinner fa-spin ml-2"></i>جاري البحث...</div>';
+                if (pagerWrap) pagerWrap.classList.add('hidden');
+                if (resultsMeta) resultsMeta.textContent = '';
+            }
+
+            function renderEmpty(q) {
+                if (!resultsList) return;
+                resultsList.innerHTML = '<div class="py-10 text-center text-gray-500">'
+                    + '<i class="fas fa-inbox text-3xl mb-3 block text-gray-300"></i>'
+                    + 'لا توجد نتائج مطابقة لـ <span class="font-bold text-gray-700">' + escapeHtml(q) + '</span>'
+                    + '</div>';
+                if (pagerWrap) pagerWrap.classList.add('hidden');
+            }
+
+            function renderError(msg) {
+                if (!resultsList) return;
+                resultsList.innerHTML = '<div class="py-10 text-center text-red-600">'
+                    + '<i class="fas fa-exclamation-triangle ml-2"></i>' + escapeHtml(msg || 'تعذر تنفيذ البحث')
+                    + '</div>';
+                if (pagerWrap) pagerWrap.classList.add('hidden');
+            }
+
+            function renderResults(payload) {
+                if (!resultsList) return;
+                const rows = Array.isArray(payload.data) ? payload.data : [];
+                const total = Number(payload.total || 0);
+                const custTotal = Number(payload.customerTotal || 0);
+                const taskTotal = Number(payload.taskTotal || 0);
+                if (resultsMeta) {
+                    resultsMeta.textContent = '(' + total + ' نتيجة — ' + custTotal + ' عميل، ' + taskTotal + ' إعلان)';
+                }
+                if (rows.length === 0) { renderEmpty(payload.q || currentQ); return; }
+                resultsList.innerHTML = rows.map(function (r) {
+                    const typeCls = escapeHtml(r.typeColor || 'bg-gray-500 text-white');
+                    const statusCls = escapeHtml(r.statusColor || 'bg-gray-100 text-gray-700');
+                    const icon = escapeHtml(r.typeIcon || 'fa-circle');
+                    const href = escapeHtml(r.href || '#');
+                    const title = escapeHtml(r.title || '—');
+                    const subtitle = escapeHtml(r.subtitle || '');
+                    const typeLabel = escapeHtml(r.typeLabel || r.type || '');
+                    const statusLabel = escapeHtml(r.status || '');
+                    return '<a href="' + href + '" class="flex items-center gap-4 py-4 px-2 hover:bg-blue-50 rounded-lg transition-colors group">'
+                        + '<span class="inline-flex items-center justify-center w-10 h-10 rounded-lg ' + typeCls + ' flex-shrink-0"><i class="fas ' + icon + '"></i></span>'
+                        + '<div class="flex-1 min-w-0">'
+                        + '  <div class="flex items-center gap-2 flex-wrap">'
+                        + '    <span class="text-xs font-bold px-2 py-0.5 rounded ' + typeCls + '">' + typeLabel + '</span>'
+                        + '    <span class="text-xs font-medium px-2 py-0.5 rounded ' + statusCls + '">' + statusLabel + '</span>'
+                        + '    <span class="text-sm font-bold text-gray-800 group-hover:text-blue-700 truncate">' + title + '</span>'
+                        + '  </div>'
+                        + (subtitle ? '  <div class="text-xs text-gray-500 mt-1 truncate">' + subtitle + '</div>' : '')
+                        + '</div>'
+                        + '<i class="fas fa-chevron-left text-gray-300 group-hover:text-blue-600 flex-shrink-0"></i>'
+                        + '</a>';
+                }).join('');
+
+                const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+                if (total > PAGE_SIZE) {
+                    pagerWrap.classList.remove('hidden');
+                    pageInfo.textContent = 'صفحة ' + currentPage + ' من ' + totalPages;
+                    prevBtn.disabled = currentPage <= 1;
+                    nextBtn.disabled = currentPage >= totalPages;
+                } else {
+                    pagerWrap.classList.add('hidden');
+                }
+            }
+
+            async function runSearch(q, page) {
+                currentQ = q; currentPage = page;
+                setDefaultsVisible(false);
+                renderLoading();
+                try {
+                    const url = '/api/dashboard-search?q=' + encodeURIComponent(q) + '&page=' + page + '&pageSize=' + PAGE_SIZE;
+                    const res = await fetch(url, { credentials: 'same-origin' });
+                    const json = await res.json();
+                    if (!json || !json.success) { renderError(json && json.error); return; }
+                    renderResults(json);
+                } catch (err) {
+                    renderError(err && err.message);
+                }
+            }
+
+            function exitSearch(pushHistory) {
+                currentQ = ''; currentPage = 1;
+                if (input) input.value = '';
+                updateClearBtn();
+                setDefaultsVisible(true);
+                if (pushHistory) {
+                    history.pushState({ panelSearch: false }, '', '/admin/panel');
+                }
+            }
+
+            function readState() {
+                const params = new URLSearchParams(window.location.search);
+                const q = (params.get('q') || '').trim();
+                const pageRaw = parseInt(params.get('page') || '1', 10);
+                const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+                return { q: q, page: page };
+            }
+
+            function applyStateFromUrl() {
+                const st = readState();
+                if (st.q) {
+                    if (input) input.value = st.q;
+                    updateClearBtn();
+                    runSearch(st.q, st.page);
+                } else {
+                    exitSearch(false);
+                }
+            }
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const q = (input && input.value || '').trim();
+                if (q.length < 2) {
+                    if (input) input.focus();
+                    return;
+                }
+                const url = '/admin/panel?q=' + encodeURIComponent(q) + '&page=1';
+                history.pushState({ panelSearch: true, q: q, page: 1 }, '', url);
+                runSearch(q, 1);
+            });
+
+            if (input) {
+                input.addEventListener('input', updateClearBtn);
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function () {
+                    if (input) { input.value = ''; input.focus(); }
+                    updateClearBtn();
+                    exitSearch(true);
+                });
+            }
+
+            if (exitBtn) {
+                exitBtn.addEventListener('click', function () { exitSearch(true); });
+            }
+
+            function gotoPage(next) {
+                if (!currentQ) return;
+                const url = '/admin/panel?q=' + encodeURIComponent(currentQ) + '&page=' + next;
+                history.replaceState({ panelSearch: true, q: currentQ, page: next }, '', url);
+                runSearch(currentQ, next);
+                if (resultsWrap && resultsWrap.scrollIntoView) {
+                    resultsWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+
+            if (prevBtn) prevBtn.addEventListener('click', function () { if (currentPage > 1) gotoPage(currentPage - 1); });
+            if (nextBtn) nextBtn.addEventListener('click', function () { gotoPage(currentPage + 1); });
+
+            window.addEventListener('popstate', applyStateFromUrl);
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', applyStateFromUrl);
+            } else {
+                applyStateFromUrl();
+            }
+        })();
+    </script>
 
 </body>
 </html>

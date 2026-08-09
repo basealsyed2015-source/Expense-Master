@@ -70,11 +70,17 @@ import {
   resolveWorkflowCrossPartyNotifyTargetUserIds,
   insertWorkflowCrossPartyAlarms,
   insertTaskPassNotification,
+  insertFollowupNoResponseTransferNotification,
   insertCustomerTransferNotification,
   validateStaffRoleChange,
   isEmployeeAssignableRole,
   isBankAgentAssignableRole,
 } from './notification-access'
+import {
+  assignBankAgentToCustomer,
+  setCustomerAssignedBankAgent,
+  syncFinancingRequestsBankAgentForCustomer,
+} from './bank-agent-assignment'
 import {
   canAccessRequestsFollowupReport,
   isRequestsFollowupReportAdminPath,
@@ -84,8 +90,14 @@ import {
   bankDuplicateMessage,
   mapBankDbError,
 } from './bank-tenant-uniqueness'
+import {
+  buildCustomerEnrollFromTaskHref,
+  findOpenFollowupTaskByPhone,
+} from './followup-task-enroll-guard'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
+import { buildStaffActiveTimeReportPage } from './staff-active-time-report'
+import { recordHeartbeat, getStaffActiveTimeReport } from './staff-active-time'
 import { workflowReportPage, employeePerformanceReportPage } from './reports-pages'
 import {
   hrReportPage,
@@ -3097,6 +3109,14 @@ async function getTenant(c: any): Promise<any> {
   return tenant
 }
 
+function readAuthTokenFromCookieHeader(cookieHeader: string | undefined): string {
+  if (!cookieHeader) return ''
+  const cookies = cookieHeader.split(';').map((cookie: string) => cookie.trim())
+  const authCookie = cookies.find((cookie: string) => cookie.startsWith('authToken='))
+  if (!authCookie) return ''
+  return authCookie.startsWith('authToken=') ? authCookie.slice('authToken='.length) : ''
+}
+
 function normalizeAuthToken(rawToken: string): string | null {
   const trimmed = rawToken.trim()
   if (!trimmed) {
@@ -3234,6 +3254,93 @@ function cacheUserInfo(c: any, info: UserInfo): UserInfo {
   return info
 }
 
+async function resolveUserInfoFromAuthToken(
+  c: any,
+  rawToken: string,
+  log: (...args: unknown[]) => void
+): Promise<UserInfo | null> {
+  const normalizedToken = normalizeAuthToken(rawToken)
+  if (!normalizedToken) return null
+
+  const decoded = atob(normalizedToken)
+  const parts = decoded.split(':')
+  const userId = parseOptionalInt(parts[0])
+  if (!userId) return null
+
+  const tenantIdFromToken = parseOptionalInt(parts[1])
+  const tokenRoleId = normalizeRoleId(parseOptionalInt(parts[2]))
+  const tokenIssuedAtMs = parseOptionalInt(parts[3])
+  if (!tokenIssuedAtMs) return null
+  log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId, tokenIssuedAtMs })
+
+  if (!c.env?.DB) {
+    console.error('❌ [getUserInfo] DB binding not available')
+    return { ...EMPTY_USER_INFO, tokenRoleId: tokenRoleId ?? null }
+  }
+
+  const user = await c.env.DB.prepare(`
+    SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
+  `).bind(userId).first()
+
+  if (!user) return { ...EMPTY_USER_INFO, tokenRoleId }
+
+  const userLastLoginMs = parseLoginTimestampToMs((user as { last_login?: string | null }).last_login ?? null)
+  if (userLastLoginMs && tokenIssuedAtMs < userLastLoginMs) {
+    log('❌ [getUserInfo] Token invalidated by a newer login', {
+      tokenIssuedAtMs,
+      userLastLoginMs,
+    })
+    return null
+  }
+
+  const normalizedRoleId = normalizeRoleId(user.role_id)
+  const assignedBankFromRow = (user as { assigned_bank_id?: number | null }).assigned_bank_id
+  const assignedBankId =
+    assignedBankFromRow != null && !Number.isNaN(Number(assignedBankFromRow))
+      ? Number(assignedBankFromRow)
+      : null
+
+  if (normalizedRoleId === 1) {
+    const queryTenantId = c.req.query('tenant_id')
+    return {
+      userId: user.id,
+      tenantId: queryTenantId ? parseInt(queryTenantId) : null,
+      roleId: 1,
+      tokenRoleId,
+      assignedBankId: null,
+    }
+  }
+
+  const dbTenantId = (user as { tenant_id?: number | null }).tenant_id
+  let tenantIdResolved: number | null = dbTenantId != null ? dbTenantId : tenantIdFromToken
+
+  if (
+    tenantIdResolved == null &&
+    (normalizedRoleId === 5 || normalizedRoleId === 6) &&
+    assignedBankId != null &&
+    c.env?.DB
+  ) {
+    try {
+      const bankRow = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
+        .bind(assignedBankId)
+        .first<{ tenant_id: number | null }>()
+      if (bankRow?.tenant_id != null && !Number.isNaN(Number(bankRow.tenant_id))) {
+        tenantIdResolved = Number(bankRow.tenant_id)
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  return {
+    userId: user.id,
+    tenantId: tenantIdResolved,
+    roleId: normalizedRoleId,
+    tokenRoleId,
+    assignedBankId: normalizedRoleId === 5 || normalizedRoleId === 6 ? assignedBankId : null,
+  }
+}
+
 // Get tenant_id for current user (for multi-tenancy filtering)
 async function getUserInfo(c: any): Promise<UserInfo> {
   try {
@@ -3248,30 +3355,18 @@ async function getUserInfo(c: any): Promise<UserInfo> {
     const log = (...args: unknown[]) => { if (dbg) console.log(...args) }
 
     log('🔍 [getUserInfo] Starting user info retrieval...')
-    // Try to get token from Authorization Header (for API calls)
-    let token = c.req.header('Authorization')?.replace('Bearer ', '')
-    log('🔍 [getUserInfo] Token from header:', token ? 'Found' : 'Not found')
-    
-    // If not in header, try to get from cookie (for HTML pages)
-    if (!token) {
-      const cookieHeader = c.req.header('Cookie')
-      log('🔍 [getUserInfo] Cookie header:', cookieHeader ? 'Present' : 'Missing')
-      if (cookieHeader) {
-        const cookies = cookieHeader.split(';').map((cookie: string) => cookie.trim())
-        const authCookie = cookies.find((cookie: string) => cookie.startsWith('authToken='))
-        if (authCookie) {
-          // Do not use split('=')[1] — base64 tokens often contain '=' padding; that truncates the value.
-          token = authCookie.startsWith('authToken=')
-            ? authCookie.slice('authToken='.length)
-            : ''
-          log('✅ [getUserInfo] Token found in cookie')
-        } else {
-          log('❌ [getUserInfo] No authToken cookie found')
-        }
-      }
-    }
-    
-    if (!token) {
+    const headerToken = (c.req.header('Authorization')?.replace(/^Bearer\s+/i, '') || '').trim()
+    const cookieToken = readAuthTokenFromCookieHeader(c.req.header('Cookie'))
+    log('🔍 [getUserInfo] Token from header:', headerToken ? 'Found' : 'Not found')
+    log('🔍 [getUserInfo] Token from cookie:', cookieToken ? 'Found' : 'Not found')
+
+    const tokenCandidates: string[] = []
+    if (headerToken) tokenCandidates.push(headerToken)
+    // Stale localStorage tokens are often sent in Authorization while the browser
+    // still holds a fresh authToken cookie — try the cookie when the header fails.
+    if (cookieToken && cookieToken !== headerToken) tokenCandidates.push(cookieToken)
+
+    if (!tokenCandidates.length) {
       log('❌ [getUserInfo] No token found in header or cookie')
       const queryTenantId = c.req.query('tenant_id')
       return cacheUserInfo(c, {
@@ -3279,105 +3374,16 @@ async function getUserInfo(c: any): Promise<UserInfo> {
         tenantId: queryTenantId ? parseInt(queryTenantId) : null,
         roleId: null,
         tokenRoleId: null,
-        assignedBankId: null
+        assignedBankId: null,
       })
     }
 
-    const normalizedToken = normalizeAuthToken(token)
-    if (!normalizedToken) {
-      return cacheUserInfo(c, EMPTY_USER_INFO)
+    for (const rawToken of tokenCandidates) {
+      const resolved = await resolveUserInfoFromAuthToken(c, rawToken, log)
+      if (resolved?.userId) return cacheUserInfo(c, resolved)
     }
 
-    const decoded = atob(normalizedToken)
-    const parts = decoded.split(':')
-    const userId = parseOptionalInt(parts[0])
-    if (!userId) {
-      return cacheUserInfo(c, EMPTY_USER_INFO)
-    }
-
-    const tenantIdFromToken = parseOptionalInt(parts[1])
-    const tokenRoleId = normalizeRoleId(parseOptionalInt(parts[2]))
-    const tokenIssuedAtMs = parseOptionalInt(parts[3])
-    if (!tokenIssuedAtMs) {
-      return cacheUserInfo(c, EMPTY_USER_INFO)
-    }
-    log('🔍 [getUserInfo] Parsed:', { userId, tenantIdFromToken, tokenRoleId, tokenIssuedAtMs })
-    
-    // Safety check for DB binding
-    if (!c.env?.DB) {
-      console.error('❌ [getUserInfo] DB binding not available')
-      return cacheUserInfo(c, { ...EMPTY_USER_INFO, tokenRoleId: tokenRoleId ?? null })
-    }
-    
-    const user = await c.env.DB.prepare(`
-      SELECT id, tenant_id, role_id, last_login, assigned_bank_id FROM users WHERE id = ?
-    `).bind(userId).first()
-    
-    if (!user) {
-      return cacheUserInfo(c, { ...EMPTY_USER_INFO, tokenRoleId })
-    }
-
-    const userLastLoginMs = parseLoginTimestampToMs((user as { last_login?: string | null }).last_login ?? null)
-    if (userLastLoginMs && tokenIssuedAtMs < userLastLoginMs) {
-      log('❌ [getUserInfo] Token invalidated by a newer login', {
-        tokenIssuedAtMs,
-        userLastLoginMs
-      })
-      return cacheUserInfo(c, EMPTY_USER_INFO)
-    }
-    
-    // Super Admin (role_id = 1) can see all data
-    const normalizedRoleId = normalizeRoleId(user.role_id)
-    const assignedBankFromRow = (user as { assigned_bank_id?: number | null }).assigned_bank_id
-    const assignedBankId =
-      assignedBankFromRow != null && !Number.isNaN(Number(assignedBankFromRow))
-        ? Number(assignedBankFromRow)
-        : null
-
-    if (normalizedRoleId === 1) {
-      const queryTenantId = c.req.query('tenant_id')
-      return cacheUserInfo(c, {
-        userId: user.id,
-        tenantId: queryTenantId ? parseInt(queryTenantId) : null,
-        roleId: 1,
-        tokenRoleId,
-        assignedBankId: null
-      })
-    }
-    
-    // For other roles: DB is source of truth for which company (tenant) this user belongs to.
-    // Stale JWT tenant segments must not override users.tenant_id (fixes customer/contract scoping).
-    const dbTenantId = (user as { tenant_id?: number | null }).tenant_id
-    let tenantIdResolved: number | null = dbTenantId != null ? dbTenantId : tenantIdFromToken
-
-    // Bank-agent capable roles (5/6) may be scoped by assigned_bank_id; banks belong to exactly one tenant.
-    // Without this, tenantId stays NULL when users.tenant_id was never filled and the JWT segment is null,
-    // and every tenant-filtered API (including the whole contracts module) returns zero rows — not just "empty list".
-    if (
-      tenantIdResolved == null &&
-      (normalizedRoleId === 5 || normalizedRoleId === 6) &&
-      assignedBankId != null &&
-      c.env?.DB
-    ) {
-      try {
-        const bankRow = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
-          .bind(assignedBankId)
-          .first<{ tenant_id: number | null }>()
-        if (bankRow?.tenant_id != null && !Number.isNaN(Number(bankRow.tenant_id))) {
-          tenantIdResolved = Number(bankRow.tenant_id)
-        }
-      } catch (_) {
-        /* ignore */
-      }
-    }
-
-    return cacheUserInfo(c, {
-      userId: user.id,
-      tenantId: tenantIdResolved,
-      roleId: normalizedRoleId,
-      tokenRoleId,
-      assignedBankId: normalizedRoleId === 5 || normalizedRoleId === 6 ? assignedBankId : null
-    })
+    return cacheUserInfo(c, EMPTY_USER_INFO)
   } catch (error: any) {
     if (authDebugEnabled(c?.env)) {
       console.error('❌ [getUserInfo] ERROR:', error?.message || error)
@@ -3589,50 +3595,6 @@ async function validateBankAgentForFinancingRequest(
   return isActiveBankAgentForTenant(db, agentUserId, tenantId)
 }
 
-async function setCustomerAssignedBankAgent(
-  db: D1Database,
-  customerId: number,
-  agentId: number | null
-): Promise<{ ok: boolean; missingColumn?: boolean }> {
-  try {
-    await db
-      .prepare(`UPDATE customers SET assigned_bank_agent_id = ? WHERE id = ?`)
-      .bind(agentId, customerId)
-      .run()
-    return { ok: true }
-  } catch (e: unknown) {
-    const msg = String((e as { message?: string })?.message || e || '')
-    if (/no such column:\s*assigned_bank_agent_id/i.test(msg)) {
-      return { ok: false, missingColumn: true }
-    }
-    throw e
-  }
-}
-
-/** Keep financing_requests.assigned_bank_agent_id aligned with the customer record. */
-async function syncFinancingRequestsBankAgentForCustomer(
-  db: D1Database,
-  customerId: number,
-  agentId: number | null
-): Promise<void> {
-  try {
-    await db
-      .prepare(
-        `UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE customer_id = ?`
-      )
-      .bind(agentId, customerId)
-      .run()
-  } catch (e: unknown) {
-    // Only swallow the specific legacy case: the column doesn't exist yet.
-    // Any other failure (constraint, IO) must propagate so callers can decide
-    // — e.g. customer-transfer accept fails cleanly instead of ending up
-    // half-applied (customer swapped, FR still on old agent).
-    const msg = String((e as { message?: string })?.message || e || '')
-    if (/no such column:\s*assigned_bank_agent_id/i.test(msg)) return
-    throw e
-  }
-}
-
 async function validateAssignedBankBelongsToTenant(
   db: D1Database,
   tenantId: number,
@@ -3829,7 +3791,7 @@ const SUPER_ADMIN_ONLY_ADMIN_PATH_PREFIXES = [
 ]
 
 /** Visible only to company admin (normalized role id 2); enforced server-side. */
-const COMPANY_ADMIN_ONLY_ADMIN_PATH_PREFIXES = ['/admin/company-settings']
+const COMPANY_ADMIN_ONLY_ADMIN_PATH_PREFIXES = ['/admin/company-settings', '/admin/reports/staff-active-time']
 
 function stripSuperAdminLinksFromHtml(html: string): string {
   const superAdminPrefixGroup = '(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)'
@@ -4005,6 +3967,136 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/chat',
   ],
 }
+
+// Client tracker for staff active-time (see docs/plan_staff_active_time.md).
+// Fires POST /api/activity/heartbeat every 60s while the tab is visible, focused,
+// and the user interacted within the last 5 minutes. Stops immediately on hide/blur/idle.
+// A localStorage leader lock ensures only one tab per browser sends heartbeats.
+const STAFF_ACTIVITY_TRACKER_SCRIPT = `
+<script>
+(function () {
+  if (window.__staffActivityTrackerInstalled) return;
+  window.__staffActivityTrackerInstalled = true;
+  var IDLE_MS = 5 * 60 * 1000;
+  var HEARTBEAT_MS = 60 * 1000;
+  var LEADER_KEY = 'staffActivityTrackerLeader';
+  var LEADER_TTL_MS = 90 * 1000;
+  var tabId = 'tab_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+  var lastActivity = Date.now();
+  var heartbeatTimer = null;
+  var leaderTimer = null;
+
+  function isLeader() {
+    try {
+      var raw = localStorage.getItem(LEADER_KEY);
+      if (!raw) return false;
+      var parsed = JSON.parse(raw);
+      return parsed && parsed.id === tabId && (Date.now() - parsed.at) < LEADER_TTL_MS;
+    } catch (_) { return false; }
+  }
+
+  function tryAcquireLeader() {
+    try {
+      var raw = localStorage.getItem(LEADER_KEY);
+      var now = Date.now();
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.id !== tabId && (now - parsed.at) < LEADER_TTL_MS) return false;
+      }
+      localStorage.setItem(LEADER_KEY, JSON.stringify({ id: tabId, at: now }));
+      return true;
+    } catch (_) { return false; }
+  }
+
+  function releaseLeader() {
+    try {
+      if (isLeader()) localStorage.removeItem(LEADER_KEY);
+    } catch (_) {}
+  }
+
+  function isActive() {
+    if (document.visibilityState !== 'visible') return false;
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+    return (Date.now() - lastActivity) < IDLE_MS;
+  }
+
+  function getToken() {
+    try { return localStorage.getItem('authToken') || ''; } catch (_) { return ''; }
+  }
+
+  function sendHeartbeat() {
+    var token = getToken();
+    if (!token) return;
+    try {
+      fetch('/api/activity/heartbeat', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ at: Date.now() }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (_) {}
+  }
+
+  function sendFinalBeacon() {
+    var token = getToken();
+    if (!token) return;
+    try {
+      var url = '/api/activity/heartbeat?final=1';
+      var payload = JSON.stringify({ at: Date.now(), token: token });
+      if (navigator.sendBeacon) {
+        var blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(url, blob);
+      } else {
+        fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: payload,
+          keepalive: true
+        }).catch(function () {});
+      }
+    } catch (_) {}
+  }
+
+  function tick() {
+    if (!isActive()) return;
+    if (!tryAcquireLeader()) return;
+    sendHeartbeat();
+  }
+
+  function markActivity() { lastActivity = Date.now(); }
+
+  var events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+  events.forEach(function (e) {
+    window.addEventListener(e, markActivity, { passive: true, capture: true });
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      markActivity();
+    } else {
+      releaseLeader();
+      sendFinalBeacon();
+    }
+  });
+  window.addEventListener('blur', releaseLeader);
+  window.addEventListener('focus', markActivity);
+  window.addEventListener('pagehide', function () {
+    releaseLeader();
+    sendFinalBeacon();
+  });
+  window.addEventListener('beforeunload', function () {
+    releaseLeader();
+    sendFinalBeacon();
+  });
+
+  heartbeatTimer = setInterval(tick, HEARTBEAT_MS);
+  // Fire an initial ping quickly so short visits still count.
+  setTimeout(tick, 3000);
+})();
+</script>
+`
 
 function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { roleId: number; userId?: number | null }): string {
   if (!pathname.startsWith('/admin/')) return html
@@ -4321,6 +4413,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/reports/banks"><i class="fas fa-university"></i>تقرير البنوك</a>
         <a href="/admin/reports/performance"><i class="fas fa-chart-bar"></i>تقرير الأداء</a>
         <a href="/admin/reports/employee-performance"><i class="fas fa-user-tie"></i>أداء الموظفين</a>
+        <a href="/admin/reports/staff-active-time" data-companyadmin-only="true"><i class="fas fa-stopwatch"></i>وقت النشاط للموظفين</a>
         <a href="/admin/reports/hr"><i class="fas fa-users-cog"></i>تقرير الموارد البشرية</a>
         <a href="/admin/reports/contracts"><i class="fas fa-file-signature"></i>تقرير العقود</a>
         <a href="/admin/reports/workflow" data-superadmin-only="true"><i class="fas fa-project-diagram"></i>تقرير سير العمل</a>
@@ -4485,7 +4578,17 @@ ${isAdminPanelRail ? `
           link.style.display = 'none';
           return;
         }
+        var isCompanyAdminOnly = link.getAttribute('data-companyadmin-only') === 'true';
+        if (isCompanyAdminOnly && ROLE_ID !== 2) {
+          link.style.display = 'none';
+          return;
+        }
+        // Submenu children inherit visibility from their parent collapsible — the
+        // allowlist only enumerates top-level paths. Role-specific attributes above
+        // still gate individual sub-links.
+        var isSubmenuChild = !!link.closest('.gps-submenu');
         var isAlways =
+          isSubmenuChild ||
           normalizedHref === '/admin/panel' ||
           normalizedHref === '/calculator' ||
           normalizedHref.indexOf('/c/') === 0;
@@ -4851,8 +4954,11 @@ ${isAdminPanelRail ? `
   const chatWidget = CHAT_UI_ENABLED && pathname !== '/admin/chat'
     ? renderChatWidgetLazyStub(opts?.userId ?? null, opts?.roleId ?? null)
     : ''
-  if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + chatWidget + out.slice(bodyIdx)
-  else out = out + sidebar + chatWidget
+  const isStaffRole = effectiveRoleId === 4 || effectiveRoleId === 5 || effectiveRoleId === 6 ||
+    effectiveRoleId === 14 || effectiveRoleId === 15
+  const activityTracker = isStaffRole ? STAFF_ACTIVITY_TRACKER_SCRIPT : ''
+  if (bodyIdx !== -1) out = out.slice(0, bodyIdx) + sidebar + chatWidget + activityTracker + out.slice(bodyIdx)
+  else out = out + sidebar + chatWidget + activityTracker
   return out
 }
 
@@ -5001,6 +5107,40 @@ app.get('/api/user-info', async (c) => {
 })
 
 // Get user ID and role for employee-specific filtering
+
+// Staff active-time heartbeat (see docs/plan_staff_active_time.md + src/staff-active-time.ts).
+app.post('/api/activity/heartbeat', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    const result = await recordHeartbeat(c.env.DB, info)
+    if (!result.ok) return c.json({ success: false, error: result.error }, result.status)
+    return c.json({ success: true, credited: result.credited })
+  } catch (error: any) {
+    console.error('Error in /api/activity/heartbeat:', error)
+    return c.json({ success: false, error: error?.message || 'Internal error' }, 500)
+  }
+})
+
+// Company admin (role 2) report: aggregated active seconds per staff user in tenant.
+app.get('/api/reports/staff-active-time', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    const result = await getStaffActiveTimeReport(c.env.DB, info, {
+      start_date: c.req.query('start_date'),
+      end_date: c.req.query('end_date'),
+    })
+    if (!result.ok) return c.json({ success: false, error: result.error }, result.status)
+    return c.json({
+      success: true,
+      start_date: result.start_date,
+      end_date: result.end_date,
+      rows: result.rows,
+    })
+  } catch (error: any) {
+    console.error('Error in /api/reports/staff-active-time:', error)
+    return c.json({ success: false, error: error?.message || 'Internal error' }, 500)
+  }
+})
 
 // Middleware: Verify and set tenant
 app.use('/c/:tenant/*', async (c, next) => {
@@ -8533,6 +8673,273 @@ app.get('/api/customers', async (c) => {
   }
 })
 
+// Unified dashboard search: returns both customers and follow-up tasks,
+// tenant-scoped by role, ignoring archived/completed filters so the user
+// can find records regardless of state. Backs the search bar on /admin/panel.
+app.get('/api/dashboard-search', async (c) => {
+  try {
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId || !userInfo.roleId) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const rawQ = String(c.req.query('q') ?? '')
+    const q = normalizeListSearchQuery(rawQ)
+    if (!q || q.length < 2) {
+      return c.json({ success: true, data: [], total: 0, page: 1, pageSize: 20, q: rawQ })
+    }
+    const { page, pageSize, offset } = parsePageParams({
+      page: c.req.query('page'),
+      pageSize: c.req.query('pageSize'),
+    })
+    const like = `%${q}%`
+
+    const roleNorm = normalizeRoleId(userInfo.roleId) ?? userInfo.roleId
+    const tenantId = userInfo.tenantId
+    const userId = userInfo.userId
+
+    // --- Customers scope (mirrors /api/customers role logic) ---
+    let custScope = ''
+    const custScopeParams: any[] = []
+    if (roleNorm === 1) {
+      custScope = '1 = 1'
+    } else if (roleNorm === 2 || roleNorm === 3) {
+      if (tenantId) { custScope = 'c.tenant_id = ?'; custScopeParams.push(tenantId) }
+      else custScope = '1 = 0'
+    } else if (roleNorm === 4) {
+      if (tenantId && userId) {
+        custScope = 'c.tenant_id = ? AND EXISTS (SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = c.id AND ca.employee_id = ?)'
+        custScopeParams.push(tenantId, userId)
+      } else custScope = '1 = 0'
+    } else if (roleNorm === 5) {
+      if (tenantId && userId) {
+        custScope = `c.tenant_id = ? AND (
+          c.created_by = ? OR c.assigned_bank_agent_id = ?
+          OR EXISTS (
+            SELECT 1 FROM financing_requests fr
+            LEFT JOIN users fr_creator ON fr_creator.id = fr.created_by
+            WHERE fr.customer_id = c.id AND (
+              fr.assigned_bank_agent_id = ? OR (fr.created_by = ? AND fr_creator.role_id IN (5, 15))
+            )
+          )
+        )`
+        custScopeParams.push(tenantId, userId, userId, userId, userId)
+      } else custScope = '1 = 0'
+    } else if (roleNorm === 6) {
+      if (tenantId && userId) {
+        custScope = `c.tenant_id = ? AND (
+          EXISTS (SELECT 1 FROM customer_assignments ca WHERE ca.customer_id = c.id AND ca.employee_id = ?)
+          OR c.assigned_bank_agent_id = ?
+          OR EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = c.id AND fr.assigned_bank_agent_id = ?)
+        )`
+        custScopeParams.push(tenantId, userId, userId, userId)
+      } else custScope = '1 = 0'
+    } else {
+      custScope = '1 = 0'
+    }
+
+    const custWhere = `(${custScope}) AND (
+      c.full_name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR IFNULL(c.national_id, '') LIKE ?
+    )`
+    const custParams = [...custScopeParams, like, like, like, like]
+
+    // --- Tasks scope: admins see tenant, staff see own assigned only ---
+    let taskScope = ''
+    const taskScopeParams: any[] = []
+    if (roleNorm === 1) {
+      taskScope = '1 = 1'
+    } else if (roleNorm === 2 || roleNorm === 3) {
+      if (tenantId) { taskScope = 't.tenant_id = ?'; taskScopeParams.push(tenantId) }
+      else taskScope = '1 = 0'
+    } else if (roleNorm === 4 || roleNorm === 5 || roleNorm === 6) {
+      if (tenantId && userId) {
+        taskScope = 't.tenant_id = ? AND t.assigned_user_id = ?'
+        taskScopeParams.push(tenantId, userId)
+      } else taskScope = '1 = 0'
+    } else {
+      taskScope = '1 = 0'
+    }
+
+    // Exclude completed + cancelled tasks: per product spec, a completed task effectively
+    // ceases to exist (enrollment closes it). Cancelled follows the same "closed" semantics.
+    // Archived / no-response state lives on the parent follow-up (f.is_archived / f.is_no_response)
+    // and IS still surfaced — those results just route to the archived/no-response page.
+    const taskWhere = `(${taskScope}) AND (
+      IFNULL(t.task_title, '') LIKE ? OR IFNULL(f.customer_name, '') LIKE ? OR IFNULL(f.customer_phone, '') LIKE ?
+    ) AND (
+      t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) NOT IN ('completed', 'cancelled')
+    )`
+    const taskParams = [...taskScopeParams, like, like, like]
+
+    let customerRows: any[] = []
+    let customerTotal = 0
+    let taskRows: any[] = []
+    let taskTotal = 0
+
+    try {
+      const custCountRow = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM customers c WHERE ${custWhere}`
+      ).bind(...custParams).first<{ n: number }>()
+      customerTotal = Number(custCountRow?.n || 0)
+    } catch { customerTotal = 0 }
+
+    try {
+      const taskCountRow = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM company_contact_followup_tasks t
+         LEFT JOIN company_contact_followups f ON f.id = t.followup_id
+         WHERE ${taskWhere}`
+      ).bind(...taskParams).first<{ n: number }>()
+      taskTotal = Number(taskCountRow?.n || 0)
+    } catch { taskTotal = 0 }
+
+    // Fetch a page worth of each type, then merge/sort/slice for a unified list.
+    // We over-fetch (offset + pageSize) from each side so the merge covers the requested page.
+    const fetchLimit = offset + pageSize
+    if (customerTotal > 0) {
+      try {
+        const r = await c.env.DB.prepare(
+          `SELECT c.id, c.full_name, c.phone, c.email, c.national_id, c.tenant_id,
+                  COALESCE(c.is_archived, 0) AS is_archived,
+                  COALESCE(c.is_completed, 0) AS is_completed,
+                  c.created_at
+           FROM customers c
+           WHERE ${custWhere}
+           ORDER BY c.created_at DESC
+           LIMIT ?`
+        ).bind(...custParams, fetchLimit).all()
+        customerRows = (r.results || []) as any[]
+      } catch { customerRows = [] }
+    }
+
+    if (taskTotal > 0) {
+      try {
+        const r = await c.env.DB.prepare(
+          `SELECT t.id, t.task_title, t.status, t.priority, t.tenant_id, t.assigned_user_id,
+                  t.scheduled_at_gregorian, t.created_at,
+                  f.id AS followup_id, f.customer_name, f.customer_phone,
+                  COALESCE(f.is_archived, 0) AS f_is_archived,
+                  COALESCE(f.is_no_response, 0) AS f_is_no_response
+           FROM company_contact_followup_tasks t
+           LEFT JOIN company_contact_followups f ON f.id = t.followup_id
+           WHERE ${taskWhere}
+           ORDER BY t.created_at DESC
+           LIMIT ?`
+        ).bind(...taskParams, fetchLimit).all()
+        taskRows = (r.results || []) as any[]
+      } catch { taskRows = [] }
+    }
+
+    // Where to send the user when they click a task result. Two axes:
+    //   - Follow-up state (archived / no_response / active) — determines the target page
+    //   - Role — admins (1/3) live in /admin/follow-ups; roles 2/4/5/6 have the /admin/my-* pages
+    // Role 2 (company admin) can access both; we keep them on /admin/follow-ups since that's
+    // the marketing module they normally work in.
+    const usesMarketingModule = (roleNorm === 1 || roleNorm === 2 || roleNorm === 3)
+    function taskHrefFor(state: 'archived' | 'no_response' | 'active', taskId: number): string {
+      const qs = `highlightTask=${taskId}`
+      if (usesMarketingModule) {
+        if (state === 'archived') return `/admin/follow-ups?followupStatusFilter=archived&${qs}`
+        if (state === 'no_response') return `/admin/follow-ups?followupStatusFilter=no_response&${qs}`
+        return `/admin/follow-ups?${qs}`
+      }
+      if (state === 'archived') return `/admin/my-archived-tasks?${qs}`
+      if (state === 'no_response') return `/admin/my-no-response-tasks?${qs}`
+      return `/admin/my-tasks?${qs}`
+    }
+
+    const customerItems = customerRows.map((r: any) => {
+      const archived = Number(r.is_archived) === 1
+      const completed = Number(r.is_completed) === 1
+      // Route to the status-appropriate page. Archived / completed customers live on their
+      // own list pages, so a search hit lands the user where that record actually lives.
+      // Active customers go straight to the detail page.
+      let href: string
+      let statusLabel: string
+      let statusColor: string
+      if (archived) {
+        href = `/admin/customers/archived?highlightCustomer=${r.id}`
+        statusLabel = 'مؤرشف'
+        statusColor = 'bg-gray-200 text-gray-700'
+      } else if (completed) {
+        href = `/admin/customers/completed?highlightCustomer=${r.id}`
+        statusLabel = 'مكتمل'
+        statusColor = 'bg-emerald-100 text-emerald-800'
+      } else {
+        href = `/admin/customers/${r.id}`
+        statusLabel = 'نشط'
+        statusColor = 'bg-blue-100 text-blue-800'
+      }
+      return {
+        type: 'customer',
+        typeLabel: 'عميل',
+        typeColor: 'bg-indigo-600 text-white',
+        typeIcon: 'fa-user',
+        id: r.id,
+        title: String(r.full_name || '—'),
+        subtitle: [r.phone, r.email].filter(Boolean).join(' • ') || (r.national_id ? String(r.national_id) : ''),
+        status: statusLabel,
+        statusColor,
+        href,
+        createdAt: r.created_at,
+      }
+    })
+
+    const taskItems = taskRows.map((r: any) => {
+      // Follow-up flags drive the task's effective state (completed/cancelled are already
+      // excluded upstream). Precedence: archived beats no_response beats active.
+      const isArchived = Number(r.f_is_archived) === 1
+      const isNoResponse = Number(r.f_is_no_response) === 1
+      const state: 'archived' | 'no_response' | 'active' =
+        isArchived ? 'archived' : (isNoResponse ? 'no_response' : 'active')
+      const statusLabel = state === 'archived' ? 'مؤرشف' : (state === 'no_response' ? 'لا يرد' : 'نشط')
+      const statusColor =
+        state === 'archived' ? 'bg-gray-200 text-gray-700'
+        : state === 'no_response' ? 'bg-orange-100 text-orange-800'
+        : 'bg-blue-100 text-blue-800'
+      // Mirror customer rows: the linked customer name owns the bold title slot,
+      // task metadata (title, phone) drops into the subtitle.
+      const title = String(r.customer_name || r.task_title || `إعلان #${r.id}`)
+      const subtitleBits: string[] = []
+      if (r.task_title) subtitleBits.push(String(r.task_title))
+      if (r.customer_phone) subtitleBits.push(String(r.customer_phone))
+      return {
+        type: 'task',
+        typeLabel: 'إعلان',
+        typeColor: 'bg-orange-600 text-white',
+        typeIcon: 'fa-bullhorn',
+        id: r.id,
+        title,
+        subtitle: subtitleBits.join(' • '),
+        status: statusLabel,
+        statusColor,
+        href: taskHrefFor(state, r.id),
+        createdAt: r.created_at,
+      }
+    })
+
+    const merged = [...customerItems, ...taskItems].sort((a, b) => {
+      const at = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return bt - at
+    })
+    const total = customerTotal + taskTotal
+    const paged = merged.slice(offset, offset + pageSize)
+
+    return c.json({
+      success: true,
+      data: paged,
+      total,
+      customerTotal,
+      taskTotal,
+      page,
+      pageSize,
+      q: rawQ,
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 // Download sample CSV template for customers
 app.get('/api/customers/sample-csv', async (c) => {
   try {
@@ -9203,6 +9610,78 @@ app.post('/api/customers', async (c) => {
         </html>
       `)
     }
+
+    // Manual create without task_id: block if an open follow-up task already exists for this phone.
+    const taskIdFromFormEarly = Number.parseInt(String(formData.get('task_id') ?? ''), 10)
+    const hasTaskEnrollId = Number.isFinite(taskIdFromFormEarly) && taskIdFromFormEarly > 0
+    if (!hasTaskEnrollId && tenant_id) {
+      const openTask = await findOpenFollowupTaskByPhone(c.env.DB, tenant_id, phone)
+      if (openTask) {
+        const enrollHref = buildCustomerEnrollFromTaskHref(openTask)
+        const leadName = String(openTask.customer_name || '').trim() || '—'
+        if (inlineCustomerForm) {
+          return c.json(
+            {
+              ok: false,
+              code: 'OPEN_FOLLOWUP_TASK',
+              message: 'يوجد مهمة متابعة مفتوحة لهذا الرقم. سجّل العميل من خلال المهمة لتجنب التكرار.',
+              hint: 'استخدم زر التسجيل من صفحة مهامي، أو افتح رابط المهمة أدناه.',
+              details: {
+                phone,
+                task_id: openTask.task_id,
+                customer_name: openTask.customer_name,
+                enroll_href: enrollHref,
+              },
+            },
+            409
+          )
+        }
+        return c.html(`
+        <!DOCTYPE html>
+        <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>مهمة متابعة مفتوحة</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+          <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        </head>
+        <body class="bg-gray-50">
+          <div class="max-w-2xl mx-auto p-6 mt-20">
+            <div class="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-6 shadow-lg">
+              <div class="flex items-center mb-4">
+                <i class="fas fa-tasks text-amber-500 text-4xl ml-3"></i>
+                <div>
+                  <h1 class="text-2xl font-bold text-amber-800">مهمة متابعة مفتوحة</h1>
+                  <p class="text-amber-700 mt-1">لا يمكن إضافة العميل يدوياً بينما توجد مهمة متابعة لهذا الرقم</p>
+                </div>
+              </div>
+              <div class="bg-white rounded-lg p-4 mb-4 text-gray-700 space-y-1">
+                <p><strong>رقم الهاتف:</strong> <span dir="ltr">${escapeHtml(phone)}</span></p>
+                <p><strong>اسم المتابعة:</strong> ${escapeHtml(leadName)}</p>
+                <p><strong>رقم المهمة:</strong> #${openTask.task_id}</p>
+              </div>
+              <div class="flex gap-3 flex-wrap">
+                <a href="${escapeHtmlAttr(enrollHref)}" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-user-plus ml-2"></i>
+                  التسجيل عبر المهمة
+                </a>
+                <a href="/admin/my-tasks" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-tasks ml-2"></i>
+                  مهامي
+                </a>
+                <a href="/admin/customers/add" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                  <i class="fas fa-arrow-right ml-2"></i>
+                  العودة للنموذج
+                </a>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `, 409)
+      }
+    }
     
     const insertBind = [
       full_name,
@@ -9489,7 +9968,7 @@ app.post('/api/customers', async (c) => {
             agentId > 0 &&
             (await isActiveBankAgentForTenant(c.env.DB, agentId, tenant_id))
           ) {
-            const persisted = await setCustomerAssignedBankAgent(
+            const persisted = await assignBankAgentToCustomer(
               c.env.DB,
               customerIdForAgent,
               agentId
@@ -9498,24 +9977,17 @@ app.post('/api/customers', async (c) => {
               console.error(
                 '[customer create] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1'
               )
-            } else if (persisted.ok) {
-              await syncFinancingRequestsBankAgentForCustomer(
-                c.env.DB,
-                customerIdForAgent,
-                agentId
-              )
             }
           }
         }
       }
     }
     // Carry over rating from followup task if registration came from my-tasks flow
-    const taskIdFromForm = Number.parseInt(String(formData.get('task_id') ?? ''), 10)
-    if (Number.isFinite(taskIdFromForm) && taskIdFromForm > 0 && createdCustomerId && tenant_id) {
+    if (hasTaskEnrollId && createdCustomerId && tenant_id) {
       try {
         const taskRow = await c.env.DB.prepare(
           `SELECT rating, rating_note FROM company_contact_followup_tasks WHERE id = ? AND tenant_id = ? LIMIT 1`
-        ).bind(taskIdFromForm, tenant_id).first<{ rating: number | null; rating_note: string | null }>()
+        ).bind(taskIdFromFormEarly, tenant_id).first<{ rating: number | null; rating_note: string | null }>()
         if (taskRow?.rating && taskRow.rating >= 1 && taskRow.rating <= 5) {
           await c.env.DB.prepare(
             `INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`
@@ -9525,7 +9997,12 @@ app.post('/api/customers', async (c) => {
       try {
         await c.env.DB.prepare(
           `UPDATE company_contact_followup_tasks SET status = 'completed' WHERE id = ? AND tenant_id = ?`
-        ).bind(taskIdFromForm, tenant_id).run()
+        ).bind(taskIdFromFormEarly, tenant_id).run()
+        await c.env.DB.prepare(`
+          UPDATE company_contact_followup_task_pass_requests
+          SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP
+          WHERE task_id = ? AND status = 'pending'
+        `).bind(taskIdFromFormEarly).run()
       } catch (_) { /* don't fail customer creation if task completion fails */ }
     }
 
@@ -9886,7 +10363,7 @@ app.post('/api/customers/:id', async (c) => {
         }
 
         if (!skipBankAgentPersist) {
-          const persisted = await setCustomerAssignedBankAgent(
+          const persisted = await assignBankAgentToCustomer(
             c.env.DB,
             Number(id),
             agentToStore
@@ -9895,8 +10372,6 @@ app.post('/api/customers/:id', async (c) => {
             console.error(
               '[customer edit] customers.assigned_bank_agent_id column missing — apply migration 0073 on D1'
             )
-          } else if (persisted.ok) {
-            await syncFinancingRequestsBankAgentForCustomer(c.env.DB, Number(id), agentToStore)
           }
         }
       }
@@ -10755,21 +11230,22 @@ app.post('/api/requests', async (c) => {
       throw lastInsertErr instanceof Error ? lastInsertErr : new Error(String(lastInsertErr))
     }
 
-    // Single source of truth: customers.assigned_bank_agent_id; mirror onto the new financing_requests row.
+    // Single source of truth: customers.assigned_bank_agent_id — sync propagates
+    // to every FR for the customer (including the row we just inserted).
     try {
       if (formAssignedBankAgent != null) {
-        await setCustomerAssignedBankAgent(c.env.DB, Number(customer_id), formAssignedBankAgent)
-      }
-      const custRow = await c.env.DB.prepare(
-        `SELECT assigned_bank_agent_id FROM customers WHERE id = ? LIMIT 1`
-      )
-        .bind(customer_id)
-        .first<{ assigned_bank_agent_id: number | null }>()
-      const finalAgent = custRow?.assigned_bank_agent_id ?? null
-      if (result.meta.last_row_id != null) {
-        await c.env.DB.prepare(`UPDATE financing_requests SET assigned_bank_agent_id = ? WHERE id = ?`)
-          .bind(finalAgent, result.meta.last_row_id)
-          .run()
+        await assignBankAgentToCustomer(c.env.DB, Number(customer_id), formAssignedBankAgent)
+      } else {
+        const custRow = await c.env.DB.prepare(
+          `SELECT assigned_bank_agent_id FROM customers WHERE id = ? LIMIT 1`
+        )
+          .bind(customer_id)
+          .first<{ assigned_bank_agent_id: number | null }>()
+        await syncFinancingRequestsBankAgentForCustomer(
+          c.env.DB,
+          Number(customer_id),
+          custRow?.assigned_bank_agent_id ?? null
+        )
       }
     } catch (_) {
       // Non-fatal: sync failure should not block the request creation response.
@@ -12513,18 +12989,11 @@ app.put('/api/financing-requests/:id', async (c) => {
     }
 
     if (assigned_bank_agent_id !== undefined && rowMeta?.customer_id != null) {
-      const persisted = await setCustomerAssignedBankAgent(
+      await assignBankAgentToCustomer(
         c.env.DB,
         Number(rowMeta.customer_id),
         assigned_bank_agent_id
       )
-      if (persisted.ok) {
-        await syncFinancingRequestsBankAgentForCustomer(
-          c.env.DB,
-          Number(rowMeta.customer_id),
-          assigned_bank_agent_id
-        )
-      }
     }
 
     const customerIdRow = await c.env.DB.prepare(`
@@ -16552,6 +17021,7 @@ app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
 app.get('/admin/reports/financial', (c) => c.html(financialReportPage))
 app.get('/admin/reports/banks', (c) => c.html(banksReportPage))
 app.get('/admin/reports/performance', (c) => c.html(performanceReportPage))
+app.get('/admin/reports/staff-active-time', (c) => c.html(buildStaffActiveTimeReportPage()))
 app.get('/admin/reports/workflow', async (c) => {
   const userInfo = await getUserInfo(c)
   if (!userInfo.userId || !userInfo.roleId) {
@@ -18332,14 +18802,27 @@ app.get('/admin/customers/add', async (c) => {
                 '<p><strong>رقم العميل:</strong> #' + peid + '</p></div>' +
                 '<div class="mt-3 flex flex-wrap gap-2 justify-end">' +
                 '<a href="/admin/customers/' + peid + '" class="inline-flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">عرض العميل الموجود</a></div>';
+            } else if (code === 'OPEN_FOLLOWUP_TASK' && d.task_id) {
+              var oph = escapeHtmlMsg(d.phone || '');
+              var ocn = escapeHtmlMsg(d.customer_name || '');
+              var otid = Number(d.task_id) || 0;
+              var enrollRaw = String(d.enroll_href || '');
+              var enrollSafe = /^\\/admin\\/customers\\/add(\\?|$)/.test(enrollRaw) ? enrollRaw : '/admin/my-tasks';
+              extra = '<div class="mt-3 text-sm bg-white/70 rounded-lg p-3 space-y-1 text-gray-800">' +
+                '<p><strong>رقم الهاتف:</strong> <span dir="ltr">' + oph + '</span></p>' +
+                (ocn ? '<p><strong>اسم المتابعة:</strong> ' + ocn + '</p>' : '') +
+                '<p><strong>رقم المهمة:</strong> #' + otid + '</p></div>' +
+                '<div class="mt-3 flex flex-wrap gap-2 justify-end">' +
+                '<a href="' + escapeHtmlMsg(enrollSafe) + '" class="inline-flex items-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">التسجيل عبر المهمة</a>' +
+                '<a href="/admin/my-tasks" class="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition">مهامي</a></div>';
             }
-            var tone = (code === 'INVALID_PHONE' || code === 'LOCATION_REQUIRED' || code === 'INVALID_LOCATION' || code === 'LOCATION_NOT_ALLOWED')
+            var tone = (code === 'INVALID_PHONE' || code === 'LOCATION_REQUIRED' || code === 'INVALID_LOCATION' || code === 'LOCATION_NOT_ALLOWED' || code === 'OPEN_FOLLOWUP_TASK')
               ? 'amber'
               : (code.indexOf('DUPLICATE') === 0 ? 'yellow' : 'red');
             var border = tone === 'amber'
               ? 'border-amber-500 bg-amber-50 text-amber-950'
               : (tone === 'yellow' ? 'border-yellow-500 bg-yellow-50 text-yellow-950' : 'border-red-500 bg-red-50 text-red-950');
-            var icon = code === 'INVALID_PHONE' ? 'fa-phone-slash' : (code.indexOf('DUPLICATE') === 0 ? 'fa-exclamation-triangle' : 'fa-exclamation-circle');
+            var icon = code === 'INVALID_PHONE' ? 'fa-phone-slash' : (code === 'OPEN_FOLLOWUP_TASK' ? 'fa-tasks' : (code.indexOf('DUPLICATE') === 0 ? 'fa-exclamation-triangle' : 'fa-exclamation-circle'));
             messageEl.innerHTML = '<div role="alert" class="rounded-lg p-4 border-r-4 ' + border + '">' +
               '<div class="flex items-start gap-3 flex-row-reverse text-right">' +
               '<i class="fas ' + icon + ' text-2xl flex-shrink-0 opacity-90"></i>' +
@@ -21383,6 +21866,7 @@ app.get('/admin/customers', async (c) => {
     const bankAgentFilterQ = String(c.req.query('bankAgentFilter') ?? 'all')
     const sourceFilterQ = String(c.req.query('sourceFilter') ?? 'all')
     const salaryBankFilterQ = String(c.req.query('salaryBankFilter') ?? 'all')
+    const sortFilter = String(c.req.query('sortFilter') ?? 'recent_activity')
 
     // Build query based on role — always exclude archived and completed customers
     let query = `
@@ -21594,6 +22078,38 @@ app.get('/admin/customers', async (c) => {
     }
 
     // Count before ORDER/LIMIT for server-side pagination
+    // Save pre-sort query/params — used by the fallback if the sort JOIN fails
+    const baseQueryBeforeSort = query
+    const baseParamsBeforeSort = [...queryParams]
+
+    // For recent_activity: inject a pre-aggregated LEFT JOIN (runs once, not per row).
+    // Avoids correlated-subquery CPU overrun in Cloudflare Workers.
+    if (sortFilter === 'recent_activity' && userInfo.userId) {
+      const sortJoin = [
+        '\n      LEFT JOIN (',
+        '\n        SELECT customer_id, MAX(t) AS _last_act FROM (',
+        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_notes WHERE performed_by = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_actions WHERE performed_by = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_transitions WHERE transitioned_by = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, changed_at AS t FROM assignment_history WHERE changed_by = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, changed_at AS t FROM assignment_history WHERE new_employee_id = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, assigned_at AS t FROM customer_assignments WHERE employee_id = ?',
+        '\n          UNION ALL',
+        '\n          SELECT customer_id, created_at AS t FROM financing_requests WHERE created_by = ? OR assigned_bank_agent_id = ?',
+        '\n        ) _acts GROUP BY customer_id',
+        '\n      ) _ua ON _ua.customer_id = customers.id'
+      ].join('')
+      const whereIdx = query.indexOf('WHERE (customers.is_archived')
+      query = query.slice(0, whereIdx) + sortJoin + '\n      ' + query.slice(whereIdx)
+      // Sort params come FIRST — they appear in SQL before the WHERE-clause params
+      queryParams = [userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId, userInfo.userId, ...queryParams]
+    }
+
     const countQuery = `SELECT COUNT(*) AS total FROM (${query}) AS _customers_page`
     let customersTotal = 0
     try {
@@ -21607,22 +22123,32 @@ app.get('/admin/customers', async (c) => {
     const customersTotalPages = Math.max(1, Math.ceil(customersTotal / customersPageSize))
     const customersPageClamped = clampPage(customersPage, customersTotalPages)
     const customersOffsetClamped = (customersPageClamped - 1) * customersPageSize
-    
-    query += ' ORDER BY customers.created_at DESC LIMIT ? OFFSET ?'
+
+    if (sortFilter === 'recent_activity' && userInfo.userId) {
+      query += " ORDER BY COALESCE(_ua._last_act, '1970-01-01') DESC, customers.created_at DESC LIMIT ? OFFSET ?"
+    } else {
+      query += ' ORDER BY customers.created_at DESC LIMIT ? OFFSET ?'
+    }
     queryParams.push(customersPageSize, customersOffsetClamped)
-    
+
     let customers: { results: any[] } = { results: [] };
     try {
       customers = await withPerfTiming(c.env as any, 'admin/customers.query', async () =>
         (await c.env.DB.prepare(query).bind(...queryParams).all()) as { results: any[] }
       )
-    } catch (e: any) {
-      const msg = String(e?.message || e || '')
-      const isMissingCreatedBy = /no such column:\s*customers\.created_by|no such column:\s*created_by/i.test(msg)
-      if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
-        const fallbackQuery = query.replace(
-          /AND\s+customers\.tenant_id\s*=\s*\?\s+AND\s*\(\s*customers\.created_by\s*=\s*\?\s+OR\s+customers\.assigned_bank_agent_id\s*=\s*\?\s+OR\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+financing_requests\s+fr\s+LEFT\s+JOIN\s+users\s+fr_creator\s+ON\s+fr_creator\.id\s*=\s*fr\.created_by\s+WHERE\s+fr\.customer_id\s*=\s*customers\.id\s+AND\s*\(\s*fr\.assigned_bank_agent_id\s*=\s*\?\s+OR\s*\(\s*fr\.created_by\s*=\s*\?\s+AND\s+fr_creator\.role_id\s+IN\s*\(\s*5,\s*15\s*\)\s*\)\s*\)\s*\)\s*\)/i,
-          `AND customers.tenant_id = ? AND (
+    } catch (_sortErr: any) {
+      // Any failure (missing table, CPU timeout, etc.) — retry with pre-sort base query
+      try {
+        const safeQuery = baseQueryBeforeSort + ' ORDER BY customers.created_at DESC LIMIT ? OFFSET ?'
+        const safeParams = [...baseParamsBeforeSort, customersPageSize, customersOffsetClamped]
+        customers = (await c.env.DB.prepare(safeQuery).bind(...safeParams).all()) as { results: any[] }
+      } catch (e: any) {
+        const msg = String(e?.message || e || '')
+        const isMissingCreatedBy = /no such column:\s*customers\.created_by|no such column:\s*created_by/i.test(msg)
+        if (normalizeRoleId(userInfo.roleId) === 5 && isMissingCreatedBy && userInfo.tenantId && userInfo.userId) {
+          const fallbackQuery = baseQueryBeforeSort.replace(
+            /AND\s+customers\.tenant_id\s*=\s*\?\s+AND\s*\(\s*customers\.created_by\s*=\s*\?\s+OR\s+customers\.assigned_bank_agent_id\s*=\s*\?\s+OR\s+EXISTS\s*\(\s*SELECT\s+1\s+FROM\s+financing_requests\s+fr\s+LEFT\s+JOIN\s+users\s+fr_creator\s+ON\s+fr_creator\.id\s*=\s*fr\.created_by\s+WHERE\s+fr\.customer_id\s*=\s*customers\.id\s+AND\s*\(\s*fr\.assigned_bank_agent_id\s*=\s*\?\s+OR\s*\(\s*fr\.created_by\s*=\s*\?\s+AND\s+fr_creator\.role_id\s+IN\s*\(\s*5,\s*15\s*\)\s*\)\s*\)\s*\)\s*\)/i,
+            `AND customers.tenant_id = ? AND (
           customers.assigned_bank_agent_id = ?
           OR EXISTS (
             SELECT 1
@@ -21635,10 +22161,11 @@ app.get('/admin/customers', async (c) => {
               )
           )
         )`
-        )
-        customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, customersPageSize, customersOffsetClamped).all()) as { results: any[] }
-      } else {
-        throw e
+          ) + ' ORDER BY customers.created_at DESC LIMIT ? OFFSET ?'
+          customers = (await c.env.DB.prepare(fallbackQuery).bind(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.userId, customersPageSize, customersOffsetClamped).all()) as { results: any[] }
+        } else {
+          throw e
+        }
       }
     }
 
@@ -21699,6 +22226,7 @@ app.get('/admin/customers', async (c) => {
       bankAgentFilter: bankAgentFilterQ,
       sourceFilter: sourceFilterQ,
       salaryBankFilter: salaryBankFilterQ,
+      sortFilter,
       page: customersServerPage,
       pageSize: customersServerPageSize,
     }).replace(/</g, '\\u003c')
@@ -21977,6 +22505,11 @@ app.get('/admin/customers', async (c) => {
                       <option value="none">بدون بنك</option>
                     </select>
 
+                    <select id="sortFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
+                      <option value="recent_activity">الترتيب: آخر تفاعل لي</option>
+                      <option value="newest">الأحدث تسجيلاً</option>
+                    </select>
+
                     <button onclick="resetFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
                       <i class="fas fa-redo"></i> إعادة تعيين
                     </button>
@@ -22103,22 +22636,26 @@ app.get('/admin/customers', async (c) => {
                           const assignedAgentId = Number((customer as any).assigned_bank_agent_id || 0)
                           const isEmp = assignedEmpId === callerUserIdForTransfer
                           const isAgent = assignedAgentId === callerUserIdForTransfer
-                          if (isEmp && isAgent) return ''
+                          const makeBtn = (at: string, label: string) => `
+                        <button type="button" class="actions-dropdown-item"
+                                data-customer-id="${customer.id}"
+                                data-customer-name="${escapeHtmlAttr(String(customer.full_name || ''))}"
+                                data-assignment-type="${at}"
+                                onclick="openCustomerTransferModal(this)"
+                                style="color:#0e7490;">
+                          <i class="fas fa-exchange-alt"></i> ${label}
+                        </button>`
+                          // Role 6 dual-holder: show both buttons
+                          if (callerRoleNormalized === 6 && isEmp && isAgent) {
+                            return makeBtn('employee', 'تمرير كموظف') + makeBtn('bank_agent', 'تمرير كوكيل بنك')
+                          }
                           let assignmentType = ''
                           if (callerRoleNormalized === 4 && isEmp) assignmentType = 'employee'
                           else if (callerRoleNormalized === 5 && isAgent) assignmentType = 'bank_agent'
                           else if (callerRoleNormalized === 6 && isEmp) assignmentType = 'employee'
                           else if (callerRoleNormalized === 6 && isAgent) assignmentType = 'bank_agent'
                           if (!assignmentType) return ''
-                          return `
-                        <button type="button" class="actions-dropdown-item"
-                                data-customer-id="${customer.id}"
-                                data-customer-name="${escapeHtmlAttr(String(customer.full_name || ''))}"
-                                data-assignment-type="${assignmentType}"
-                                onclick="openCustomerTransferModal(this)"
-                                style="color:#0e7490;">
-                          <i class="fas fa-exchange-alt"></i> تمرير العميل
-                        </button>`
+                          return makeBtn(assignmentType, 'تمرير العميل')
                         })()}
                       </div>
                     </td>
@@ -22335,17 +22872,18 @@ app.get('/admin/customers', async (c) => {
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-visible">
             <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
               <h2 class="text-white text-xl font-bold"><i class="fas fa-inbox ml-2"></i> طلب تمرير عميل</h2>
-              <button onclick="closeCustomerTransferIncomingModal()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+              <button type="button" id="ctxInCloseBtn" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
             </div>
             <div class="p-6 space-y-3">
               <div id="ctxInBody" class="text-sm text-gray-800 space-y-2"></div>
+              <div id="ctxInSuccess" class="hidden text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2 font-medium"></div>
               <div id="ctxInError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
             </div>
             <div class="px-6 pb-6 flex gap-3 justify-end" id="ctxInActions">
-              <button onclick="respondCustomerTransfer('reject')" class="px-5 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-bold transition-colors">
+              <button type="button" id="ctxInRejectBtn" data-customer-transfer-action="reject" class="px-5 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-bold transition-colors">
                 <i class="fas fa-times ml-1"></i> رفض
               </button>
-              <button onclick="respondCustomerTransfer('accept')" class="px-5 py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold transition-all shadow-md">
+              <button type="button" id="ctxInAcceptBtn" data-customer-transfer-action="accept" class="px-5 py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold transition-all shadow-md">
                 <i class="fas fa-check ml-1"></i> قبول
               </button>
             </div>
@@ -22741,6 +23279,71 @@ app.get('/admin/customers', async (c) => {
           // ==================== Customer Transfer ====================
           var ctxCurrent = { customerId: null, customerName: '', assignmentType: '' };
 
+          function readClientAuthToken() {
+            var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+            if (!token && typeof document !== 'undefined') {
+              var parts = document.cookie.split(';');
+              for (var i = 0; i < parts.length; i++) {
+                var p = parts[i].trim();
+                if (p.indexOf('authToken=') === 0) {
+                  token = decodeURIComponent(p.slice('authToken='.length));
+                  break;
+                }
+              }
+            }
+            return token;
+          }
+
+          function customerTransferAuthHeaders(jsonBody) {
+            var token = readClientAuthToken();
+            var headers = {};
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            if (jsonBody) headers['Content-Type'] = 'application/json';
+            return headers;
+          }
+
+          async function parseCustomerTransferApiResponse(resp, opts) {
+            opts = opts || {};
+            var text = await resp.text();
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (_) {}
+            if (!resp.ok) {
+              return { ok: false, error: (data && data.error) || ('فشل الطلب (رمز ' + resp.status + ')') };
+            }
+            if (!data || !data.success) {
+              return { ok: false, error: (data && data.error) || 'حدث خطأ غير متوقع' };
+            }
+            // PATCH accept/reject returns { success, message } — not { success, data }.
+            if (opts.requireMutation && data.data && !data.message) {
+              return { ok: false, error: 'استجابة غير متوقعة من الخادم — حاول مرة أخرى' };
+            }
+            return { ok: true, data: data };
+          }
+
+          function setCustomerTransferIncomingBusy(busy, action) {
+            var acceptBtn = document.getElementById('ctxInAcceptBtn');
+            var rejectBtn = document.getElementById('ctxInRejectBtn');
+            var actions = document.getElementById('ctxInActions');
+            if (acceptBtn) {
+              acceptBtn.disabled = !!busy;
+              if (busy && action === 'accept') {
+                acceptBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جاري القبول...';
+              } else if (!busy) {
+                acceptBtn.innerHTML = '<i class="fas fa-check ml-1"></i> قبول';
+              }
+            }
+            if (rejectBtn) {
+              rejectBtn.disabled = !!busy;
+              if (busy && action === 'reject') {
+                rejectBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جاري الرفض...';
+              } else if (!busy) {
+                rejectBtn.innerHTML = '<i class="fas fa-times ml-1"></i> رفض';
+              }
+            }
+            if (actions && busy) actions.style.opacity = '0.85';
+            else if (actions) actions.style.opacity = '';
+          }
+
           function openCustomerTransferModal(btn) {
             var cid = Number(btn.getAttribute('data-customer-id'));
             var name = btn.getAttribute('data-customer-name') || '';
@@ -22755,7 +23358,10 @@ app.get('/admin/customers', async (c) => {
             var sel = document.getElementById('ctxRecipient');
             sel.innerHTML = '<option value="">— جاري التحميل —</option>';
             document.getElementById('customerTransferModal').classList.remove('hidden');
-            fetch('/api/customer-transfer-candidates?assignment_type=' + encodeURIComponent(at))
+            fetch('/api/customer-transfer-candidates?assignment_type=' + encodeURIComponent(at), {
+              credentials: 'same-origin',
+              headers: customerTransferAuthHeaders(false)
+            })
               .then(function(r){ return r.json(); })
               .then(function(data){
                 if (!data || !data.success) {
@@ -22792,7 +23398,8 @@ app.get('/admin/customers', async (c) => {
             try {
               var resp = await fetch('/api/customers/' + ctxCurrent.customerId + '/transfer', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: customerTransferAuthHeaders(true),
                 body: JSON.stringify({ to_user_id: recip, note_text: note, assignment_type: ctxCurrent.assignmentType })
               });
               var data = await resp.json();
@@ -22815,12 +23422,26 @@ app.get('/admin/customers', async (c) => {
             if (e.target === this) closeCustomerTransferModal();
           });
 
-          // ------- Recipient popup (opened from ?customer_transfer=<id>) -------
+          // ------- Recipient popup (opened from ?customer_transfer=<id> or alarm panel) -------
           var ctxIncomingId = null;
+          var ctxIncomingAlarmId = null;
+          var ctxIncomingBusy = false;
 
-          function closeCustomerTransferIncomingModal() {
+          function parseCustomerTransferIdFromLink(linkUrl) {
+            if (!linkUrl) return null;
+            try {
+              var m = String(linkUrl).match(/[?&]customer_transfer=([0-9]+)/);
+              return m ? Number(m[1]) : null;
+            } catch (_) { return null; }
+          }
+
+          function closeCustomerTransferIncomingModal(force) {
+            if (ctxIncomingBusy && !force) return;
             document.getElementById('customerTransferIncomingModal').classList.add('hidden');
             ctxIncomingId = null;
+            // Keep alarm unread on close so the user can reopen Accept/Reject later.
+            ctxIncomingAlarmId = null;
+            ctxIncomingBusy = false;
             // Clean the query param so a refresh doesn't re-open the modal.
             try {
               var url = new URL(window.location.href);
@@ -22834,27 +23455,53 @@ app.get('/admin/customers', async (c) => {
           document.getElementById('customerTransferIncomingModal').addEventListener('click', function(e){
             if (e.target === this) closeCustomerTransferIncomingModal();
           });
+          document.getElementById('ctxInCloseBtn').addEventListener('click', function(e){
+            e.preventDefault();
+            closeCustomerTransferIncomingModal();
+          });
+          // Do not rely on inline onclick attributes: they can be blocked by a
+          // Content-Security-Policy, which previously made Accept appear inert.
+          document.getElementById('ctxInActions').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest
+              ? e.target.closest('[data-customer-transfer-action]')
+              : null;
+            if (!button) return;
+            e.preventDefault();
+            var action = button.getAttribute('data-customer-transfer-action');
+            if (action === 'accept' || action === 'reject') respondCustomerTransfer(action);
+          });
 
-          async function openCustomerTransferIncoming(id) {
+          async function openCustomerTransferIncoming(id, alarmId) {
             ctxIncomingId = Number(id);
+            ctxIncomingAlarmId = alarmId != null && Number.isFinite(Number(alarmId)) ? Number(alarmId) : null;
             var body = document.getElementById('ctxInBody');
             var actions = document.getElementById('ctxInActions');
             var errEl = document.getElementById('ctxInError');
+            var okEl = document.getElementById('ctxInSuccess');
             errEl.classList.add('hidden'); errEl.textContent = '';
-            body.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
+            if (okEl) { okEl.classList.add('hidden'); okEl.textContent = ''; }
+            body.innerHTML = '<div class="text-gray-500"><i class="fas fa-spinner fa-spin ml-1"></i> جاري التحميل...</div>';
             actions.style.display = 'none';
+            setCustomerTransferIncomingBusy(false);
+            ctxIncomingBusy = false;
             document.getElementById('customerTransferIncomingModal').classList.remove('hidden');
             try {
-              var resp = await fetch('/api/customer-transfers/' + ctxIncomingId);
-              var data = await resp.json();
-              if (!data || !data.success) {
-                body.innerHTML = '<div class="text-red-700">' + ((data && data.error) || 'لم يتم العثور على الطلب') + '</div>';
+              closeNotifPanel();
+            } catch (_) {}
+            try {
+              var resp = await fetch('/api/customer-transfers/' + ctxIncomingId, {
+                credentials: 'same-origin',
+                headers: customerTransferAuthHeaders(false)
+              });
+              var parsed = await parseCustomerTransferApiResponse(resp);
+              if (!parsed.ok) {
+                body.innerHTML = '<div class="text-red-700">' + escHtml(parsed.error) + '</div>';
                 return;
               }
-              var r = data.data;
+              var r = parsed.data.data;
               var atLabel = r.assignment_type === 'employee' ? 'كموظف' : 'كوكيل بنك';
               var statusLabel = r.status === 'pending' ? '' :
-                '<div class="mt-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900">هذا الطلب لم يعد معلّقاً (الحالة: ' + r.status + ')</div>';
+                '<div class="mt-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900">هذا الطلب لم يعد معلّقاً (الحالة: ' + escHtml(r.status) + ')</div>';
               body.innerHTML =
                 '<div><span class="text-gray-500">العميل:</span> <span class="font-bold">' + escHtml(r.customer_name || ('#' + r.customer_id)) + '</span></div>' +
                 '<div><span class="text-gray-500">من:</span> <span class="font-bold">' + escHtml(r.from_user_name || '—') + '</span></div>' +
@@ -22862,8 +23509,13 @@ app.get('/admin/customers', async (c) => {
                 '<div class="mt-2"><span class="text-gray-500">الملاحظة:</span><div class="mt-1 p-2 bg-gray-50 border border-gray-200 rounded whitespace-pre-wrap">' + escHtml(r.note_text || '') + '</div></div>' +
                 statusLabel;
               if (r.status === 'pending') actions.style.display = '';
+              else if (ctxIncomingAlarmId) {
+                // Already resolved — clear Accept/Reject affordance and mark alarm read.
+                try { await markAlarmRead(ctxIncomingAlarmId); } catch (_) {}
+                ctxIncomingAlarmId = null;
+              }
             } catch(e) {
-              body.innerHTML = '<div class="text-red-700">فشل الاتصال بالخادم</div>';
+              body.innerHTML = '<div class="text-red-700">فشل الاتصال بالخادم — تحقق من الاتصال وحاول مرة أخرى</div>';
             }
           }
 
@@ -22873,27 +23525,65 @@ app.get('/admin/customers', async (c) => {
           }
 
           async function respondCustomerTransfer(action) {
-            if (!ctxIncomingId) return;
+            var transferId = ctxIncomingId;
+            if (!transferId) {
+              var errEl0 = document.getElementById('ctxInError');
+              if (errEl0) {
+                errEl0.textContent = 'انتهت صلاحية نافذة الطلب — أعد فتح الإشعار';
+                errEl0.classList.remove('hidden');
+              }
+              showToast('انتهت صلاحية نافذة الطلب — أعد فتح الإشعار', 'error');
+              return;
+            }
             var errEl = document.getElementById('ctxInError');
+            var okEl = document.getElementById('ctxInSuccess');
             errEl.classList.add('hidden'); errEl.textContent = '';
+            if (okEl) { okEl.classList.add('hidden'); okEl.textContent = ''; }
+            ctxIncomingBusy = true;
+            setCustomerTransferIncomingBusy(true, action);
             try {
-              var resp = await fetch('/api/customer-transfers/' + ctxIncomingId, {
+              var resp = await fetch('/api/customer-transfers/' + transferId, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: customerTransferAuthHeaders(true),
                 body: JSON.stringify({ action: action })
               });
-              var data = await resp.json();
-              if (data && data.success) {
-                closeCustomerTransferIncomingModal();
-                showToast(action === 'accept' ? 'تم قبول التمرير' : 'تم رفض التمرير', 'success');
-                setTimeout(function(){ window.location.reload(); }, 600);
-              } else {
-                errEl.textContent = (data && data.error) || 'حدث خطأ';
+              var parsed = await parseCustomerTransferApiResponse(resp, { requireMutation: true });
+              if (!parsed.ok) {
+                errEl.textContent = parsed.error;
                 errEl.classList.remove('hidden');
+                showToast(parsed.error, 'error');
+                ctxIncomingBusy = false;
+                setCustomerTransferIncomingBusy(false);
+                return;
               }
+              var successMsg = parsed.data.message || (action === 'accept' ? 'تم قبول التمرير بنجاح' : 'تم رفض التمرير');
+              if (okEl) {
+                okEl.innerHTML = '<i class="fas fa-check-circle ml-1"></i> ' + escHtml(successMsg);
+                okEl.classList.remove('hidden');
+              }
+              document.getElementById('ctxInActions').style.display = 'none';
+              showToast(successMsg, 'success');
+              var alarmToMark = ctxIncomingAlarmId;
+              ctxIncomingBusy = false;
+              if (alarmToMark) {
+                try { await markAlarmRead(alarmToMark); } catch (_) {}
+              }
+              setTimeout(function(){
+                closeCustomerTransferIncomingModal(true);
+                if (action === 'accept') {
+                  window.location.href = '/admin/customers?requestsFilter=all';
+                } else {
+                  window.location.reload();
+                }
+              }, 1200);
             } catch(e) {
-              errEl.textContent = 'فشل الاتصال بالخادم';
+              var netErr = 'فشل الاتصال بالخادم — تحقق من الاتصال وحاول مرة أخرى';
+              errEl.textContent = netErr;
               errEl.classList.remove('hidden');
+              showToast(netErr, 'error');
+              ctxIncomingBusy = false;
+              setCustomerTransferIncomingBusy(false);
             }
           }
 
@@ -22912,7 +23602,10 @@ app.get('/admin/customers', async (c) => {
           async function markPendingTransfers(){
             try {
               document.querySelectorAll('.ctx-pending-badge').forEach(function(n){ n.remove(); });
-              var resp = await fetch('/api/customer-transfers/my-pending');
+              var resp = await fetch('/api/customer-transfers/my-pending', {
+                credentials: 'same-origin',
+                headers: customerTransferAuthHeaders(false)
+              });
               var data = await resp.json();
               if (!data || !data.success) return;
               (data.data || []).forEach(function(pt){
@@ -22942,7 +23635,8 @@ app.get('/admin/customers', async (c) => {
             try {
               var resp = await fetch('/api/customer-transfers/' + transferId, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                headers: customerTransferAuthHeaders(true),
                 body: JSON.stringify({ action: 'cancel' })
               });
               var data = await resp.json();
@@ -22993,6 +23687,7 @@ app.get('/admin/customers', async (c) => {
                 const isTransfer = a.alarm_type === 'customer_transfer';
                 // Any alarm with an explicit link_url (workflow, customer_transfer) uses it directly.
                 const useLinkUrl = isWorkflow || isTransfer;
+                const transferId = isTransfer ? parseCustomerTransferIdFromLink(a.link_url) : null;
                 let dateStr = [a.alarm_date_gregorian, a.alarm_date_hijri].filter(Boolean).join(' | ');
                 if (!dateStr && a.created_at) {
                   try {
@@ -23034,19 +23729,44 @@ app.get('/admin/customers', async (c) => {
                 const nameColor = isWorkflow ? 'text-blue-800' : isTransfer ? 'text-cyan-800' : isReminder ? 'text-green-800' : 'text-gray-800';
                 const noteColor = isWorkflow ? 'text-blue-700' : isTransfer ? 'text-cyan-700' : isReminder ? 'text-green-700' : 'text-gray-600';
                 const linkTitle = isWorkflow ? 'سير العمل' : isTransfer ? 'فتح طلب التمرير' : 'بيانات العميل';
+                // Only unread + pending transfers get Accept/Reject; resolved ones are marked read and lose the button.
+                const transferOpenBtn = (isTransfer && transferId && isUnread)
+                  ? \`<button type="button" data-open-alarm-transfer="\${transferId}" data-alarm-id="\${a.id}" title="قبول أو رفض التمرير" class="px-2 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-[11px] font-bold leading-tight whitespace-nowrap">قبول / رفض</button>\`
+                  : '';
+                // Transfer alarms: no green check (it looked like Accept). Mark-read happens after accept/reject.
+                const markReadBtn = (!isTransfer && isUnread)
+                  ? \`<button type="button" onclick="markAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\`
+                  : '';
+                const transferCardInner =
+                  '<div class="flex items-center gap-2 mb-1">' +
+                    (isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : '') +
+                    icon +
+                    '<p class="font-bold ' + nameColor + ' text-sm truncate">' + a.customer_name + '</p>' +
+                  '</div>' +
+                  (dateStr ? '<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock ' + clockColor + ' ml-1"></i>' + dateStr + timeStr + '</p>' : '') +
+                  (a.note ? '<p class="text-sm ' + noteColor + ' mt-1 line-clamp-4 whitespace-pre-line text-right">' + a.note + '</p>' : '');
+                const mainBody = (isTransfer && transferId && isUnread)
+                  ? \`<button type="button" data-open-alarm-transfer="\${transferId}" data-alarm-id="\${a.id}" title="\${linkTitle}"
+                       class="flex-1 min-w-0 p-4 block text-right border-0 bg-transparent cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-s-xl">
+                      \${transferCardInner}
+                    </button>\`
+                  : isTransfer
+                  ? \`<div class="flex-1 min-w-0 p-4 text-right rounded-s-xl">\${transferCardInner}</div>\`
+                  : \`<a href="\${customerHref}" title="\${linkTitle}"
+                       class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-s-xl">
+                      <div class="flex items-center gap-2 mb-1">
+                        \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
+                        \${icon}
+                        <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
+                      </div>
+                      \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
+                      \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
+                    </a>\`;
                 return \`<div id="alarm-\${a.id}" class="rounded-xl border \${borderClass} shadow-sm transition-all flex items-stretch overflow-hidden">
-                  <a href="\${customerHref}" title="\${linkTitle}"
-                     class="flex-1 min-w-0 p-4 block text-right no-underline text-inherit cursor-pointer hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-s-xl">
-                    <div class="flex items-center gap-2 mb-1">
-                      \${isUnread ? '<span class="inline-block w-2.5 h-2.5 rounded-full ' + dotColor + ' flex-shrink-0 mt-0.5" style="animation:pulse-glow 1.5s infinite"></span>' : ''}
-                      \${icon}
-                      <p class="font-bold \${nameColor} text-sm truncate">\${a.customer_name}</p>
-                    </div>
-                    \${dateStr ? \`<p class="text-xs text-gray-500 mb-1"><i class="fas fa-clock \${clockColor} ml-1"></i>\${dateStr}\${timeStr}</p>\` : ''}
-                    \${a.note ? \`<p class="text-sm \${noteColor} mt-1 line-clamp-4 whitespace-pre-line">\${a.note}</p>\` : ''}
-                  </a>
+                  \${mainBody}
                   <div class="flex flex-col gap-1 flex-shrink-0 justify-center px-2 py-2 border-s border-gray-200/80 \${sideBgClass}">
-                    \${isUnread ? \`<button type="button" onclick="markAlarmRead(\${a.id})" title="تحديد كمقروء" class="w-7 h-7 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center transition-colors"><i class="fas fa-check text-xs"></i></button>\` : ''}
+                    \${transferOpenBtn}
+                    \${markReadBtn}
                     <button type="button" onclick="deleteAlarm(\${a.id})" title="حذف" class="w-7 h-7 rounded-full bg-red-100 hover:bg-red-200 text-red-600 flex items-center justify-center transition-colors"><i class="fas fa-trash text-xs"></i></button>
                   </div>
                 </div>\`;
@@ -23056,16 +23776,42 @@ app.get('/admin/customers', async (c) => {
             }
           }
 
+          document.getElementById('notifList').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest
+              ? e.target.closest('[data-open-alarm-transfer]')
+              : null;
+            if (!button) return;
+            e.preventDefault();
+            var transferId = Number(button.getAttribute('data-open-alarm-transfer'));
+            var alarmId = Number(button.getAttribute('data-alarm-id'));
+            if (Number.isFinite(transferId) && transferId > 0) {
+              openCustomerTransferIncoming(transferId, Number.isFinite(alarmId) ? alarmId : null);
+            }
+          });
+
           async function markAlarmRead(id) {
             await fetch('/api/customer-alarms/' + id + '/read', { method: 'PUT' });
             const el = document.getElementById('alarm-' + id);
             if (el) {
-              el.classList.remove('border-orange-300','bg-orange-50','border-blue-300','bg-blue-50','border-green-300','bg-green-50');
+              el.classList.remove('border-orange-300','bg-orange-50','border-blue-300','bg-blue-50','border-green-300','bg-green-50','border-cyan-300','bg-cyan-50');
               el.classList.add('border-gray-200','bg-white');
-              const dot = el.querySelector('.bg-red-500,.bg-blue-500,.bg-green-500');
+              const dot = el.querySelector('.bg-red-500,.bg-blue-500,.bg-green-500,.bg-cyan-500');
               if (dot) dot.remove();
               const readBtn = el.querySelector('button[onclick^="markAlarmRead"]');
               if (readBtn) readBtn.remove();
+              // Drop Accept/Reject controls once the transfer alarm is resolved/read.
+              el.querySelectorAll('[data-open-alarm-transfer]').forEach(function(node) {
+                if (node.tagName === 'BUTTON' && node.closest('.flex.flex-col')) {
+                  node.remove();
+                } else {
+                  node.removeAttribute('data-open-alarm-transfer');
+                  node.removeAttribute('data-alarm-id');
+                  if (node.tagName === 'BUTTON') {
+                    node.disabled = true;
+                    node.classList.remove('cursor-pointer', 'hover:bg-black/5');
+                  }
+                }
+              });
             }
             refreshUnreadDot();
           }
@@ -23174,19 +23920,23 @@ app.get('/admin/customers', async (c) => {
           function buildCustomersListUrl(overrides) {
             const params = new URLSearchParams(window.location.search)
             const next = Object.assign({}, CUSTOMERS_FILTER_STATE, overrides || {})
-            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','sourceFilter','salaryBankFilter','page','pageSize']
+            const keys = ['q','filterField','dateRange','requestsFilter','ratingFilter','employeeFilter','bankAgentFilter','sourceFilter','salaryBankFilter','sortFilter','page','pageSize']
             keys.forEach((k) => {
               const v = next[k]
+              // Role 4/6: server redirects missing requestsFilter → 0. Never drop the param —
+              // "all" must stay as ?requestsFilter=all or selecting الكل snaps back to بدون طلب.
+              if (k === 'requestsFilter' && DEFAULT_REQUESTS_FILTER === '0') {
+                const rf = (v == null || v === '') ? DEFAULT_REQUESTS_FILTER : String(v)
+                params.set(k, rf)
+                return
+              }
               if (v == null || v === '' || v === 'all' || (k === 'page' && Number(v) === 1) || (k === 'pageSize' && Number(v) === 15)) {
-                if (k === 'requestsFilter' && String(v) === '0') { params.set(k, '0'); return }
                 if (k === 'q' && v) { params.set(k, String(v)); return }
                 params.delete(k)
                 return
               }
               params.set(k, String(v))
             })
-            // Always keep explicit requestsFilter=0 for role-default pages
-            if (String(next.requestsFilter) === '0') params.set('requestsFilter', '0')
             if (next.q) params.set('q', String(next.q))
             if (next.filterField && next.filterField !== 'all') params.set('filterField', String(next.filterField))
             if (next.dateRange && next.dateRange !== 'all') params.set('dateRange', String(next.dateRange))
@@ -23195,6 +23945,7 @@ app.get('/admin/customers', async (c) => {
             if (next.bankAgentFilter && next.bankAgentFilter !== 'all') params.set('bankAgentFilter', String(next.bankAgentFilter))
             if (next.sourceFilter && next.sourceFilter !== 'all') params.set('sourceFilter', String(next.sourceFilter)); else params.delete('sourceFilter')
             if (next.salaryBankFilter && next.salaryBankFilter !== 'all') params.set('salaryBankFilter', String(next.salaryBankFilter)); else params.delete('salaryBankFilter')
+            if (next.sortFilter && next.sortFilter !== 'recent_activity') params.set('sortFilter', String(next.sortFilter)); else params.delete('sortFilter')
             if (Number(next.page) > 1) params.set('page', String(next.page)); else params.delete('page')
             if (Number(next.pageSize) && Number(next.pageSize) !== 15) params.set('pageSize', String(next.pageSize)); else params.delete('pageSize')
             const qs = params.toString()
@@ -23499,6 +24250,7 @@ app.get('/admin/customers', async (c) => {
             const bankAgentFilter = (document.getElementById('bankAgentFilter') || {value: 'all'}).value;
             const sourceFilter = (document.getElementById('sourceFilter') || {value: 'all'}).value;
             const salaryBankFilter = (document.getElementById('salaryBankFilter') || {value: 'all'}).value;
+            const sortFilter = (document.getElementById('sortFilter') || {value: 'recent_activity'}).value;
             navigateCustomersList({
               q: searchInput,
               filterField,
@@ -23509,6 +24261,7 @@ app.get('/admin/customers', async (c) => {
               bankAgentFilter,
               sourceFilter,
               salaryBankFilter,
+              sortFilter,
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -23529,6 +24282,7 @@ app.get('/admin/customers', async (c) => {
             setVal('requestsFilter', s.requestsFilter || 'all');
             setVal('ratingFilter', s.ratingFilter || 'all');
             setVal('sourceFilter', s.sourceFilter || 'all');
+            setVal('sortFilter', s.sortFilter || 'recent_activity');
           }
 
           function applyPresetFiltersFromUrl() {
@@ -23548,6 +24302,7 @@ app.get('/admin/customers', async (c) => {
               bankAgentFilter: 'all',
               sourceFilter: 'all',
               salaryBankFilter: 'all',
+              sortFilter: 'recent_activity',
               page: 1,
               pageSize: customersPaging.pageSize,
             });
@@ -24348,7 +25103,7 @@ app.get('/admin/notifications', async (c) => {
               </button>
               <button type="button" data-notification-filter="customer_transfer_request" class="filter-btn px-6 py-2 rounded-lg font-bold transition">
                 <i class="fas fa-exchange-alt ml-2"></i>
-                طلبات تمرير العملاء
+                تمرير العملاء
               </button>
             </div>
           </div>
@@ -24373,6 +25128,20 @@ app.get('/admin/notifications', async (c) => {
             </div>
             <div id="passRequestModalBody" class="p-6 max-h-[60vh] overflow-y-auto"></div>
             <div id="passRequestModalFooter" class="px-6 pb-5 flex justify-end gap-3"></div>
+          </div>
+        </div>
+
+        <!-- Customer Transfer Request Popup Modal -->
+        <div id="customerTransferPopupModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-gradient-to-r from-cyan-600 to-indigo-600 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <h2 class="text-white text-xl font-bold"><i class="fas fa-exchange-alt ml-2"></i>طلب تمرير عميل</h2>
+              <button type="button" onclick="closeCustomerTransferPopup()" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+            </div>
+            <div id="customerTransferPopupBody" class="p-6 max-h-[60vh] overflow-y-auto text-sm text-gray-800 space-y-2"></div>
+            <div id="customerTransferPopupSuccess" class="hidden mx-6 mb-2 text-sm text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2 font-medium"></div>
+            <div id="customerTransferPopupError" class="hidden mx-6 mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+            <div id="customerTransferPopupFooter" class="px-6 pb-5 flex justify-end gap-3"></div>
           </div>
         </div>
 
@@ -24446,7 +25215,13 @@ app.get('/admin/notifications', async (c) => {
             } else if (currentFilter === 'read') {
               filtered = allNotifications.filter(function (n) { return !notificationIsUnread(n); });
             } else if (['request', 'status_change', 'workflow_action', 'task_pass_request', 'customer_transfer_request'].includes(currentFilter)) {
-              filtered = allNotifications.filter(n => n.category === currentFilter);
+              if (currentFilter === 'customer_transfer_request') {
+                filtered = allNotifications.filter(function (n) {
+                  return n.category === 'customer_transfer_request' || n.category === 'customer_transfer_response';
+                });
+              } else {
+                filtered = allNotifications.filter(n => n.category === currentFilter);
+              }
             }
 
             if (filtered.length === 0) {
@@ -24507,10 +25282,17 @@ app.get('/admin/notifications', async (c) => {
                 </a>
               \` : '';
 
-              var transferBtn = isTransfer && notification.related_transfer_request_id ? \`
-                <a href="/admin/customers?customer_transfer=\${notification.related_transfer_request_id}"
-                  class="mt-3 inline-flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition no-underline">
-                  <i class="fas fa-exchange-alt"></i> فتح طلب تمرير العميل
+              var transferBtn = isTransferRequest && notification.related_transfer_request_id ? \`
+                <button type="button" data-open-customer-transfer="\${notification.related_transfer_request_id}" data-notification-id="\${notification.id}"
+                  class="mt-3 inline-flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition cursor-pointer border-0">
+                  <i class="fas fa-exchange-alt"></i> قبول / رفض التمرير
+                </button>
+              \` : '';
+
+              var transferResponseBtn = isTransferResponse ? \`
+                <a href="/admin/customers?requestsFilter=all"
+                  class="mt-3 inline-flex items-center gap-2 \${notification.type === 'success' ? 'bg-green-600 hover:bg-green-700' : notification.type === 'warning' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-cyan-600 hover:bg-cyan-700'} text-white text-sm font-medium px-4 py-2 rounded-lg transition no-underline">
+                  <i class="fas fa-users"></i> عرض العملاء
                 </a>
               \` : '';
 
@@ -24549,6 +25331,7 @@ app.get('/admin/notifications', async (c) => {
                       <p class="\${msgColor} mb-2">\${notification.message}</p>
                       \${passRequestBtn}
                       \${transferBtn}
+                      \${transferResponseBtn}
                       <div class="flex items-center gap-4 text-sm text-gray-600 mt-3">
                         <span>
                           <i class="fas \${categoryIcon} ml-1"></i>
@@ -24722,6 +25505,170 @@ app.get('/admin/notifications', async (c) => {
           document.getElementById('passRequestModal').addEventListener('click', function(e) {
             if (e.target === this) closePassRequestModal();
           });
+
+          // ── Customer Transfer Request Popup ─────────────────────────────
+          var transferPopupId = null;
+          var transferPopupNotifId = null;
+          var transferPopupBusy = false;
+
+          function escapeTransferHtml(v) {
+            return String(v ?? '')
+              .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          }
+
+          function transferPopupAuthHeaders() {
+            var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+            if (!token && typeof document !== 'undefined') {
+              var parts = document.cookie.split(';');
+              for (var i = 0; i < parts.length; i++) {
+                var p = parts[i].trim();
+                if (p.indexOf('authToken=') === 0) {
+                  token = decodeURIComponent(p.slice('authToken='.length));
+                  break;
+                }
+              }
+            }
+            return token ? { Authorization: 'Bearer ' + token } : {};
+          }
+
+          function closeCustomerTransferPopup(force) {
+            if (transferPopupBusy && !force) return;
+            var modal = document.getElementById('customerTransferPopupModal');
+            modal.classList.add('hidden');
+            modal.style.display = '';
+            transferPopupId = null;
+            transferPopupNotifId = null;
+            transferPopupBusy = false;
+          }
+
+          async function openCustomerTransferPopup(transferRequestId, notificationId) {
+            transferPopupId = transferRequestId;
+            transferPopupNotifId = notificationId;
+            var modal = document.getElementById('customerTransferPopupModal');
+            var body = document.getElementById('customerTransferPopupBody');
+            var footer = document.getElementById('customerTransferPopupFooter');
+            var errEl = document.getElementById('customerTransferPopupError');
+            var okEl = document.getElementById('customerTransferPopupSuccess');
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+            body.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-spinner fa-spin text-3xl mb-3"></i><p>جاري التحميل...</p></div>';
+            footer.innerHTML = '';
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            okEl.classList.add('hidden'); okEl.textContent = '';
+            try {
+              var res = await axios.get('/api/customer-transfers/' + transferRequestId, { headers: transferPopupAuthHeaders() });
+              var r = res.data && res.data.data;
+              if (!r) throw new Error('لم يتم العثور على الطلب');
+              var atLabel = r.assignment_type === 'employee' ? 'كموظف' : 'كوكيل بنك';
+              var statusHtml = r.status === 'pending' ? '' :
+                '<div class="mt-2 px-3 py-2 rounded bg-amber-50 border border-amber-200 text-amber-900">هذا الطلب لم يعد معلّقاً (الحالة: ' + escapeTransferHtml(r.status) + ')</div>';
+              body.innerHTML =
+                '<div><span class="text-gray-500">العميل:</span> <span class="font-bold">' + escapeTransferHtml(r.customer_name || ('#' + r.customer_id)) + '</span></div>' +
+                '<div><span class="text-gray-500">من:</span> <span class="font-bold">' + escapeTransferHtml(r.from_user_name || '—') + '</span></div>' +
+                '<div><span class="text-gray-500">نوع التمرير:</span> ' + atLabel + '</div>' +
+                '<div class="mt-2"><span class="text-gray-500">الملاحظة:</span><div class="mt-1 p-2 bg-gray-50 border border-gray-200 rounded whitespace-pre-wrap">' + escapeTransferHtml(r.note_text || '') + '</div></div>' +
+                statusHtml;
+              if (r.status === 'pending') {
+                footer.innerHTML =
+                  '<button type="button" id="transferPopupRejectBtn" data-customer-transfer-popup-action="reject" ' +
+                    'class="px-5 py-2.5 rounded-lg border border-red-300 text-red-700 hover:bg-red-50 font-bold text-sm">رفض</button>' +
+                  '<button type="button" id="transferPopupAcceptBtn" data-customer-transfer-popup-action="accept" ' +
+                    'class="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm">قبول التمرير</button>';
+              } else {
+                footer.innerHTML = '<span class="text-sm text-gray-500">' + escapeTransferHtml(r.status) + '</span>';
+              }
+            } catch (e) {
+              body.innerHTML = '<p class="text-red-600 text-sm text-center py-4">' + escapeTransferHtml(e?.response?.data?.error || e?.message || 'تعذر تحميل بيانات الطلب') + '</p>';
+            }
+          }
+
+          async function submitCustomerTransferPopupAction(action) {
+            if (!transferPopupId) return;
+            var footer = document.getElementById('customerTransferPopupFooter');
+            var errEl = document.getElementById('customerTransferPopupError');
+            var okEl = document.getElementById('customerTransferPopupSuccess');
+            var acceptBtn = document.getElementById('transferPopupAcceptBtn');
+            var rejectBtn = document.getElementById('transferPopupRejectBtn');
+            errEl.classList.add('hidden'); errEl.textContent = '';
+            okEl.classList.add('hidden'); okEl.textContent = '';
+            if (acceptBtn) acceptBtn.disabled = true;
+            if (rejectBtn) rejectBtn.disabled = true;
+            transferPopupBusy = true;
+            if (action === 'accept' && acceptBtn) acceptBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جاري القبول...';
+            if (action === 'reject' && rejectBtn) rejectBtn.innerHTML = '<i class="fas fa-spinner fa-spin ml-1"></i> جاري الرفض...';
+            try {
+              var headers = Object.assign({ 'Content-Type': 'application/json' }, transferPopupAuthHeaders());
+              var res = await axios.patch('/api/customer-transfers/' + transferPopupId, { action: action }, { headers: headers });
+              if (!res.data || !res.data.success) {
+                throw new Error((res.data && res.data.error) || 'حدث خطأ أثناء معالجة الطلب');
+              }
+              if (res.data.data && !res.data.message) {
+                throw new Error('استجابة غير متوقعة من الخادم — حاول مرة أخرى');
+              }
+              var msg = res.data.message || (action === 'accept' ? 'تم قبول التمرير بنجاح' : 'تم رفض التمرير');
+              okEl.innerHTML = '<i class="fas fa-check-circle ml-1"></i> ' + escapeTransferHtml(msg);
+              okEl.classList.remove('hidden');
+              footer.innerHTML = '';
+              if (transferPopupNotifId) {
+                await axios.put('/api/notifications/' + transferPopupNotifId + '/read', {}, { headers: transferPopupAuthHeaders() });
+              }
+              transferPopupBusy = false;
+              setTimeout(async function() {
+                closeCustomerTransferPopup(true);
+                await loadNotifications();
+                if (action === 'accept') {
+                  window.location.href = '/admin/customers?requestsFilter=all';
+                }
+              }, 1200);
+            } catch (e) {
+              transferPopupBusy = false;
+              if (acceptBtn) { acceptBtn.disabled = false; acceptBtn.innerHTML = 'قبول التمرير'; }
+              if (rejectBtn) { rejectBtn.disabled = false; rejectBtn.innerHTML = 'رفض'; }
+              var errMsg = e?.response?.data?.error || e?.message || 'حدث خطأ أثناء معالجة الطلب';
+              errEl.textContent = errMsg;
+              errEl.classList.remove('hidden');
+            }
+          }
+
+          document.getElementById('customerTransferPopupModal').addEventListener('click', function(e) {
+            if (e.target === this) closeCustomerTransferPopup();
+          });
+          document.getElementById('customerTransferPopupFooter').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest
+              ? e.target.closest('[data-customer-transfer-popup-action]')
+              : null;
+            if (!button) return;
+            e.preventDefault();
+            var action = button.getAttribute('data-customer-transfer-popup-action');
+            if (action === 'accept' || action === 'reject') submitCustomerTransferPopupAction(action);
+          });
+          document.getElementById('notificationsList').addEventListener('click', function(e) {
+            var button = e.target && e.target.closest
+              ? e.target.closest('[data-open-customer-transfer]')
+              : null;
+            if (!button) return;
+            e.preventDefault();
+            var transferId = Number(button.getAttribute('data-open-customer-transfer'));
+            var notificationId = Number(button.getAttribute('data-notification-id'));
+            if (Number.isFinite(transferId) && transferId > 0) {
+              openCustomerTransferPopup(transferId, Number.isFinite(notificationId) ? notificationId : null);
+            }
+          });
+
+          // Auto-open transfer popup from ?customer_transfer=<id> (alarm/notification deep links)
+          (function() {
+            try {
+              var params = new URLSearchParams(window.location.search);
+              var tid = params.get('customer_transfer');
+              if (tid && /^[0-9]+$/.test(tid)) {
+                openCustomerTransferPopup(Number(tid), null);
+                params.delete('customer_transfer');
+                var qs = params.toString();
+                window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
+              }
+            } catch (_) {}
+          })();
 
           // Load notifications on page load
           loadNotifications();
@@ -31990,6 +32937,7 @@ app.get('/admin/users', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">اسم المستخدم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم الكامل</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الإلكتروني</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الثانوي</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الدور</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الشركة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
@@ -31998,7 +32946,7 @@ app.get('/admin/users', async (c) => {
               </thead>
               <tbody class="divide-y divide-gray-200" id="tableBody">
                 <tr>
-                  <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="10" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
                     <div>جاري تحميل البيانات...</div>
                   </td>
@@ -32077,7 +33025,7 @@ app.get('/admin/users', async (c) => {
               console.error('❌ خطأ في تحميل المستخدمين:', error);
               document.getElementById('tableBody').innerHTML = \`
                 <tr>
-                  <td colspan="9" class="px-6 py-8 text-center text-red-500">
+                  <td colspan="10" class="px-6 py-8 text-center text-red-500">
                     <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
                     <div>فشل تحميل البيانات: \${error.message}</div>
                   </td>
@@ -32093,7 +33041,7 @@ app.get('/admin/users', async (c) => {
             if (!users || users.length === 0) {
               tbody.innerHTML = \`
                 <tr>
-                  <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="10" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-users text-3xl mb-2"></i>
                     <div>لا توجد بيانات مستخدمين</div>
                   </td>
@@ -32148,6 +33096,7 @@ app.get('/admin/users', async (c) => {
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.full_name || '-'}</td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.email || '-'}</td>
+                  <td class="px-6 py-4 text-sm text-gray-600">\${user.secondary_email || '-'}</td>
                   <td class="px-6 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-bold \${roleClass}">
                       \${roleDisplayLabel(user)}
@@ -32475,6 +33424,11 @@ app.get('/admin/users/:id', async (c) => {
                     <div>
                       <label class="text-sm text-gray-500">البريد الإلكتروني</label>
                       <p class="font-bold text-gray-800">${user.email || '-'}</p>
+                    </div>
+                    
+                    <div>
+                      <label class="text-sm text-gray-500">البريد الإلكتروني الثانوي</label>
+                      <p class="font-bold text-gray-800">${user.secondary_email || '-'}</p>
                     </div>
                     
                     <div>
@@ -34217,38 +35171,105 @@ app.get('/api/my-profile', async (c) => {
     const userInfo = await getUserInfo(c);
     if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
 
-    const user = await c.env.DB.prepare('SELECT email, full_name FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
-    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+    const user = await c.env.DB.prepare(
+      'SELECT id, full_name, email, phone, secondary_email FROM users WHERE id = ?'
+    ).bind(userInfo.userId).first() as any;
+    if (!user) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
 
     const employee = await c.env.DB.prepare(
       `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
               id_type, iqama_number, iqama_expiry, id_document_url, department, job_title, hire_date, status
        FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
-    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+    ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
 
-    return c.json({ success: true, employeeFound: !!employee, data: employee || null, userName: user.full_name });
+    return c.json({
+      success: true,
+      account: {
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        secondary_email: user.secondary_email,
+      },
+      employeeFound: !!employee,
+      data: employee || null,
+      userName: user.full_name,
+    });
   } catch (error: any) {
     console.error('Error fetching my profile:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });
 
-// Update logged-in user's own ID details
+// Update the logged-in user's account contact details and ID details.
 app.patch('/api/my-profile', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
     if (!userInfo.userId) return c.json({ success: false, error: 'غير مسجل الدخول' }, 401);
 
-    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(userInfo.userId).first() as any;
-    if (!user?.email) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+    const user = await c.env.DB.prepare(
+      'SELECT id, email, phone, secondary_email FROM users WHERE id = ?'
+    ).bind(userInfo.userId).first() as any;
+    if (!user) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
+
+    const body = await c.req.json() as Record<string, unknown>;
+    const hasContactFields = ['email', 'phone', 'secondary_email'].some((key) =>
+      Object.prototype.hasOwnProperty.call(body, key)
+    );
 
     const employee = await c.env.DB.prepare(
       'SELECT id FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
-    ).bind(user.email, userInfo.tenantId || 1).first() as any;
+    ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
 
-    if (!employee) return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+    if (hasContactFields) {
+      const email = String(body.email ?? '').trim().toLowerCase();
+      const phone = String(body.phone ?? '').trim();
+      const secondaryEmailRaw = String(body.secondary_email ?? '').trim();
+      const secondaryEmail = secondaryEmailRaw === '' ? null : secondaryEmailRaw.toLowerCase();
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    const { id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url } = await c.req.json();
+      if (!email || !emailPattern.test(email)) {
+        return c.json({ success: false, error: 'يرجى إدخال بريد إلكتروني صالح' }, 400);
+      }
+      if (!phone) {
+        return c.json({ success: false, error: 'رقم الجوال مطلوب' }, 400);
+      }
+      if (secondaryEmail && !emailPattern.test(secondaryEmail)) {
+        return c.json({ success: false, error: 'يرجى إدخال بريد إلكتروني ثانوي صالح' }, 400);
+      }
+      if (secondaryEmail && secondaryEmail === email) {
+        return c.json({ success: false, error: 'يجب أن يختلف البريد الإلكتروني الثانوي عن البريد الأساسي' }, 400);
+      }
+
+      const duplicate = await c.env.DB.prepare(
+        'SELECT id FROM users WHERE LOWER(TRIM(email)) = ? AND id != ? LIMIT 1'
+      ).bind(email, userInfo.userId).first();
+      if (duplicate) {
+        return c.json({ success: false, error: 'البريد الإلكتروني مستخدم بالفعل. الرجاء استخدام بريد آخر.' }, 400);
+      }
+
+      const updates = [
+        c.env.DB.prepare(
+          'UPDATE users SET email = ?, phone = ?, secondary_email = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).bind(email, phone, secondaryEmail, userInfo.userId),
+      ];
+      if (employee) {
+        updates.push(
+          c.env.DB.prepare(
+            'UPDATE hr_employees SET email = ?, phone = ?, updated_at = datetime(\'now\') WHERE id = ?'
+          ).bind(email, phone, employee.id)
+        );
+      }
+      await c.env.DB.batch(updates);
+    }
+
+    const { id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url } = body;
+    const hasIdFields = ['id_type', 'national_id', 'national_id_expiry', 'iqama_number', 'iqama_expiry', 'id_document_url']
+      .some((key) => Object.prototype.hasOwnProperty.call(body, key));
+
+    if (!hasIdFields) return c.json({ success: true });
+    if (!employee) {
+      return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+    }
 
     if (id_type === 'national') {
       await c.env.DB.prepare(
@@ -35834,8 +36855,8 @@ app.get('/admin/my-profile', (c) => {
     .form-group { margin-bottom: 16px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; color: #475569; margin-bottom: 6px; }
     .req { color: #ef4444; }
-    input[type=text], input[type=date], input[type=file] { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
-    input[type=text]:focus, input[type=date]:focus { outline: none; border-color: #3b82f6; background: #fff; }
+    input[type=text], input[type=email], input[type=tel], input[type=date], input[type=file] { width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.95rem; font-family: inherit; background: #f8fafc; color: #1e293b; transition: border 0.2s; }
+    input[type=text]:focus, input[type=email]:focus, input[type=tel]:focus, input[type=date]:focus { outline: none; border-color: #3b82f6; background: #fff; }
     input[type=file] { padding: 6px 10px; cursor: pointer; }
     .expiry-warn { display: none; color: #b45309; font-size: 0.8rem; margin-top: 5px; background: #fef3c7; border-radius: 5px; padding: 5px 10px; }
     .upload-progress { display: none; font-size: 0.82rem; color: #64748b; margin-top: 4px; }
@@ -35864,6 +36885,26 @@ app.get('/admin/my-profile', (c) => {
 <div class="page-wrapper">
   <h1><i class="fas fa-id-card"></i> ملفي الشخصي</h1>
   <div id="pageAlert"></div>
+
+  <div class="card">
+    <h2><i class="fas fa-address-card" style="color:#1e40af"></i> بيانات التواصل</h2>
+    <div id="contactAlert"></div>
+    <form id="contactForm" onsubmit="submitContactForm(event)">
+      <div class="form-group">
+        <label>البريد الإلكتروني الأساسي <span class="req">*</span></label>
+        <input type="email" id="profileEmail" autocomplete="email" dir="ltr" required>
+      </div>
+      <div class="form-group">
+        <label>البريد الإلكتروني الثانوي</label>
+        <input type="email" id="profileSecondaryEmail" autocomplete="email" dir="ltr">
+      </div>
+      <div class="form-group">
+        <label>رقم الجوال <span class="req">*</span></label>
+        <input type="tel" id="profilePhone" autocomplete="tel" dir="ltr" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="contactSaveBtn"><i class="fas fa-save"></i> حفظ بيانات التواصل</button>
+    </form>
+  </div>
 
   <div class="card" id="infoCard" style="display:none">
     <h2><i class="fas fa-user" style="color:#1e40af"></i> بياناتي الوظيفية</h2>
@@ -35940,6 +36981,7 @@ app.get('/admin/my-profile', (c) => {
 (async function() {
   const authH = () => ({ 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') });
   let emp = null;
+  let account = null;
   let currentType = null;
 
   function setAlert(el, type, msg) {
@@ -36029,6 +37071,41 @@ app.get('/admin/my-profile', (c) => {
     }).join('');
   }
 
+  window.submitContactForm = async function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('contactSaveBtn');
+    const contactAlert = document.getElementById('contactAlert');
+    const email = document.getElementById('profileEmail').value.trim();
+    const secondaryEmail = document.getElementById('profileSecondaryEmail').value.trim();
+    const phone = document.getElementById('profilePhone').value.trim();
+    btn.disabled = true;
+    contactAlert.innerHTML = '';
+
+    try {
+      const r = await fetch('/api/my-profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') },
+        body: JSON.stringify({ email: email, phone: phone, secondary_email: secondaryEmail }),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        setAlert(contactAlert, 'error', d.error || 'حدث خطأ');
+        return;
+      }
+      account = { ...account, email: email, phone: phone, secondary_email: secondaryEmail || null };
+      if (emp) {
+        emp.email = email;
+        emp.phone = phone;
+        renderEmployeeInfo();
+      }
+      setAlert(contactAlert, 'success', 'تم حفظ بيانات التواصل بنجاح ✓');
+    } catch(err) {
+      setAlert(contactAlert, 'error', 'فشل الاتصال بالخادم');
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
   window.submitForm = async function(e) {
     e.preventDefault();
     const btn = document.getElementById('saveBtn');
@@ -36093,12 +37170,31 @@ app.get('/admin/my-profile', (c) => {
     btn.disabled = false;
   };
 
+  function renderEmployeeInfo() {
+    const infoRows = [
+      ['الاسم', emp.full_name || emp.full_name_ar || '-'],
+      ['البريد الإلكتروني', emp.email || '-'],
+      ['الجوال', emp.phone || '-'],
+      ['القسم', emp.department || '-'],
+      ['المسمى الوظيفي', emp.job_title || '-'],
+      ['تاريخ التعيين', emp.hire_date || '-'],
+      ['الحالة', emp.status === 'active' ? 'نشط' : (emp.status || '-')],
+    ];
+    document.getElementById('infoRows').innerHTML = infoRows.map(function(r) {
+      return '<div class="info-row"><span class="info-label">' + r[0] + '</span><span>' + r[1] + '</span></div>';
+    }).join('');
+  }
+
   // ── Bootstrap ──
   const res = await fetch('/api/my-profile', { headers: authH() });
   const data = await res.json();
   const pageAlert = document.getElementById('pageAlert');
 
   if (!data.success) { setAlert(pageAlert, 'error', data.error || 'حدث خطأ'); return; }
+  account = data.account || {};
+  document.getElementById('profileEmail').value = account.email || '';
+  document.getElementById('profileSecondaryEmail').value = account.secondary_email || '';
+  document.getElementById('profilePhone').value = account.phone || '';
   if (!data.employeeFound) {
     setAlert(pageAlert, 'info', 'لم يتم ربط حسابك بسجل موظف بعد. يرجى التواصل مع مدير الموارد البشرية.');
     return;
@@ -36108,18 +37204,7 @@ app.get('/admin/my-profile', (c) => {
   document.getElementById('infoCard').style.display = 'block';
   document.getElementById('idCard').style.display = 'block';
 
-  const infoRows = [
-    ['الاسم', emp.full_name || emp.full_name_ar || '-'],
-    ['البريد الإلكتروني', emp.email || '-'],
-    ['الجوال', emp.phone || '-'],
-    ['القسم', emp.department || '-'],
-    ['المسمى الوظيفي', emp.job_title || '-'],
-    ['تاريخ التعيين', emp.hire_date || '-'],
-    ['الحالة', emp.status === 'active' ? 'نشط' : (emp.status || '-')],
-  ];
-  document.getElementById('infoRows').innerHTML = infoRows.map(function(r) {
-    return '<div class="info-row"><span class="info-label">' + r[0] + '</span><span>' + r[1] + '</span></div>';
-  }).join('');
+  renderEmployeeInfo();
 
   // Determine initial state
   const hasData = emp.national_id || emp.iqama_number;
@@ -38245,6 +39330,29 @@ app.get('/api/follow-ups', async (c) => {
     const priorityFilter =
       priorityFilterRaw === 'important' || priorityFilterRaw === 'regular' ? priorityFilterRaw : 'all'
 
+    const statusFilterRaw = String(c.req.query('followupStatusFilter') ?? '').trim().toLowerCase()
+    const includeArchivedRaw = String(c.req.query('includeArchived') ?? '').trim().toLowerCase()
+    const includeArchivedLegacy = includeArchivedRaw === '1' || includeArchivedRaw === 'true'
+    let statusFilter: 'active' | 'no_response' | 'archived' | 'all' = 'active'
+    if (
+      statusFilterRaw === 'active' ||
+      statusFilterRaw === 'no_response' ||
+      statusFilterRaw === 'archived' ||
+      statusFilterRaw === 'all'
+    ) {
+      statusFilter = statusFilterRaw
+    } else if (includeArchivedLegacy) {
+      statusFilter = 'all'
+    }
+    const statusClause =
+      statusFilter === 'no_response'
+        ? ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 1'
+        : statusFilter === 'archived'
+          ? ' AND COALESCE(f.is_archived, 0) = 1'
+          : statusFilter === 'all'
+            ? ''
+            : ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 0'
+
     const linkClause =
       linkFilter === 'company'
         ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') AND COALESCE(f.source_slug, '') <> 'csv' `
@@ -38275,7 +39383,7 @@ app.get('/api/follow-ups', async (c) => {
           LEFT JOIN tenants t ON t.id = f.tenant_id
           LEFT JOIN tenant_locations tl ON tl.id = f.location_id
           WHERE f.tenant_id = ?
-          AND COALESCE(f.is_archived, 0) = 0
+          ${statusClause}
           ${linkClause}
           ${priorityClause}
           ORDER BY f.created_at DESC
@@ -38298,7 +39406,8 @@ app.get('/api/follow-ups', async (c) => {
         FROM company_contact_followups f
         LEFT JOIN tenants t ON t.id = f.tenant_id
         LEFT JOIN tenant_locations tl ON tl.id = f.location_id
-        WHERE COALESCE(f.is_archived, 0) = 0
+        WHERE 1 = 1
+        ${statusClause}
         ${linkClause}
         ${priorityClause}
         ORDER BY f.created_at DESC
@@ -38326,7 +39435,7 @@ app.get('/api/follow-ups', async (c) => {
       LEFT JOIN tenants t ON t.id = f.tenant_id
       LEFT JOIN tenant_locations tl ON tl.id = f.location_id
       WHERE f.tenant_id = ?
-      AND COALESCE(f.is_archived, 0) = 0
+      ${statusClause}
       ${linkClause}
       ${priorityClause}
       ORDER BY f.created_at DESC
@@ -39900,6 +41009,8 @@ function callerHoldsAssignment(
   return ctx.bankAgentId === userId
 }
 
+const CUSTOMER_TRANSFER_API_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+
 app.get('/api/customer-transfers/my-pending', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -40095,10 +41206,10 @@ app.get('/api/customer-transfers/:id', async (c) => {
       LIMIT 1
     `).bind(transferId, userInfo.tenantId, userInfo.userId, userInfo.userId).first()
 
-    if (!row) return c.json({ success: false, error: 'Not found' }, 404)
-    return c.json({ success: true, data: row })
+    if (!row) return c.json({ success: false, error: 'Not found' }, 404, CUSTOMER_TRANSFER_API_HEADERS)
+    return c.json({ success: true, data: row }, 200, CUSTOMER_TRANSFER_API_HEADERS)
   } catch (error: any) {
-    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500, CUSTOMER_TRANSFER_API_HEADERS)
   }
 })
 
@@ -40147,10 +41258,22 @@ app.patch('/api/customer-transfers/:id', async (c) => {
       await c.env.DB.prepare(
         `UPDATE customer_transfer_requests SET status = 'cancelled', resolved_at = CURRENT_TIMESTAMP WHERE id = ?`
       ).bind(transferId).run()
-      return c.json({ success: true, message: 'تم إلغاء طلب التمرير' })
+      try {
+        await insertCustomerTransferNotification(c.env.DB, {
+          recipientUserId: row.to_user_id,
+          tenantId: row.tenant_id,
+          customerId: row.customer_id,
+          title: 'تم إلغاء طلب التمرير',
+          message: `${row.from_user_name || 'المرسل'} ألغى طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`}`,
+          notifType: 'info',
+          category: 'customer_transfer_response',
+          transferRequestId: transferId,
+        })
+      } catch (notifErr) { console.error('customer_transfer_cancel notification failed:', notifErr) }
+      return c.json({ success: true, message: 'تم إلغاء طلب التمرير' }, 200, CUSTOMER_TRANSFER_API_HEADERS)
     }
 
-    if (row.to_user_id !== userInfo.userId) return c.json({ success: false, error: 'Forbidden' }, 403)
+    if (row.to_user_id !== userInfo.userId) return c.json({ success: false, error: 'Forbidden' }, 403, CUSTOMER_TRANSFER_API_HEADERS)
 
     if (action === 'reject') {
       await c.env.DB.prepare(
@@ -40162,13 +41285,14 @@ app.patch('/api/customer-transfers/:id', async (c) => {
           tenantId: row.tenant_id,
           customerId: row.customer_id,
           title: 'تم رفض طلب التمرير',
-          message: `${row.to_user_name || 'المستلم'} رفض طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`}`,
+          message: `${row.to_user_name || 'المستلم'} رفض طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`} — لا يزال العميل مخصصاً لك`,
           notifType: 'warning',
           category: 'customer_transfer_response',
           transferRequestId: transferId,
+          linkUrl: '/admin/customers?requestsFilter=all',
         })
       } catch (notifErr) { console.error('customer_transfer_reject notification failed:', notifErr) }
-      return c.json({ success: true, message: 'تم رفض طلب التمرير' })
+      return c.json({ success: true, message: 'تم رفض طلب التمرير' }, 200, CUSTOMER_TRANSFER_API_HEADERS)
     }
 
     // action === 'accept'
@@ -40231,16 +41355,17 @@ app.patch('/api/customer-transfers/:id', async (c) => {
         tenantId: row.tenant_id,
         customerId: row.customer_id,
         title: 'تم قبول طلب التمرير',
-        message: `${row.to_user_name || 'المستلم'} قبل طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`}`,
+        message: `${row.to_user_name || 'المستلم'} قبل طلب تمرير العميل ${row.customer_name || `#${row.customer_id}`} — لم يعد العميل في قائمتك`,
         notifType: 'success',
         category: 'customer_transfer_response',
         transferRequestId: transferId,
+        linkUrl: '/admin/customers?requestsFilter=all',
       })
     } catch (notifErr) { console.error('customer_transfer_accept notification failed:', notifErr) }
 
-    return c.json({ success: true, message: 'تم قبول العميل ونقله إليك' })
+    return c.json({ success: true, message: 'تم قبول العميل ونقله إليك' }, 200, CUSTOMER_TRANSFER_API_HEADERS)
   } catch (error: any) {
-    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500, CUSTOMER_TRANSFER_API_HEADERS)
   }
 })
 
@@ -44235,7 +45360,24 @@ app.get('/admin/follow-ups/archived', async (c) => {
         </div>
       </div>
 
+      <div class="bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative flex-1 min-w-[160px] max-w-sm">
+              <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+              <input type="text" id="archivedFollowupSearchInput" placeholder="بحث بالاسم أو الهاتف أو المصدر..."
+                class="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent bg-white"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();applyArchivedFollowupSearch();}">
+            </div>
+            <button type="button" onclick="applyArchivedFollowupSearch()" class="px-4 py-2 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+              <i class="fas fa-search ml-1"></i>بحث
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div id="archivedListStatus" class="text-sm text-gray-600 mb-3"></div>
         <div id="archivedCards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
       </div>
 
@@ -44273,6 +45415,7 @@ app.get('/admin/follow-ups/archived', async (c) => {
 
       <script>
         let pendingUnarchiveId = null;
+        let allArchivedFollowups = [];
 
         function escapeHtml(v) {
           return String(v ?? '')
@@ -44288,6 +45431,13 @@ app.get('/admin/follow-ups/archived', async (c) => {
             year: 'numeric', month: 'short', day: 'numeric',
             hour: '2-digit', minute: '2-digit', hour12: true
           });
+        }
+
+        function displayPhone(raw) {
+          const s = String(raw || '').trim();
+          if (s.startsWith('966') && s.length === 12) return '0' + s.slice(3);
+          if (/^5\\d{8}$/.test(s)) return '0' + s;
+          return s || '-';
         }
 
         function openUnarchiveModal(btn) {
@@ -44328,51 +45478,99 @@ app.get('/admin/follow-ups/archived', async (c) => {
           }
         });
 
+        function archivedSourceLabel(row) {
+          return String((row.affiliate_label || '')).trim() || (row.affiliate_path_segment ? 'أفلييت' : 'رابط الشركة');
+        }
+
+        function renderArchivedFollowupCards(rows) {
+          const cards = document.getElementById('archivedCards');
+          const status = document.getElementById('archivedListStatus');
+          if (!rows.length) {
+            cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد نتائج مطابقة.</div>';
+            if (status) status.textContent = '0 نتيجة';
+            return;
+          }
+          if (status) status.textContent = rows.length + ' نتيجة';
+          cards.innerHTML = rows.map((row) => {
+            const sourceLabel = archivedSourceLabel(row);
+            const phoneDisp = displayPhone(row.customer_phone);
+            return \`
+              <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 opacity-80"
+                data-followup-id="\${Number(row.id)}"
+                data-customer-name="\${escapeHtml(row.customer_name || '-')}"
+                data-customer-phone="\${escapeHtml(phoneDisp)}"
+                data-customer-phone-raw="\${escapeHtml(row.customer_phone || '')}"
+                data-source-label="\${escapeHtml(sourceLabel)}">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                      <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                  </div>
+                  <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                </div>
+                <div class="space-y-2">
+                  <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(phoneDisp)}</p>
+                  <p class="text-sm text-gray-700"><i class="fas fa-tag ml-2 text-blue-600"></i>\${escapeHtml(sourceLabel)}</p>
+                  <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                  \${row.archive_reason ? '<div class="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"><i class="fas fa-sticky-note mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(row.archive_reason) + '</span></div>' : ''}
+                  <div class="pt-2">
+                    <button onclick="openUnarchiveModal(this)" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                      <i class="fas fa-undo ml-2"></i>استعادة من الأرشيف
+                    </button>
+                  </div>
+                </div>
+              </div>
+            \`;
+          }).join('');
+        }
+
+        function applyArchivedFollowupSearch() {
+          const searchVal = ((document.getElementById('archivedFollowupSearchInput') || {}).value || '').trim().toLowerCase();
+          const searchDigits = searchVal.replace(/[^\\d]/g, '');
+          const filtered = !searchVal ? allArchivedFollowups : allArchivedFollowups.filter((row) => {
+            const name = String(row.customer_name || '').toLowerCase();
+            const phoneRaw = String(row.customer_phone || '').toLowerCase();
+            const phoneDisp = displayPhone(row.customer_phone).toLowerCase();
+            const source = archivedSourceLabel(row).toLowerCase();
+            const msg = String(row.customer_message || '').toLowerCase();
+            const reason = String(row.archive_reason || '').toLowerCase();
+            const textMatch = name.includes(searchVal) || phoneRaw.includes(searchVal) || phoneDisp.includes(searchVal)
+              || source.includes(searchVal) || msg.includes(searchVal) || reason.includes(searchVal);
+            const digitMatch = searchDigits.length >= 4 && (
+              phoneRaw.replace(/[^\\d]/g, '').includes(searchDigits)
+              || phoneDisp.replace(/[^\\d]/g, '').includes(searchDigits)
+            );
+            return textMatch || digitMatch;
+          });
+          if (!allArchivedFollowups.length) {
+            document.getElementById('archivedCards').innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات مؤرشفة حالياً.</div>';
+            const status = document.getElementById('archivedListStatus');
+            if (status) status.textContent = '';
+            return;
+          }
+          renderArchivedFollowupCards(filtered);
+        }
+
         async function loadArchivedFollowUps() {
           const cards = document.getElementById('archivedCards');
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
           try {
             const res = await axios.get('/api/follow-ups-archived');
-            const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
-            if (!rows.length) {
-              cards.innerHTML = '<div class="bg-white p-6 rounded-xl border text-gray-600">لا توجد طلبات مؤرشفة حالياً.</div>';
-              return;
-            }
-            cards.innerHTML = rows.map((row) => {
-              const sourceLabel = String((row.affiliate_label || '')).trim() || (row.affiliate_path_segment ? 'أفلييت' : 'رابط الشركة');
-              return \`
-                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 opacity-80"
-                  data-followup-id="\${Number(row.id)}"
-                  data-customer-name="\${escapeHtml(row.customer_name || '-')}"
-                  data-customer-phone="\${escapeHtml(row.customer_phone || '-')}"
-                  data-source-label="\${escapeHtml(sourceLabel)}">
-                  <div class="flex items-start justify-between gap-3 mb-3">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
-                        <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>
-                      </div>
-                      <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
-                    </div>
-                    <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                  </div>
-                  <div class="space-y-2">
-                    <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(row.customer_phone || '-')}</p>
-                    <p class="text-sm text-gray-700"><i class="fas fa-tag ml-2 text-blue-600"></i>\${escapeHtml(sourceLabel)}</p>
-                    <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
-                    \${row.archive_reason ? '<div class="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"><i class="fas fa-sticky-note mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(row.archive_reason) + '</span></div>' : ''}
-                    <div class="pt-2">
-                      <button onclick="openUnarchiveModal(this)" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
-                        <i class="fas fa-undo ml-2"></i>استعادة من الأرشيف
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              \`;
-            }).join('');
+            allArchivedFollowups = Array.isArray(res?.data?.data) ? res.data.data : [];
+            applyArchivedFollowupSearch();
           } catch(e) {
             cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
           }
+        }
+
+        const archivedSearchInput = document.getElementById('archivedFollowupSearchInput');
+        if (archivedSearchInput) {
+          archivedSearchInput.addEventListener('input', function () {
+            applyArchivedFollowupSearch();
+          });
         }
 
         loadArchivedFollowUps();
@@ -45484,6 +46682,15 @@ app.get('/admin/follow-ups', async (c) => {
                 </select>
                 <i class="fas fa-chevron-down absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
               </div>
+              <div class="relative">
+                <select id="followupStatusFilterSelect" class="h-9 appearance-none bg-white border border-gray-200 rounded-lg px-3 pl-8 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer">
+                  <option value="active">الحالة: النشطة</option>
+                  <option value="no_response">الحالة: لا يرد</option>
+                  <option value="archived">الحالة: مؤرشف</option>
+                  <option value="all">الحالة: الكل</option>
+                </select>
+                <i class="fas fa-chevron-down absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none text-xs"></i>
+              </div>
               <button onclick="resetFollowupFilters()" class="mr-auto bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2">
                 <i class="fas fa-redo"></i> إعادة تعيين
               </button>
@@ -46246,12 +47453,11 @@ app.get('/admin/follow-ups', async (c) => {
           const cards = document.getElementById('cards');
           cards.innerHTML = '<div class="text-gray-500">جاري التحميل...</div>';
           try {
-            const params = new URLSearchParams(window.location.search);
-            const link = params.get('followupLinkFilter') || 'all';
-            const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
+            const filterParams = getFollowupFilterParamsFromUrl();
             const api = new URL('/api/follow-ups', window.location.origin);
-            if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
-            if (pr && pr !== 'all') api.searchParams.set('followupPriorityFilter', pr);
+            if (filterParams.link && filterParams.link !== 'all') api.searchParams.set('followupLinkFilter', filterParams.link);
+            if (filterParams.pr && filterParams.pr !== 'all') api.searchParams.set('followupPriorityFilter', filterParams.pr);
+            if (filterParams.status && filterParams.status !== 'active') api.searchParams.set('followupStatusFilter', filterParams.status);
             const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             if (!rows.length) {
@@ -46259,26 +47465,38 @@ app.get('/admin/follow-ups', async (c) => {
               return;
             }
 
-            cards.innerHTML = rows.map((row) => \`
-              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+            cards.innerHTML = rows.map((row) => {
+              const isArchived = Number(row.is_archived) === 1 || row.is_archived === true;
+              const isNoResponse = Number(row.is_no_response) === 1 || row.is_no_response === true;
+              const archiveBtn = isArchived
+                ? \`<button onclick="restoreFollowupFromArchive(\${Number(row.id)})" class="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="استعادة من الأرشيف">
+                    <i class="fas fa-undo"></i>
+                  </button>\`
+                : \`<button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
+                    <i class="fas fa-archive"></i>
+                  </button>\`;
+              return \`
+              <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 \${isArchived ? 'opacity-80 border-slate-200' : ''}"
                 data-followup-id="\${Number(row.id)}"
                 data-customer-name="\${escapeHtml(row.customer_name || '-')}"
                 data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
                 data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}"
-                data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
+                data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}"
+                data-archived="\${isArchived ? '1' : '0'}"
+                data-no-response="\${isNoResponse ? '1' : '0'}">
                 <div class="flex items-start justify-between gap-3 mb-3">
                   <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
                       \${followupSourceBadgeHtml(row)}
+                      \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
+                      \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
                     </div>
                     <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
                   </div>
                   <div class="flex items-center gap-1.5 flex-shrink-0">
                     <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                    <button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
-                      <i class="fas fa-archive"></i>
-                    </button>
+                    \${archiveBtn}
                   </div>
                 </div>
                 <div class="space-y-2">
@@ -46298,7 +47516,8 @@ app.get('/admin/follow-ups', async (c) => {
                   </div>
                 </div>
               </div>
-            \`).join('');
+            \`;
+            }).join('');
 
             bindWhatsAppButtons(cards);
             rows.forEach((row) => loadCardTasks(Number(row.id)));
@@ -46350,9 +47569,18 @@ app.get('/admin/follow-ups', async (c) => {
           const isDynamic = linkRaw.toLowerCase().startsWith('affiliate:') || linkRaw.toLowerCase().startsWith('import-label:');
           const link = isFixedVal ? linkLower : (isDynamic ? linkRaw : 'all');
           const pr = String(params.get('followupPriorityFilter') || 'all').trim().toLowerCase();
+          const statusRaw = String(params.get('followupStatusFilter') || '').trim().toLowerCase();
+          const includeArchivedRaw = String(params.get('includeArchived') || '').trim().toLowerCase();
+          let status = 'active';
+          if (statusRaw === 'active' || statusRaw === 'no_response' || statusRaw === 'archived' || statusRaw === 'all') {
+            status = statusRaw;
+          } else if (includeArchivedRaw === '1' || includeArchivedRaw === 'true') {
+            status = 'all';
+          }
           return {
             link,
-            pr: (pr === 'important' || pr === 'regular' || pr === 'all') ? pr : 'all'
+            pr: (pr === 'important' || pr === 'regular' || pr === 'all') ? pr : 'all',
+            status
           };
         }
 
@@ -46360,12 +47588,17 @@ app.get('/admin/follow-ups', async (c) => {
           const params = new URLSearchParams(window.location.search);
           const link = String(next?.link || 'all').trim();
           const pr = String(next?.pr || 'all').trim().toLowerCase();
+          const status = String(next?.status || 'active').trim().toLowerCase();
 
           if (link && link !== 'all') params.set('followupLinkFilter', link);
           else params.delete('followupLinkFilter');
 
           if (pr && pr !== 'all') params.set('followupPriorityFilter', pr);
           else params.delete('followupPriorityFilter');
+
+          if (status && status !== 'active') params.set('followupStatusFilter', status);
+          else params.delete('followupStatusFilter');
+          params.delete('includeArchived');
 
           const qs = params.toString();
           const nextUrl = window.location.pathname + (qs ? ('?' + qs) : '');
@@ -46376,10 +47609,12 @@ app.get('/admin/follow-ups', async (c) => {
           hydrateFollowupLinkFilter();
           const linkSelect = document.getElementById('followupLinkFilterSelect');
           const prSelect = document.getElementById('followupPriorityFilterSelect');
+          const statusSelect = document.getElementById('followupStatusFilterSelect');
           if (!linkSelect || !prSelect) return;
           const current = getFollowupFilterParamsFromUrl();
           linkSelect.value = current.link;
           prSelect.value = current.pr;
+          if (statusSelect) statusSelect.value = current.status;
         }
 
         function toggleFollowupFilters() {
@@ -46410,7 +47645,15 @@ app.get('/admin/follow-ups', async (c) => {
 
         function applyFollowupClientFilters() {
           const searchVal = ((document.getElementById('followupSearchInput') || {}).value || '').trim().toLowerCase();
+          const searchDigits = searchVal.replace(/[^\\d]/g, '');
           const empVal = ((document.getElementById('followupEmployeeFilter') || {}).value || 'all');
+
+          function matchesSearch(name, phone, source) {
+            if (!searchVal) return true;
+            if (name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal)) return true;
+            if (searchDigits.length >= 4 && phone.replace(/[^\\d]/g, '').includes(searchDigits)) return true;
+            return false;
+          }
 
           const cards = document.getElementById('cards');
           if (cards) {
@@ -46419,7 +47662,7 @@ app.get('/admin/follow-ups', async (c) => {
               const phone = (card.getAttribute('data-customer-phone') || '').toLowerCase();
               const source = (card.getAttribute('data-source-label') || '').toLowerCase();
               const assigned = (card.getAttribute('data-assigned') || '').trim();
-              const matchSearch = !searchVal || name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal);
+              const matchSearch = matchesSearch(name, phone, source);
               const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
               card.style.display = (matchSearch && matchEmp) ? '' : 'none';
             });
@@ -46432,7 +47675,7 @@ app.get('/admin/follow-ups', async (c) => {
               const phone = (row.getAttribute('data-customer-phone') || '').toLowerCase();
               const source = (row.getAttribute('data-source-label') || '').toLowerCase();
               const assigned = (row.getAttribute('data-assigned') || '').trim();
-              const matchSearch = !searchVal || name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal);
+              const matchSearch = matchesSearch(name, phone, source);
               const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
               row.style.display = (matchSearch && matchEmp) ? '' : 'none';
             });
@@ -46444,7 +47687,7 @@ app.get('/admin/follow-ups', async (c) => {
           if (searchEl) searchEl.value = '';
           const empEl = document.getElementById('followupEmployeeFilter');
           if (empEl) empEl.value = 'all';
-          setFollowupFilterParamsInUrl({ link: 'all', pr: 'all' });
+          setFollowupFilterParamsInUrl({ link: 'all', pr: 'all', status: 'active' });
           syncFollowupHeaderFiltersFromUrl();
           loadFollowUps();
         }
@@ -46452,21 +47695,30 @@ app.get('/admin/follow-ups', async (c) => {
         function initFollowupHeaderFilters() {
           const linkSelect = document.getElementById('followupLinkFilterSelect');
           const prSelect = document.getElementById('followupPriorityFilterSelect');
+          const statusSelect = document.getElementById('followupStatusFilterSelect');
           if (!linkSelect || !prSelect) return;
 
           syncFollowupHeaderFiltersFromUrl();
 
           linkSelect.addEventListener('change', function() {
             const current = getFollowupFilterParamsFromUrl();
-            setFollowupFilterParamsInUrl({ link: this.value, pr: current.pr });
+            setFollowupFilterParamsInUrl({ link: this.value, pr: current.pr, status: current.status });
             loadFollowUps().then(() => applyFollowupClientFilters());
           });
 
           prSelect.addEventListener('change', function() {
             const current = getFollowupFilterParamsFromUrl();
-            setFollowupFilterParamsInUrl({ link: current.link, pr: this.value });
+            setFollowupFilterParamsInUrl({ link: current.link, pr: this.value, status: current.status });
             loadFollowUps().then(() => applyFollowupClientFilters());
           });
+
+          if (statusSelect) {
+            statusSelect.addEventListener('change', function() {
+              const current = getFollowupFilterParamsFromUrl();
+              setFollowupFilterParamsInUrl({ link: current.link, pr: current.pr, status: this.value });
+              loadFollowUps().then(() => applyFollowupClientFilters());
+            });
+          }
 
           window.addEventListener('popstate', function() {
             syncFollowupHeaderFiltersFromUrl();
@@ -46621,7 +47873,16 @@ app.get('/admin/follow-ups', async (c) => {
           tbody.innerHTML = rows.map((row) => {
             const fid = Number(row.id);
             const sourceLabel = followupSourceLabel(row) || '-';
-            return \`<tr class="hover:bg-gray-50 transition-colors" data-followup-id="\${fid}" data-customer-name="\${escapeHtml(row.customer_name||'-')}" data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}" data-source-label="\${escapeHtml(sourceLabel)}" data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
+            const isArchived = Number(row.is_archived) === 1 || row.is_archived === true;
+            const isNoResponse = Number(row.is_no_response) === 1 || row.is_no_response === true;
+            const archiveAction = isArchived
+              ? \`<button type="button" onclick="restoreFollowupFromArchive(\${fid})" class="actions-dropdown-item" style="color:#059669;">
+                    <i class="fas fa-undo"></i> استعادة
+                  </button>\`
+              : \`<button type="button" onclick="openArchiveModalById(\${fid})" class="actions-dropdown-item" style="color:#b45309;">
+                    <i class="fas fa-archive"></i> أرشفة
+                  </button>\`;
+            return \`<tr class="hover:bg-gray-50 transition-colors \${isArchived ? 'bg-slate-50/80' : ''}" data-followup-id="\${fid}" data-customer-name="\${escapeHtml(row.customer_name||'-')}" data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}" data-source-label="\${escapeHtml(sourceLabel)}" data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}" data-archived="\${isArchived ? '1' : '0'}" data-no-response="\${isNoResponse ? '1' : '0'}">
               <td class="px-4 py-3">
                 <input type="checkbox" class="followup-row-check rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" data-id="\${fid}" onchange="onFollowupRowCheckChange(this)">
               </td>
@@ -46639,12 +47900,10 @@ app.get('/admin/follow-ups', async (c) => {
                     <i class="fas fa-tasks"></i> المهام
                   </button>
                   <div class="actions-dropdown-divider"></div>
-                  <button type="button" onclick="openArchiveModalById(\${fid})" class="actions-dropdown-item" style="color:#b45309;">
-                    <i class="fas fa-archive"></i> أرشفة
-                  </button>
+                  \${archiveAction}
                 </div>
               </td>
-              <td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">\${escapeHtml(row.customer_name||'-')}</td>
+              <td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">\${escapeHtml(row.customer_name||'-')}\${isNoResponse ? ' <span class="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">لا يرد</span>' : ''}\${isArchived ? ' <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">أرشيف</span>' : ''}</td>
               <td class="px-4 py-3 text-gray-700 whitespace-nowrap"><div class="inline-flex items-center gap-2"><span dir="ltr">\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</div></td>
               <td class="px-4 py-3">\${followupSourceBadgeHtml(row) || escapeHtml(sourceLabel)}</td>
               <td class="px-4 py-3">
@@ -46823,12 +48082,11 @@ app.get('/admin/follow-ups', async (c) => {
           }
 
           try {
-            const params = new URLSearchParams(window.location.search);
-            const link = params.get('followupLinkFilter') || 'all';
-            const pr = (params.get('followupPriorityFilter') || 'all').toLowerCase();
+            const filterParams = getFollowupFilterParamsFromUrl();
             const api = new URL('/api/follow-ups', window.location.origin);
-            if (link && link !== 'all') api.searchParams.set('followupLinkFilter', link);
-            if (pr && pr !== 'all') api.searchParams.set('followupPriorityFilter', pr);
+            if (filterParams.link && filterParams.link !== 'all') api.searchParams.set('followupLinkFilter', filterParams.link);
+            if (filterParams.pr && filterParams.pr !== 'all') api.searchParams.set('followupPriorityFilter', filterParams.pr);
+            if (filterParams.status && filterParams.status !== 'active') api.searchParams.set('followupStatusFilter', filterParams.status);
             const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             followupCurrentRows = rows;
@@ -46841,26 +48099,38 @@ app.get('/admin/follow-ups', async (c) => {
 
             // Cards view
             if (cards) {
-              cards.innerHTML = rows.map((row) => \`
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+              cards.innerHTML = rows.map((row) => {
+                const isArchived = Number(row.is_archived) === 1 || row.is_archived === true;
+                const isNoResponse = Number(row.is_no_response) === 1 || row.is_no_response === true;
+                const archiveBtn = isArchived
+                  ? \`<button onclick="restoreFollowupFromArchive(\${Number(row.id)})" class="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="استعادة من الأرشيف">
+                      <i class="fas fa-undo"></i>
+                    </button>\`
+                  : \`<button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
+                      <i class="fas fa-archive"></i>
+                    </button>\`;
+                return \`
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 \${isArchived ? 'opacity-80 border-slate-200' : ''}"
                   data-followup-id="\${Number(row.id)}"
                   data-customer-name="\${escapeHtml(row.customer_name || '-')}"
                   data-customer-phone="\${escapeHtml(displayPhone(row.customer_phone))}"
                   data-source-label="\${escapeHtml(followupSourceLabel(row) || '-')}"
-                  data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}">
+                  data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}"
+                  data-archived="\${isArchived ? '1' : '0'}"
+                  data-no-response="\${isNoResponse ? '1' : '0'}">
                   <div class="flex items-start justify-between gap-3 mb-3">
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
                         \${followupSourceBadgeHtml(row)}
+                        \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
+                        \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
                       </div>
                       <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
                     </div>
                     <div class="flex items-center gap-1.5 flex-shrink-0">
                       <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                      <button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
-                        <i class="fas fa-archive"></i>
-                      </button>
+                      \${archiveBtn}
                     </div>
                   </div>
                   <div class="space-y-2">
@@ -46880,7 +48150,8 @@ app.get('/admin/follow-ups', async (c) => {
                     </div>
                   </div>
                 </div>
-              \`).join('');
+              \`;
+              }).join('');
               bindWhatsAppButtons(cards);
               rows.forEach((row) => loadCardTasks(Number(row.id)));
             }
@@ -46995,6 +48266,19 @@ app.get('/admin/follow-ups', async (c) => {
           const modal = document.getElementById('archiveModal');
           modal.classList.add('hidden');
           modal.classList.remove('flex');
+        }
+
+        async function restoreFollowupFromArchive(followupId) {
+          const id = Number(followupId);
+          if (!Number.isFinite(id) || id <= 0) return;
+          if (!confirm('استعادة هذا الطلب من الأرشيف؟')) return;
+          try {
+            await axios.patch('/api/follow-ups/' + id + '/archive', { restore: true });
+            await loadFollowUps();
+            applyFollowupClientFilters();
+          } catch (e) {
+            alert('حدث خطأ أثناء الاستعادة');
+          }
         }
 
         document.getElementById('archiveCancelBtn').addEventListener('click', closeArchiveModal);
@@ -47414,7 +48698,8 @@ app.post('/api/customer-reminders/trigger', async (c) => {
 // tenant_followup_auto_assign_state, pure round-robin excluding the current assignee.
 async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; skipped: number }> {
   const { results: expiredRows } = await db.prepare(`
-    SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id
+    SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
+           f.customer_name
     FROM company_contact_followup_tasks t
     INNER JOIN company_contact_followups f ON f.id = t.followup_id
     WHERE COALESCE(f.is_no_response, 0) = 1
@@ -47423,7 +48708,14 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       AND COALESCE(f.is_archived, 0) = 0
     ORDER BY f.no_response_at ASC
     LIMIT 200
-  `).all<{ task_id: number; tenant_id: number; assigned_user_id: number; followup_id: number }>()
+  `).all<{
+    task_id: number
+    tenant_id: number
+    assigned_user_id: number
+    followup_id: number
+    task_title: string | null
+    customer_name: string | null
+  }>()
 
   let transferred = 0
   let skipped = 0
@@ -47496,10 +48788,11 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?
     `).bind(nextId, row.task_id, tenantId).run()
 
-    // Clear the no-response flag so the task appears normally in the new employee's list
+    // Keep it as a no-response task for the new assignee; reset the 48h clock so cron
+    // does not immediately re-transfer on the next run.
     await db.prepare(`
       UPDATE company_contact_followups
-      SET is_no_response = 0, no_response_at = NULL, no_response_by = NULL
+      SET is_no_response = 1, no_response_at = CURRENT_TIMESTAMP
       WHERE id = ? AND tenant_id = ?
     `).bind(row.followup_id, tenantId).run()
 
@@ -47516,6 +48809,32 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
         `تم تحويل المهمة تلقائياً من ${fromName} إلى ${toName} بسبب عدم الرد خلال 48 ساعة`
       ).run()
     } catch { /* note table may be missing in test envs */ }
+
+    const taskLabel =
+      String(row.task_title || row.customer_name || '').trim() || `مهمة #${row.task_id}`
+
+    try {
+      await insertFollowupNoResponseTransferNotification(db, {
+        recipientUserId: row.assigned_user_id,
+        tenantId,
+        title: 'تم تحويل مهمة (عدم رد)',
+        message: `تم تحويل مهمة "${taskLabel}" تلقائياً إلى ${toName} بسبب عدم الرد خلال 48 ساعة`,
+        notifType: 'info',
+        category: 'followup_no_response_transfer_out',
+        taskId: row.task_id,
+      })
+      await insertFollowupNoResponseTransferNotification(db, {
+        recipientUserId: nextId,
+        tenantId,
+        title: 'مهمة جديدة (عدم رد)',
+        message: `تم إسناد مهمة "${taskLabel}" إليك تلقائياً من ${fromName} بسبب عدم الرد خلال 48 ساعة`,
+        notifType: 'warning',
+        category: 'followup_no_response_transfer_in',
+        taskId: row.task_id,
+      })
+    } catch (notifErr) {
+      console.error('followup_no_response_transfer notification insert failed:', notifErr)
+    }
 
     // Update follow-up round-robin cursor (same state table as CSV import)
     await db.prepare(`
