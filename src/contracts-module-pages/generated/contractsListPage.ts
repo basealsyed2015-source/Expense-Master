@@ -1014,7 +1014,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260716"></script>
+  <script src="/contracts-module/js/app.js?v=20260809"></script>
   <script>
     let allContracts = [];
     let filteredContracts = [];
@@ -1120,7 +1120,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           <td><span class="amount-display" style="font-size:14px;">\${formatMoney(c.finance_amount)}</span></td>
           <td><strong class="text-secondary">\${formatMoney(c.commission_amount)}</strong></td>
           <td>\${c.finance_type || '—'}</td>
-          <td>\${getStatusBadge(c.status)}</td>
+          <td>\${getStatusBadge(c.status, { bankAgentName: c.bank_agent_name })}</td>
           <td>\${c.note_order_number ? \`<a href="/admin/contracts/notes?search=\${c.note_order_number}" style="color:var(--primary);"><code>\${c.note_order_number}</code></a>\` : '—'}</td>
           <td style="font-size:12px;color:var(--text-muted);">\${c.date_gregorian || '—'}</td>
           <td>

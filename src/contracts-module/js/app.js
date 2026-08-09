@@ -126,7 +126,7 @@ function formatDate(dateStr) {
   } catch { return dateStr; }
 }
 
-function getStatusBadge(status) {
+function getStatusBadge(status, opts) {
   const map = {
     'نشط': { cls: 'badge-active', icon: 'fa-check-circle' },
     'بانتظار التمويل': { cls: 'badge-pending', icon: 'fa-clock' },
@@ -137,7 +137,13 @@ function getStatusBadge(status) {
     'ملغي': { cls: 'badge-cancelled', icon: 'fa-times-circle' }
   };
   const s = map[status] || { cls: 'badge-pending', icon: 'fa-question' };
-  return `<span class="badge ${s.cls}"><i class="fas ${s.icon}" style="font-size:10px;margin-left:4px;"></i>${status}</span>`;
+  const bankAgentName = opts && opts.bankAgentName ? String(opts.bankAgentName).trim() : '';
+  let label = status;
+  if (status === CONTRACT_STATUS_AWAITING_BANK_AGENT_APPROVAL && bankAgentName) {
+    label = `${status} — ${bankAgentName}`;
+  }
+  const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return `<span class="badge ${s.cls}"><i class="fas ${s.icon}" style="font-size:10px;margin-left:4px;"></i>${esc(label)}</span>`;
 }
 
 function getNoteStatusBadge(status) {

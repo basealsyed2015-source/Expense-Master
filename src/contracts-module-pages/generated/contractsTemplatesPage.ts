@@ -1185,7 +1185,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260716"></script>
+  <script src="/contracts-module/js/app.js?v=20260809"></script>
   <script>
     let editingId = null;
     let tplBodyEditorReady = null;

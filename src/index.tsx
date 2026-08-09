@@ -8835,16 +8835,20 @@ app.get('/api/dashboard-search', async (c) => {
     // Role 2 (company admin) can access both; we keep them on /admin/follow-ups since that's
     // the marketing module they normally work in.
     const usesMarketingModule = (roleNorm === 1 || roleNorm === 2 || roleNorm === 3)
-    function taskHrefFor(state: 'archived' | 'no_response' | 'active', taskId: number): string {
-      const qs = `highlightTask=${taskId}`
+    // Deep-link by phone so the destination page can prefill its search filter.
+    // (Task id alone is not enough — follow-ups / my-tasks lists are phone/name searchable.)
+    function taskHrefFor(state: 'archived' | 'no_response' | 'active', phone: string | null | undefined): string {
+      const phoneQ = String(phone || '').trim()
+      const qs = phoneQ ? `q=${encodeURIComponent(phoneQ)}` : ''
+      const withQs = (base: string) => (qs ? `${base}${base.includes('?') ? '&' : '?'}${qs}` : base)
       if (usesMarketingModule) {
-        if (state === 'archived') return `/admin/follow-ups?followupStatusFilter=archived&${qs}`
-        if (state === 'no_response') return `/admin/follow-ups?followupStatusFilter=no_response&${qs}`
-        return `/admin/follow-ups?${qs}`
+        if (state === 'archived') return withQs('/admin/follow-ups?followupStatusFilter=archived')
+        if (state === 'no_response') return withQs('/admin/follow-ups?followupStatusFilter=no_response')
+        return withQs('/admin/follow-ups')
       }
-      if (state === 'archived') return `/admin/my-archived-tasks?${qs}`
-      if (state === 'no_response') return `/admin/my-no-response-tasks?${qs}`
-      return `/admin/my-tasks?${qs}`
+      if (state === 'archived') return withQs('/admin/my-archived-tasks')
+      if (state === 'no_response') return withQs('/admin/my-no-response-tasks')
+      return withQs('/admin/my-tasks')
     }
 
     const customerItems = customerRows.map((r: any) => {
@@ -8912,7 +8916,7 @@ app.get('/api/dashboard-search', async (c) => {
         subtitle: subtitleBits.join(' • '),
         status: statusLabel,
         statusColor,
-        href: taskHrefFor(state, r.id),
+        href: taskHrefFor(state, r.customer_phone),
         createdAt: r.created_at,
       }
     })
@@ -22084,23 +22088,27 @@ app.get('/admin/customers', async (c) => {
 
     // For recent_activity: inject a pre-aggregated LEFT JOIN (runs once, not per row).
     // Avoids correlated-subquery CPU overrun in Cloudflare Workers.
+    // D1 rejects flat compound SELECTs with >5 terms ("too many terms in compound SELECT"),
+    // which silently fell back to created_at ordering — nest unions to stay under the limit.
     if (sortFilter === 'recent_activity' && userInfo.userId) {
       const sortJoin = [
         '\n      LEFT JOIN (',
         '\n        SELECT customer_id, MAX(t) AS _last_act FROM (',
-        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_notes WHERE performed_by = ?',
+        '\n          SELECT customer_id, t FROM (',
+        '\n            SELECT customer_id, created_at AS t FROM customer_workflow_notes WHERE performed_by = ?',
+        '\n            UNION ALL',
+        '\n            SELECT customer_id, created_at AS t FROM customer_workflow_actions WHERE performed_by = ?',
+        '\n            UNION ALL',
+        '\n            SELECT customer_id, created_at AS t FROM customer_workflow_transitions WHERE transitioned_by = ?',
+        '\n          )',
         '\n          UNION ALL',
-        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_actions WHERE performed_by = ?',
-        '\n          UNION ALL',
-        '\n          SELECT customer_id, created_at AS t FROM customer_workflow_transitions WHERE transitioned_by = ?',
-        '\n          UNION ALL',
-        '\n          SELECT customer_id, changed_at AS t FROM assignment_history WHERE changed_by = ?',
-        '\n          UNION ALL',
-        '\n          SELECT customer_id, changed_at AS t FROM assignment_history WHERE new_employee_id = ?',
-        '\n          UNION ALL',
-        '\n          SELECT customer_id, assigned_at AS t FROM customer_assignments WHERE employee_id = ?',
-        '\n          UNION ALL',
-        '\n          SELECT customer_id, created_at AS t FROM financing_requests WHERE created_by = ? OR assigned_bank_agent_id = ?',
+        '\n          SELECT customer_id, t FROM (',
+        '\n            SELECT customer_id, changed_at AS t FROM assignment_history WHERE changed_by = ? OR new_employee_id = ?',
+        '\n            UNION ALL',
+        '\n            SELECT customer_id, assigned_at AS t FROM customer_assignments WHERE employee_id = ?',
+        '\n            UNION ALL',
+        '\n            SELECT customer_id, created_at AS t FROM financing_requests WHERE created_by = ? OR assigned_bank_agent_id = ?',
+        '\n          )',
         '\n        ) _acts GROUP BY customer_id',
         '\n      ) _ua ON _ua.customer_id = customers.id'
       ].join('')
@@ -35176,11 +35184,30 @@ app.get('/api/my-profile', async (c) => {
     ).bind(userInfo.userId).first() as any;
     if (!user) return c.json({ success: false, error: 'لم يتم العثور على بيانات المستخدم' }, 400);
 
-    const employee = await c.env.DB.prepare(
-      `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
-              id_type, iqama_number, iqama_expiry, id_document_url, department, job_title, hire_date, status
-       FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
-    ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
+    let employee: any = null;
+    try {
+      employee = await c.env.DB.prepare(
+        `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
+                id_type, iqama_number, iqama_expiry, id_document_url,
+                medical_insurance_document_url, medical_insurance_expiry,
+                gosi_document_url, gosi_document_expiry,
+                department, job_title, hire_date, status
+         FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
+      ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
+    } catch {
+      // Migration 0144 not applied yet — fall back without insurance columns
+      employee = await c.env.DB.prepare(
+        `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
+                id_type, iqama_number, iqama_expiry, id_document_url, department, job_title, hire_date, status
+         FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
+      ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
+      if (employee) {
+        employee.medical_insurance_document_url = null;
+        employee.medical_insurance_expiry = null;
+        employee.gosi_document_url = null;
+        employee.gosi_document_expiry = null;
+      }
+    }
 
     return c.json({
       success: true,
@@ -35200,7 +35227,7 @@ app.get('/api/my-profile', async (c) => {
   }
 });
 
-// Update the logged-in user's account contact details and ID details.
+// Update the logged-in user's account contact details, ID details, and insurance docs.
 app.patch('/api/my-profile', async (c) => {
   try {
     const userInfo = await getUserInfo(c);
@@ -35266,19 +35293,74 @@ app.patch('/api/my-profile', async (c) => {
     const hasIdFields = ['id_type', 'national_id', 'national_id_expiry', 'iqama_number', 'iqama_expiry', 'id_document_url']
       .some((key) => Object.prototype.hasOwnProperty.call(body, key));
 
-    if (!hasIdFields) return c.json({ success: true });
-    if (!employee) {
-      return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+    if (hasIdFields) {
+      if (!employee) {
+        return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+      }
+      if (id_type === 'national') {
+        await c.env.DB.prepare(
+          `UPDATE hr_employees SET id_type = 'national', national_id = ?, national_id_expiry = ?, iqama_number = NULL, iqama_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
+        ).bind(national_id || null, national_id_expiry || null, id_document_url || null, employee.id).run();
+      } else {
+        await c.env.DB.prepare(
+          `UPDATE hr_employees SET id_type = 'iqama', iqama_number = ?, iqama_expiry = ?, national_id = NULL, national_id_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
+        ).bind(iqama_number || null, iqama_expiry || null, id_document_url || null, employee.id).run();
+      }
     }
 
-    if (id_type === 'national') {
-      await c.env.DB.prepare(
-        `UPDATE hr_employees SET id_type = 'national', national_id = ?, national_id_expiry = ?, iqama_number = NULL, iqama_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(national_id || null, national_id_expiry || null, id_document_url || null, employee.id).run();
-    } else {
-      await c.env.DB.prepare(
-        `UPDATE hr_employees SET id_type = 'iqama', iqama_number = ?, iqama_expiry = ?, national_id = NULL, national_id_expiry = NULL, id_document_url = ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(iqama_number || null, iqama_expiry || null, id_document_url || null, employee.id).run();
+    const insuranceKeys = [
+      'medical_insurance_document_url',
+      'medical_insurance_expiry',
+      'gosi_document_url',
+      'gosi_document_expiry',
+    ];
+    const hasInsuranceFields = insuranceKeys.some((key) =>
+      Object.prototype.hasOwnProperty.call(body, key)
+    );
+
+    if (hasInsuranceFields) {
+      if (!employee) {
+        return c.json({ success: false, error: 'لم يتم العثور على سجل الموظف المرتبط بحسابك. تواصل مع مدير النظام.' }, 400);
+      }
+      const medicalUrl = Object.prototype.hasOwnProperty.call(body, 'medical_insurance_document_url')
+        ? (body.medical_insurance_document_url || null)
+        : undefined;
+      const medicalExpiry = Object.prototype.hasOwnProperty.call(body, 'medical_insurance_expiry')
+        ? (String(body.medical_insurance_expiry || '').trim() || null)
+        : undefined;
+      const gosiUrl = Object.prototype.hasOwnProperty.call(body, 'gosi_document_url')
+        ? (body.gosi_document_url || null)
+        : undefined;
+      const gosiExpiry = Object.prototype.hasOwnProperty.call(body, 'gosi_document_expiry')
+        ? (String(body.gosi_document_expiry || '').trim() || null)
+        : undefined;
+
+      // Only update columns that were sent so partial saves (one doc at a time) work.
+      const sets: string[] = [];
+      const binds: unknown[] = [];
+      if (medicalUrl !== undefined) {
+        sets.push('medical_insurance_document_url = ?');
+        binds.push(medicalUrl);
+      }
+      if (medicalExpiry !== undefined) {
+        sets.push('medical_insurance_expiry = ?');
+        binds.push(medicalExpiry);
+      }
+      if (gosiUrl !== undefined) {
+        sets.push('gosi_document_url = ?');
+        binds.push(gosiUrl);
+      }
+      if (gosiExpiry !== undefined) {
+        sets.push('gosi_document_expiry = ?');
+        binds.push(gosiExpiry);
+      }
+      if (sets.length) {
+        sets.push(`updated_at = datetime('now')`);
+        binds.push(employee.id);
+        await c.env.DB.prepare(
+          `UPDATE hr_employees SET ${sets.join(', ')} WHERE id = ?`
+        ).bind(...binds).run();
+      }
     }
 
     return c.json({ success: true });
@@ -36976,6 +37058,52 @@ app.get('/admin/my-profile', (c) => {
       </div>
     </div>
   </div>
+
+  <div class="card" id="insuranceCard" style="display:none">
+    <h2><i class="fas fa-shield-alt" style="color:#1e40af"></i> مستندات التأمين</h2>
+    <p class="type-hint">ارفع بطاقة التأمين الطبي وشهادة التأمينات الاجتماعية (اختياري)</p>
+    <div id="insuranceAlert"></div>
+
+    <div style="border:1px solid #e2e8f0; border-radius:10px; padding:16px; margin-bottom:16px;">
+      <div style="font-weight:700; color:#334155; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-heartbeat" style="color:#dc2626"></i> التأمين الطبي
+      </div>
+      <div id="medicalRead" style="display:none; margin-bottom:12px;"></div>
+      <form id="medicalForm" onsubmit="submitInsuranceDoc(event, 'medical')">
+        <div class="form-group">
+          <label>تاريخ انتهاء البطاقة / الوثيقة</label>
+          <input type="date" id="medicalExpiry">
+          <div class="expiry-warn" id="warnMedical"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+        </div>
+        <div class="form-group">
+          <label>ملف التأمين الطبي</label>
+          <input type="file" id="medicalFile" accept="image/*,.pdf">
+          <div class="upload-progress" id="medicalUploadProgress"><i class="fas fa-spinner fa-spin"></i> جاري رفع الملف...</div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="medicalSaveBtn"><i class="fas fa-save"></i> حفظ التأمين الطبي</button>
+      </form>
+    </div>
+
+    <div style="border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+      <div style="font-weight:700; color:#334155; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-building" style="color:#ea580c"></i> التأمينات الاجتماعية (GOSI)
+      </div>
+      <div id="gosiRead" style="display:none; margin-bottom:12px;"></div>
+      <form id="gosiForm" onsubmit="submitInsuranceDoc(event, 'gosi')">
+        <div class="form-group">
+          <label>تاريخ انتهاء / صلاحية الشهادة</label>
+          <input type="date" id="gosiExpiry">
+          <div class="expiry-warn" id="warnGosi"><i class="fas fa-exclamation-triangle"></i> <span></span></div>
+        </div>
+        <div class="form-group">
+          <label>ملف التأمينات الاجتماعية</label>
+          <input type="file" id="gosiFile" accept="image/*,.pdf">
+          <div class="upload-progress" id="gosiUploadProgress"><i class="fas fa-spinner fa-spin"></i> جاري رفع الملف...</div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="gosiSaveBtn"><i class="fas fa-save"></i> حفظ التأمينات الاجتماعية</button>
+      </form>
+    </div>
+  </div>
 </div>
 <script>
 (async function() {
@@ -37004,6 +37132,131 @@ app.get('/admin/my-profile', (c) => {
 
   document.getElementById('nationalIdExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnNational')); });
   document.getElementById('iqamaExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnIqama')); });
+  document.getElementById('medicalExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnMedical')); });
+  document.getElementById('gosiExpiry').addEventListener('change', function() { checkExpiry(this.value, document.getElementById('warnGosi')); });
+
+  function docPreviewHtml(url, label) {
+    if (!url) return '<span style="color:#94a3b8">لم يُرفع بعد</span>';
+    return '<a href="' + url + '" target="_blank" rel="noopener"><img src="' + url + '" class="doc-img-thumb" onerror="this.style.display=\\'none\\';this.nextSibling.style.display=\\'inline\\'"><span style="display:none;font-size:0.85rem;color:#1e40af">عرض ' + label + '</span></a>';
+  }
+
+  function expiryLabel(expiry) {
+    if (!expiry) return '-';
+    const d = daysUntil(expiry);
+    let html = expiry;
+    if (d !== null && d < 0) html += ' <span class="badge-expired">منتهية</span>';
+    else if (d !== null && d <= 90) html += ' <span class="badge-warn">تنتهي خلال ' + d + ' يوم</span>';
+    return html;
+  }
+
+  function renderInsuranceRead() {
+    if (!emp) return;
+    const medicalHas = emp.medical_insurance_document_url || emp.medical_insurance_expiry;
+    const gosiHas = emp.gosi_document_url || emp.gosi_document_expiry;
+    const medicalEl = document.getElementById('medicalRead');
+    const gosiEl = document.getElementById('gosiRead');
+    if (medicalHas) {
+      medicalEl.style.display = 'block';
+      medicalEl.innerHTML =
+        '<div class="read-row"><span class="read-label">الانتهاء</span><span>' + expiryLabel(emp.medical_insurance_expiry) + '</span></div>' +
+        '<div class="read-row"><span class="read-label">الملف</span><span>' + docPreviewHtml(emp.medical_insurance_document_url, 'التأمين الطبي') + '</span></div>';
+    } else {
+      medicalEl.style.display = 'none';
+      medicalEl.innerHTML = '';
+    }
+    if (gosiHas) {
+      gosiEl.style.display = 'block';
+      gosiEl.innerHTML =
+        '<div class="read-row"><span class="read-label">الانتهاء</span><span>' + expiryLabel(emp.gosi_document_expiry) + '</span></div>' +
+        '<div class="read-row"><span class="read-label">الملف</span><span>' + docPreviewHtml(emp.gosi_document_url, 'التأمينات') + '</span></div>';
+    } else {
+      gosiEl.style.display = 'none';
+      gosiEl.innerHTML = '';
+    }
+    if (emp.medical_insurance_expiry) {
+      document.getElementById('medicalExpiry').value = emp.medical_insurance_expiry;
+      checkExpiry(emp.medical_insurance_expiry, document.getElementById('warnMedical'));
+    }
+    if (emp.gosi_document_expiry) {
+      document.getElementById('gosiExpiry').value = emp.gosi_document_expiry;
+      checkExpiry(emp.gosi_document_expiry, document.getElementById('warnGosi'));
+    }
+  }
+
+  window.submitInsuranceDoc = async function(e, kind) {
+    e.preventDefault();
+    const isMedical = kind === 'medical';
+    const btn = document.getElementById(isMedical ? 'medicalSaveBtn' : 'gosiSaveBtn');
+    const alertEl = document.getElementById('insuranceAlert');
+    const progressEl = document.getElementById(isMedical ? 'medicalUploadProgress' : 'gosiUploadProgress');
+    const fileInput = document.getElementById(isMedical ? 'medicalFile' : 'gosiFile');
+    const expiry = document.getElementById(isMedical ? 'medicalExpiry' : 'gosiExpiry').value;
+    btn.disabled = true;
+    alertEl.innerHTML = '';
+
+    let docUrl = isMedical ? (emp && emp.medical_insurance_document_url) : (emp && emp.gosi_document_url);
+    if (fileInput.files && fileInput.files[0]) {
+      progressEl.style.display = 'block';
+      try {
+        const fd = new FormData();
+        fd.append('file', fileInput.files[0]);
+        fd.append('attachment_id', isMedical ? 'hr_medical_insurance' : 'hr_gosi_doc');
+        const ur = await fetch('/api/attachments/upload', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') },
+          body: fd,
+        });
+        const ud = await ur.json();
+        if (!ud.success) throw new Error(ud.error || 'فشل رفع الملف');
+        docUrl = ud.url;
+      } catch (err) {
+        setAlert(alertEl, 'error', err.message || 'فشل رفع الملف');
+        progressEl.style.display = 'none';
+        btn.disabled = false;
+        return;
+      }
+      progressEl.style.display = 'none';
+    }
+
+    if (!docUrl && !expiry) {
+      setAlert(alertEl, 'error', 'يرجى رفع ملف أو إدخال تاريخ الانتهاء');
+      btn.disabled = false;
+      return;
+    }
+
+    const body = isMedical
+      ? { medical_insurance_document_url: docUrl || null, medical_insurance_expiry: expiry || null }
+      : { gosi_document_url: docUrl || null, gosi_document_expiry: expiry || null };
+
+    try {
+      const r = await fetch('/api/my-profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('authToken') || '') },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        setAlert(alertEl, 'error', d.error || 'حدث خطأ');
+        return;
+      }
+      if (isMedical) {
+        emp.medical_insurance_document_url = docUrl || null;
+        emp.medical_insurance_expiry = expiry || null;
+        fileInput.value = '';
+      } else {
+        emp.gosi_document_url = docUrl || null;
+        emp.gosi_document_expiry = expiry || null;
+        fileInput.value = '';
+      }
+      renderInsuranceRead();
+      setAlert(alertEl, 'success', isMedical ? 'تم حفظ التأمين الطبي ✓' : 'تم حفظ التأمينات الاجتماعية ✓');
+      setTimeout(function() { alertEl.innerHTML = ''; }, 4000);
+    } catch (err) {
+      setAlert(alertEl, 'error', 'فشل الاتصال بالخادم');
+    } finally {
+      btn.disabled = false;
+    }
+  };
 
   function show(id) {
     ['section-pick','section-form','section-read'].forEach(function(s) {
@@ -37203,8 +37456,10 @@ app.get('/admin/my-profile', (c) => {
   emp = data.data;
   document.getElementById('infoCard').style.display = 'block';
   document.getElementById('idCard').style.display = 'block';
+  document.getElementById('insuranceCard').style.display = 'block';
 
   renderEmployeeInfo();
+  renderInsuranceRead();
 
   // Determine initial state
   const hasData = emp.national_id || emp.iqama_number;
@@ -37234,25 +37489,47 @@ app.get('/api/hr/employee-ids', async (c) => {
     try {
       const r = await c.env.DB.prepare(`
         SELECT id, full_name, full_name_ar, department, job_title, status,
-               id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url
+               id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url,
+               medical_insurance_document_url, medical_insurance_expiry,
+               gosi_document_url, gosi_document_expiry
         FROM hr_employees ${where}
         ORDER BY COALESCE(full_name, full_name_ar)
       `).all();
       results = r.results || [];
     } catch {
-      // New columns not yet in DB — return base data without them
-      const r = await c.env.DB.prepare(`
-        SELECT id, full_name, full_name_ar, department, job_title, status,
-               national_id, iqama_number, iqama_expiry
-        FROM hr_employees ${where}
-        ORDER BY COALESCE(full_name, full_name_ar)
-      `).all();
-      results = (r.results || []).map((row: any) => ({
-        ...row,
-        id_type: row.iqama_number ? 'iqama' : (row.national_id ? 'national' : null),
-        national_id_expiry: null,
-        id_document_url: null,
-      }));
+      try {
+        const r = await c.env.DB.prepare(`
+          SELECT id, full_name, full_name_ar, department, job_title, status,
+                 id_type, national_id, national_id_expiry, iqama_number, iqama_expiry, id_document_url
+          FROM hr_employees ${where}
+          ORDER BY COALESCE(full_name, full_name_ar)
+        `).all();
+        results = (r.results || []).map((row: any) => ({
+          ...row,
+          medical_insurance_document_url: null,
+          medical_insurance_expiry: null,
+          gosi_document_url: null,
+          gosi_document_expiry: null,
+        }));
+      } catch {
+        // New columns not yet in DB — return base data without them
+        const r = await c.env.DB.prepare(`
+          SELECT id, full_name, full_name_ar, department, job_title, status,
+                 national_id, iqama_number, iqama_expiry
+          FROM hr_employees ${where}
+          ORDER BY COALESCE(full_name, full_name_ar)
+        `).all();
+        results = (r.results || []).map((row: any) => ({
+          ...row,
+          id_type: row.iqama_number ? 'iqama' : (row.national_id ? 'national' : null),
+          national_id_expiry: null,
+          id_document_url: null,
+          medical_insurance_document_url: null,
+          medical_insurance_expiry: null,
+          gosi_document_url: null,
+          gosi_document_expiry: null,
+        }));
+      }
     }
     return c.json({ success: true, data: results });
   } catch (error: any) {
@@ -42287,6 +42564,10 @@ app.get('/admin/my-tasks', async (c) => {
 
         setActiveFilterButtons();
         (async function init() {
+          // Prefill search from ?q= (panel search deep-link by task phone).
+          var q = String(new URLSearchParams(window.location.search).get('q') || '').trim();
+          var searchEl = document.getElementById('taskSearchInput');
+          if (searchEl && q) searchEl.value = q;
           await loadStaff();
           await Promise.all([loadTasks(), loadIncomingPasses()]);
           syncPassesTabStyle();
@@ -42533,6 +42814,13 @@ app.get('/admin/my-no-response-tasks', async (c) => {
 
         document.getElementById('nrSearchInput').addEventListener('input', applySearch);
 
+        // Prefill search from ?q= (panel search deep-link by task phone).
+        (function () {
+          var q = String(new URLSearchParams(window.location.search).get('q') || '').trim();
+          var searchEl = document.getElementById('nrSearchInput');
+          if (searchEl && q) searchEl.value = q;
+        })();
+
         // Refresh countdown every minute
         setInterval(function() {
           var root = document.getElementById('nrCards');
@@ -42777,6 +43065,13 @@ app.get('/admin/my-archived-tasks', async (c) => {
             clearTimeout(t);
             t = setTimeout(applySearch, 200);
           });
+        })();
+
+        // Prefill search from ?q= (panel search deep-link by task phone).
+        (function () {
+          var q = String(new URLSearchParams(window.location.search).get('q') || '').trim();
+          var searchEl = document.getElementById('archivedSearchInput');
+          if (searchEl && q) searchEl.value = q;
         })();
 
         loadArchivedTasks();
@@ -47688,6 +47983,13 @@ app.get('/admin/follow-ups', async (c) => {
           const empEl = document.getElementById('followupEmployeeFilter');
           if (empEl) empEl.value = 'all';
           setFollowupFilterParamsInUrl({ link: 'all', pr: 'all', status: 'active' });
+          // Drop deep-link search query from the URL as well.
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('q')) {
+            params.delete('q');
+            const qs = params.toString();
+            window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
+          }
           syncFollowupHeaderFiltersFromUrl();
           loadFollowUps();
         }
@@ -48308,6 +48610,13 @@ app.get('/admin/follow-ups', async (c) => {
           document.getElementById('cards').classList.add('hidden');
           document.getElementById('rows-container').classList.remove('hidden');
         }
+
+        // Prefill search from ?q= (panel search deep-link by task phone).
+        (function hydrateFollowupSearchFromUrl() {
+          const q = String(new URLSearchParams(window.location.search).get('q') || '').trim();
+          const searchEl = document.getElementById('followupSearchInput');
+          if (searchEl && q) searchEl.value = q;
+        })();
 
         loadFollowupAssignableStaff().then(() => loadFollowUps().then(() => applyFollowupClientFilters()));
 

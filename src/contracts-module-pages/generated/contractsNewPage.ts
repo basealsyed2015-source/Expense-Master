@@ -1086,11 +1086,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label">نوع التمويل <span class="required">*</span></label>
-                <select class="form-control" id="finance_type" required>
+                <select class="form-control" id="finance_type" required onchange="handleFinanceTypeChange()">
                   <option value="">-- اختر نوع التمويل --</option>
                   <!--CONTRACTS_FINANCE_TYPE_OPTIONS-->
+                  <option value="__custom__">أخرى (إدخال يدوي)</option>
                 </select>
-                <div class="invalid-feedback">يرجى اختيار نوع التمويل</div>
+                <input type="text" class="form-control" id="finance_type_custom" placeholder="أدخل نوع التمويل" maxlength="200" style="display:none;margin-top:8px;" />
+                <div class="invalid-feedback">يرجى اختيار أو إدخال نوع التمويل</div>
               </div>
               <div class="form-group">
                 <label class="form-label">مبلغ التمويل (ريال) <span class="required">*</span></label>
@@ -1102,14 +1104,14 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <input type="text" class="form-control" id="bank_name" placeholder="مثال: بنك الراجحي" required />
                 <div class="invalid-feedback">يرجى إدخال اسم البنك أو الجهة الممولة</div>
               </div>
-              <div class="form-group">
+              <div class="form-group" id="property_description_group" style="display:none;">
                 <label class="form-label">وصف العقار <span class="required">*</span></label>
-                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" required />
+                <input type="text" class="form-control" id="property_description" placeholder="مثال: شقة سكنية" />
                 <div class="invalid-feedback">يرجى إدخال وصف العقار</div>
               </div>
-              <div class="form-group form-full">
+              <div class="form-group form-full" id="property_location_group" style="display:none;">
                 <label class="form-label">موقع العقار <span class="required">*</span></label>
-                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" required />
+                <input type="text" class="form-control" id="property_location" placeholder="مثال: الرياض - حي النرجس" />
                 <div class="invalid-feedback">يرجى إدخال موقع العقار</div>
               </div>
             </div>
@@ -1203,7 +1205,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <!--CONTRACTS_FINANCING_REQUESTS_JSON-->
-  <script src="/contracts-module/js/app.js?v=20260716"></script>
+  <script src="/contracts-module/js/app.js?v=20260809"></script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
     let loadedTemplates = [];
@@ -1358,21 +1360,77 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    const FINANCE_TYPE_CUSTOM = '__custom__';
+    const REAL_ESTATE_FINANCE_TYPE = 'تمويل عقاري';
+
+    function isRealEstateFinanceType() {
+      return resolveFinanceTypeValue() === REAL_ESTATE_FINANCE_TYPE;
+    }
+
+    function syncPropertyFieldsVisibility() {
+      const show = isRealEstateFinanceType();
+      const descGroup = document.getElementById('property_description_group');
+      const locGroup = document.getElementById('property_location_group');
+      const desc = document.getElementById('property_description');
+      const loc = document.getElementById('property_location');
+      if (descGroup) descGroup.style.display = show ? '' : 'none';
+      if (locGroup) locGroup.style.display = show ? '' : 'none';
+      if (!show) {
+        if (desc) desc.classList.remove('is-invalid');
+        if (loc) loc.classList.remove('is-invalid');
+      }
+    }
+
+    function handleFinanceTypeChange() {
+      const sel = document.getElementById('finance_type');
+      const custom = document.getElementById('finance_type_custom');
+      if (sel && custom) {
+        if (sel.value === FINANCE_TYPE_CUSTOM) {
+          custom.style.display = '';
+          custom.focus();
+        } else {
+          custom.style.display = 'none';
+          custom.classList.remove('is-invalid');
+        }
+      }
+      syncPropertyFieldsVisibility();
+    }
+
+    function resolveFinanceTypeValue() {
+      const sel = document.getElementById('finance_type');
+      if (!sel) return '';
+      if (sel.value === FINANCE_TYPE_CUSTOM) {
+        const custom = document.getElementById('finance_type_custom');
+        return custom ? String(custom.value || '').trim() : '';
+      }
+      return String(sel.value || '').trim();
+    }
+
     function setFinanceTypeValue(typeName) {
       if (!typeName) return;
       const sel = document.getElementById('finance_type');
+      const custom = document.getElementById('finance_type_custom');
       if (!sel) return;
       let found = false;
       for (let i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === typeName) { found = true; break; }
+        const v = sel.options[i].value;
+        if (v && v !== FINANCE_TYPE_CUSTOM && v === typeName) { found = true; break; }
       }
-      if (!found) {
-        const o = document.createElement('option');
-        o.value = typeName;
-        o.textContent = typeName;
-        sel.appendChild(o);
+      if (found) {
+        sel.value = typeName;
+        if (custom) {
+          custom.value = '';
+          custom.style.display = 'none';
+          custom.classList.remove('is-invalid');
+        }
+      } else {
+        sel.value = FINANCE_TYPE_CUSTOM;
+        if (custom) {
+          custom.value = typeName;
+          custom.style.display = '';
+        }
       }
-      sel.value = typeName;
+      syncPropertyFieldsVisibility();
     }
 
     function fillFromFinancingRequest(requestId) {
@@ -1599,13 +1657,21 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         { id: 'party_two_name', msg: 'يرجى إدخال اسم العميل', check: v => v.trim().length >= 3 },
         { id: 'party_two_id', msg: 'إن أُدخل، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\\d{10}$/.test(t); } },
         { id: 'party_two_phone', msg: 'يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
-        { id: 'finance_type', msg: 'يرجى اختيار نوع التمويل', check: v => v !== '' },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
-        { id: 'property_description', msg: 'يرجى إدخال وصف العقار', check: v => v.trim().length > 0 },
-        { id: 'property_location', msg: 'يرجى إدخال موقع العقار', check: v => v.trim().length > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }
       ];
+      if (isRealEstateFinanceType()) {
+        fields.push(
+          { id: 'property_description', msg: 'يرجى إدخال وصف العقار', check: v => v.trim().length > 0 },
+          { id: 'property_location', msg: 'يرجى إدخال موقع العقار', check: v => v.trim().length > 0 }
+        );
+      } else {
+        const desc = document.getElementById('property_description');
+        const loc = document.getElementById('property_location');
+        if (desc) desc.classList.remove('is-invalid');
+        if (loc) loc.classList.remove('is-invalid');
+      }
       fields.forEach(f => {
         const el = document.getElementById(f.id);
         if (!el) return;
@@ -1615,6 +1681,19 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         if (wrapper) wrapper.classList.toggle('is-invalid', !ok);
         if (!ok) valid = false;
       });
+      const ftSel = document.getElementById('finance_type');
+      const ftCustom = document.getElementById('finance_type_custom');
+      if (ftSel) {
+        const ftOk = resolveFinanceTypeValue().length > 0;
+        if (ftSel.value === FINANCE_TYPE_CUSTOM) {
+          ftSel.classList.remove('is-invalid');
+          if (ftCustom) ftCustom.classList.toggle('is-invalid', !ftOk);
+        } else {
+          if (ftCustom) ftCustom.classList.remove('is-invalid');
+          ftSel.classList.toggle('is-invalid', !ftOk);
+        }
+        if (!ftOk) valid = false;
+      }
       if (!valid) showToast('يرجى تصحيح الأخطاء المميزة', 'warning');
       return valid;
     }
@@ -1660,7 +1739,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <div class="info-item"><label>نوع التمويل</label><span>\${data.finance_type}</span></div>
               <div class="info-item"><label>مبلغ التمويل</label><span class="amount-display">\${formatMoney(data.finance_amount)}</span></div>
               <div class="info-item"><label>البنك</label><span>\${data.bank_name || '—'}</span></div>
-              <div class="info-item"><label>وصف العقار</label><span>\${data.property_description || '—'}</span></div>
+              \${isRealEstateFinanceType() ? \`<div class="info-item"><label>وصف العقار</label><span>\${escHtml(data.property_description) || '—'}</span></div>
+              <div class="info-item"><label>موقع العقار</label><span>\${escHtml(data.property_location) || '—'}</span></div>\` : ''}
             </div>
           </div>
           <div style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;padding:16px;">
@@ -1811,11 +1891,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         party_two_id: (document.getElementById('party_two_id').value || '').trim(),
         party_two_phone: (function(){ const v = document.getElementById('party_two_phone').value.trim(); return v ? '+966' + v : ''; })(),
         party_two_address: document.getElementById('party_two_address').value,
-        finance_type: document.getElementById('finance_type').value,
+        finance_type: resolveFinanceTypeValue(),
         finance_amount: parseFloat(document.getElementById('finance_amount').value) || 0,
         bank_name: document.getElementById('bank_name').value,
-        property_description: document.getElementById('property_description').value,
-        property_location: document.getElementById('property_location').value,
+        property_description: isRealEstateFinanceType() ? (document.getElementById('property_description').value || '') : '',
+        property_location: isRealEstateFinanceType() ? (document.getElementById('property_location').value || '') : '',
         commission_type: document.getElementById('commission_type').value,
         commission_rate: parseFloat(document.getElementById('commission_rate').value) || 0,
         commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
@@ -1906,6 +1986,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       document.getElementById('finance_amount')?.addEventListener('input', () => {
         if (document.getElementById('commission_type').value === 'نسبة مئوية') calcCommission();
       });
+      document.getElementById('finance_type_custom')?.addEventListener('input', syncPropertyFieldsVisibility);
+      syncPropertyFieldsVisibility();
       document.getElementById('date_gregorian')?.addEventListener('input', () => {
         autoFillDay();
         syncContractDateFromGregorian();

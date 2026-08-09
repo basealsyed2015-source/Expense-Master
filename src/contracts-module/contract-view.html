@@ -1995,7 +1995,9 @@
     function renderStatusDisplay(status) {
       const el = document.getElementById('statusDisplay');
       if (!el) return;
-      el.innerHTML = getStatusBadge(status || 'نشط');
+      el.innerHTML = getStatusBadge(status || 'نشط', {
+        bankAgentName: currentContract && currentContract.bank_agent_name
+      });
     }
 
     function isContractPendingApprovalForCurrentRole() {

@@ -209,7 +209,7 @@ function buildRecentTable(contracts) {
       <td><small>${c.template_name || '—'}</small></td>
       <td><span class="amount-display" style="font-size:14px;">${formatMoney(c.finance_amount)}</span></td>
       <td><strong class="text-secondary">${formatMoney(c.commission_amount)}</strong></td>
-      <td>${getStatusBadge(c.status)}</td>
+      <td>${getStatusBadge(c.status, { bankAgentName: c.bank_agent_name })}</td>
       <td>${c.note_order_number ? `<code>${c.note_order_number}</code>` : '—'}</td>
       <td>
         <div class="action-btns">

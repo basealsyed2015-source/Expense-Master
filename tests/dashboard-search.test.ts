@@ -80,7 +80,9 @@ describe('dashboard search endpoint — source invariants', () => {
     const slice = sliceEndpoint()
     assert.match(slice, /\/admin\/follow-ups/)
     assert.match(slice, /\/admin\/my-tasks/)
-    assert.match(slice, /highlightTask=/)
+    // Deep-link by customer phone so the destination page can prefill its search filter.
+    assert.match(slice, /q=\$\{encodeURIComponent\(phoneQ\)\}/)
+    assert.doesNotMatch(slice, /highlightTask=/)
   })
 
   it('returns customerTotal + taskTotal so the UI can label result counts distinctly', () => {

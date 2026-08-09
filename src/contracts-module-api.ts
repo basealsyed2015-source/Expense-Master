@@ -514,6 +514,30 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         ' OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     }
+    if (table === 'contracts') {
+      try {
+        const enriched = await c.env.DB.prepare(
+          `SELECT contracts.*,
+                  emp.full_name AS employee_name,
+                  COALESCE(ba_fr.full_name, ba_cust.full_name, ba_appr.full_name) AS bank_agent_name
+           FROM contracts
+           LEFT JOIN users emp ON emp.id = contracts.created_by
+           LEFT JOIN financing_requests fr ON fr.id = contracts.financing_request_id
+           LEFT JOIN users ba_fr ON ba_fr.id = fr.assigned_bank_agent_id
+           LEFT JOIN customers cust ON cust.id = contracts.customer_id
+           LEFT JOIN users ba_cust ON ba_cust.id = cust.assigned_bank_agent_id
+           LEFT JOIN users ba_appr ON ba_appr.id = contracts.bank_agent_approved_by
+           WHERE contracts.id = ? ${tsql} ${rowScopeSqlId}`
+        )
+          .bind(id, ...tbinds, ...rowScopeBindsId)
+          .first()
+        if (!enriched) return c.json({ error: 'Not found' }, 404)
+        return c.json(enriched)
+      } catch (e: unknown) {
+        const msg = String((e as { message?: string })?.message || e || '')
+        if (!/no such column/i.test(msg)) throw e
+      }
+    }
     const row = await c.env.DB.prepare(`SELECT * FROM ${table} WHERE id = ? ${tsql} ${rowScopeSqlId}`)
       .bind(id, ...tbinds, ...rowScopeBindsId)
       .first()
