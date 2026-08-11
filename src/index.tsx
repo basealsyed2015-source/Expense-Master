@@ -4327,6 +4327,7 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     line-height: 1;
   }
   #global-persistent-sidebar .gps-divider { margin: 4px 8px; border: 0; border-top: 1px solid #f1f5f9; }
+  html { overflow-y: auto; scrollbar-gutter: stable; }
   body { margin-right: 260px !important; }
   @media (max-width: 768px) {
     #global-persistent-sidebar { display: none; }
@@ -10028,6 +10029,17 @@ app.post('/api/customers', async (c) => {
           WHERE task_id = ? AND status = 'pending'
         `).bind(taskIdFromFormEarly).run()
       } catch (_) { /* don't fail customer creation if task completion fails */ }
+    }
+
+    // Carry over the form note field to the workflow page notes (no ads label)
+    if (!hasTaskEnrollId && notes && createdCustomerId) {
+      try {
+        const preStageId = await ensurePreWorkflowStage(c.env.DB)
+        await c.env.DB.prepare(`
+          INSERT INTO customer_workflow_notes (customer_id, stage_id, note_text, performed_by)
+          VALUES (?, ?, ?, ?)
+        `).bind(createdCustomerId, preStageId, notes, creatorUserId ?? null).run()
+      } catch (_) { /* don't fail customer creation if note carry-over fails */ }
     }
 
     if (inlineCustomerForm) {
@@ -18114,7 +18126,7 @@ app.get('/admin/customers/add', async (c) => {
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
         <div class="mb-6">
-          <a href="${addFormBackHref}" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='${addFormBackHref}'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">${addFormBackLabel}</a>
+          <a href="${addFormBackHref}" onclick="${fromMyTasksEnrollment ? "history.back();return false;" : "try{var r=document.referrer&&new URL(document.referrer);if(r&&r.origin===location.origin&&r.pathname==='"+addFormBackHref+"'){history.back();return false;}}catch(e){}"}" class="text-blue-600 hover:text-blue-800">${addFormBackLabel}</a>
         </div>
         
         <div class="bg-white rounded-xl shadow-lg p-8">
@@ -18678,7 +18690,7 @@ app.get('/admin/customers/add', async (c) => {
                 <i class="fas fa-plus ml-2"></i>
                 إضافة العميل
               </button>
-              <a href="${addFormBackHref}" class="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-bold">
+              <a href="${addFormBackHref}" onclick="${fromMyTasksEnrollment ? "history.back();return false;" : ""}" class="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-bold">
                 <i class="fas fa-times ml-2"></i>
                 إلغاء
               </a>
@@ -42156,16 +42168,16 @@ app.get('/admin/my-tasks', async (c) => {
           <div id="rows-container" class="hidden">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
+                <table class="min-w-full w-full text-sm table-fixed">
                   <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الهاتف</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">العنوان</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 min-w-[8rem]">المصدر</th>
-                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الموعد</th>
+                      <th class="px-3 py-3 w-9"></th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-36">الاسم</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-44">الهاتف</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">العنوان</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-28">الحالة</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-32">المصدر</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 w-28">الموعد</th>
                     </tr>
                   </thead>
                   <tbody id="task-rows-body" class="divide-y divide-gray-50"></tbody>
@@ -42687,36 +42699,150 @@ app.get('/admin/my-tasks', async (c) => {
             return;
           }
           tbody.innerHTML = tasks.map(function (task) {
+            var tid = escapeHtml(String(task.id));
             var enrollHref = buildEnrollHref(task);
             var outId = task.outgoing_pass_request_id;
-            var passBadge = (outId != null && outId !== '' && Number(outId) > 0)
+            var hasPending = outId != null && outId !== '' && Number(outId) > 0;
+            var passBadge = hasPending
               ? ' <span class="text-[10px] font-bold text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">تمرير معلّق</span>'
               : '';
             var scheduleText = escapeHtml(task.scheduled_at_gregorian || '-');
             if (task.scheduled_at_hijri) {
               scheduleText += '<div class="text-[11px] text-gray-400 mt-0.5">' + escapeHtml(task.scheduled_at_hijri) + '</div>';
             }
+
+            // ── expansion panel pieces ──
+            var expandParts = [];
+
+            if (task.company_name) {
+              expandParts.push(
+                '<div class="flex items-center gap-1.5 text-xs text-gray-600">' +
+                  '<i class="fas fa-building text-gray-400"></i>' + escapeHtml(task.company_name) +
+                '</div>'
+              );
+            }
+            if (task.customer_message) {
+              expandParts.push(
+                '<div class="text-xs text-gray-700">' +
+                  '<span class="font-semibold text-gray-500"><i class="fas fa-comment ml-1 text-gray-400"></i>رسالة العميل:</span> ' +
+                  '<span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span>' +
+                '</div>'
+              );
+            }
+            if (task.employee_note_text) {
+              expandParts.push(
+                '<div class="text-xs bg-amber-50 border border-amber-100 rounded p-2">' +
+                  '<span class="font-semibold text-amber-800"><i class="fas fa-sticky-note ml-1"></i>آخر ملاحظة:</span>' +
+                  '<div class="mt-1 whitespace-pre-wrap break-words text-gray-800">' + escapeHtml(task.employee_note_text) + '</div>' +
+                  (task.employee_note_updated_at ? '<div class="text-gray-400 mt-1">' + escapeHtml(formatDate(task.employee_note_updated_at)) + '</div>' : '') +
+                '</div>'
+              );
+            }
+            var taskRating = Number(task.rating) || 0;
+            if (taskRating >= 1 && taskRating <= 5) {
+              var stars = '';
+              for (var s = 1; s <= 5; s++) {
+                stars += '<i class="fas fa-star text-' + (s <= taskRating ? 'amber-400' : 'gray-200') + ' text-xs"></i>';
+              }
+              expandParts.push(
+                '<div class="text-xs text-gray-700">' +
+                  '<span class="font-semibold text-gray-500"><i class="fas fa-star ml-1 text-amber-400"></i>التقييم:</span> ' + stars +
+                  (task.rating_note ? ' — <span class="text-gray-600">' + escapeHtml(task.rating_note) + '</span>' : '') +
+                '</div>'
+              );
+            }
+            var tlogHtml = transferLogHtml(task.transfer_summary);
+            if (tlogHtml) {
+              expandParts.push('<div class="text-xs">' + tlogHtml + '</div>');
+            }
+            if (hasPending) {
+              expandParts.push(
+                '<div class="rounded border border-violet-200 bg-violet-50 p-2 text-xs text-violet-900">' +
+                  '<div class="mb-1.5"><i class="fas fa-hourglass-half ml-1"></i>طلب تمرير قيد الانتظار إلى: <strong>' + escapeHtml(task.outgoing_pass_to_name || '') + '</strong></div>' +
+                  '<button type="button" data-pass-cancel="' + escapeHtml(String(outId)) + '" class="text-xs font-medium text-violet-800 underline">إلغاء طلب التمرير</button>' +
+                '</div>'
+              );
+            }
+            expandParts.push(
+              '<div class="text-xs text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>'
+            );
+
+            var historyBlock =
+              '<div class="rounded border border-gray-200 bg-gray-50 p-2">' +
+                '<div class="text-xs font-medium text-gray-700 mb-2"><i class="fas fa-history ml-1 text-indigo-500"></i>سجل الملاحظات</div>' +
+                '<div id="rowHistBody-' + tid + '" class="text-xs text-gray-400">جاري التحميل...</div>' +
+              '</div>';
+
+            var registerBtn =
+              '<a href="' + enrollHref + '" class="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg">' +
+                '<i class="fas fa-user-plus"></i>تسجيل عميل' +
+              '</a>';
+
             return (
-              '<tr class="hover:bg-gray-50 transition-colors" data-task-id="' + escapeHtml(String(task.id)) + '">' +
-                '<td class="px-3 py-3 whitespace-nowrap text-right align-middle">' +
-                  '<a href="' + enrollHref + '" class="inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap">' +
-                    '<i class="fas fa-user-plus"></i><span>تسجيل عميل</span></a>' +
+              '<tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">' +
+                '<td class="px-3 py-3 align-middle">' +
+                  '<button type="button" data-expand-task="' + tid + '" class="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" aria-expanded="false">' +
+                    '<i class="fas fa-chevron-left text-xs" id="rowChevron-' + tid + '"></i>' +
+                  '</button>' +
                 '</td>' +
-                '<td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">' +
-                  escapeHtml(task.customer_name || '-') + passBadge +
-                '</td>' +
+                '<td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">' + escapeHtml(task.customer_name || '-') + passBadge + '</td>' +
                 '<td class="px-4 py-3 text-gray-700 whitespace-nowrap">' +
                   '<div class="inline-flex items-center gap-2"><span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span>' +
-                  whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                  '<button type="button" class="wa-btn inline-flex items-center justify-center bg-green-50 text-green-700 hover:bg-green-100 w-7 h-7 rounded-md transition-colors shrink-0" data-wa-phone="' + escapeHtml(task.customer_phone || '') + '" data-wa-name="' + escapeHtml(task.customer_name || '') + '" title="فتح واتساب"><i class="fab fa-whatsapp text-sm"></i></button>' +
+                  '</div>' +
                 '</td>' +
-                '<td class="px-4 py-3 text-gray-800 max-w-[14rem]"><div class="truncate" title="' + escapeHtml(task.task_title || '') + '">' + escapeHtml(task.task_title || '-') + '</div></td>' +
-                '<td class="px-4 py-3 whitespace-nowrap"><div class="flex flex-wrap gap-1">' + priorityBadge(task.priority) + statusBadge(task) + '</div></td>' +
+                '<td class="px-4 py-3 text-gray-800 max-w-[14rem]">' +
+                  '<div class="truncate" title="' + escapeHtml(task.task_title || '') + '">' + escapeHtml(task.task_title || '-') + '</div>' +
+                  '<div class="mt-0.5">' + priorityBadge(task.priority) + '</div>' +
+                '</td>' +
+                '<td class="px-4 py-3 whitespace-nowrap">' + statusBadge(task) + '</td>' +
                 '<td class="px-4 py-3">' + (followupSourceBadgeHtml(task) || '<span class="text-gray-400">-</span>') + '</td>' +
                 '<td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">' + scheduleText + '</td>' +
+              '</tr>' +
+              '<tr id="expand-row-' + tid + '" class="hidden">' +
+                '<td colspan="7" class="bg-slate-50 border-b border-slate-200 p-0">' +
+                  '<div class="px-6 py-4 space-y-3 overflow-hidden break-words">' +
+                    expandParts.join('') +
+                    historyBlock +
+                    '<div>' + registerBtn + '</div>' +
+                  '</div>' +
+                '</td>' +
               '</tr>'
             );
           }).join('');
           bindWhatsAppButtons(tbody);
+          bindRowExpandButtons(tbody);
+        }
+
+        function bindRowExpandButtons(tbody) {
+          var loadedHist = {};
+          tbody.querySelectorAll('[data-expand-task]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var tid = btn.getAttribute('data-expand-task');
+              var expandRow = document.getElementById('expand-row-' + tid);
+              var chevron = document.getElementById('rowChevron-' + tid);
+              if (!expandRow) return;
+              var opening = expandRow.classList.contains('hidden');
+              expandRow.classList.toggle('hidden', !opening);
+              btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+              if (chevron) {
+                chevron.classList.toggle('fa-chevron-left', !opening);
+                chevron.classList.toggle('fa-chevron-down', opening);
+                chevron.classList.toggle('text-indigo-500', opening);
+              }
+              // auto-load note history the first time the row opens
+              if (opening && !loadedHist[tid]) {
+                loadedHist[tid] = true;
+                var histBody = document.getElementById('rowHistBody-' + tid);
+                if (histBody) loadNoteHistory(tid, histBody);
+              }
+            });
+          });
+
+          // pass cancel inside expansion panel
+          tbody.querySelectorAll('[data-pass-cancel]').forEach(function (btn) {
+            btn.addEventListener('click', function () { patchPass(btn.getAttribute('data-pass-cancel'), 'cancel'); });
+          });
         }
 
         function renderTasks(tasks) {
