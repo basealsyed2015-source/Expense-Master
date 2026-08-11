@@ -1,0 +1,24 @@
+# Companion cron Worker for the Pages app (tamweel-calc-prod).
+# Pages Functions do not honor [triggers].crons — deploy this Worker separately:
+#   npx wrangler deploy -c wrangler.cron.toml
+#
+# One-time secrets (use the SAME random value on both sides):
+#   npx wrangler pages secret put CRON_SECRET --project-name tamweel-calc-prod
+#   npx wrangler secret put CRON_SECRET -c wrangler.cron.toml
+#
+# Optional: override target origin
+#   npx wrangler secret put PAGES_BASE_URL -c wrangler.cron.toml
+#   (or change [vars].PAGES_BASE_URL below)
+
+name = "tamweel-cron"
+main = "src/cron-worker.ts"
+compatibility_date = "2024-12-14"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+[vars]
+PAGES_BASE_URL = "https://tamweel-calc.com"
+
+# Daily 06:00 UTC (same schedule previously declared on the unused Pages Worker config)
+[triggers]
+crons = ["0 6 * * *"]

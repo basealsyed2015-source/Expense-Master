@@ -1715,21 +1715,24 @@ export const hrDocumentsPage = `
           <h2 class="text-lg font-bold text-gray-800 flex-1">سجلات الهوية والمستندات</h2>
           <input type="text" id="searchInput" placeholder="بحث بالاسم أو الرقم..." class="border rounded-lg px-3 py-2 text-sm w-52" oninput="renderTable()">
           <select id="typeFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
-            <option value="">جميع الأنواع</option>
+            <option value="">جميع أنواع الهوية</option>
             <option value="national">هوية وطنية</option>
             <option value="iqama">إقامة</option>
             <option value="missing">غير محدد</option>
           </select>
           <select id="docFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
             <option value="">جميع المستندات</option>
-            <option value="has">رُفعت صورة</option>
-            <option value="none">لم يُرفع</option>
+            <option value="has">رُفع أي مستند</option>
+            <option value="none">لم يُرفع شيء</option>
+            <option value="incomplete">ناقصة (بعضها مفقود)</option>
+            <option value="complete">مكتملة (الكل مرفوع)</option>
           </select>
           <select id="statusFilter" onchange="renderTable()" class="border rounded-lg px-3 py-2 text-sm">
             <option value="">جميع الحالات</option>
-            <option value="expired">منتهية</option>
-            <option value="expiring">تنتهي قريباً</option>
-            <option value="valid">سارية</option>
+            <option value="expired">فيها منتهية</option>
+            <option value="expiring">فيها تنتهي قريباً</option>
+            <option value="missing">فيها ناقصة</option>
+            <option value="valid">سارية بالكامل</option>
           </select>
         </div>
         <div class="overflow-x-auto">
@@ -1740,15 +1743,14 @@ export const hrDocumentsPage = `
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">القسم</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">نوع الهوية</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الرقم</th>
-                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">تاريخ الانتهاء</th>
-                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">أسوأ حالة</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">الهوية</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">تأمين طبي</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">تأمينات اجتماعية</th>
               </tr>
             </thead>
             <tbody id="idTableBody" class="bg-white divide-y divide-gray-200">
-              <tr><td colspan="9" class="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
+              <tr><td colspan="8" class="text-center py-8 text-gray-400">جاري التحميل...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1777,37 +1779,69 @@ export const hrDocumentsPage = `
       return Math.ceil((d - today) / 86400000);
     }
 
-    function idStatus(emp) {
-      const num = emp.id_type === 'iqama' ? emp.iqama_number : emp.national_id;
-      if (!num) return 'missing';
-      const expiry = emp.id_type === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
+    /** Rank: expired > expiring > missing > valid */
+    function docSlotStatus(url, expiry) {
+      if (!url) return 'missing';
       if (!expiry) return 'valid';
       const d = daysUntil(expiry);
+      if (d === null) return 'valid';
       if (d < 0) return 'expired';
       if (d <= 90) return 'expiring';
       return 'valid';
     }
 
+    function idExpiry(emp) {
+      const idType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : null));
+      return idType === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
+    }
+
+    function empDocSlots(emp) {
+      return [
+        { key: 'id', label: emp.id_type === 'iqama' ? 'إقامة' : 'هوية', url: emp.id_document_url, expiry: idExpiry(emp) },
+        { key: 'medical', label: 'تأمين طبي', url: emp.medical_insurance_document_url, expiry: emp.medical_insurance_expiry },
+        { key: 'gosi', label: 'تأمينات اجتماعية', url: emp.gosi_document_url, expiry: emp.gosi_document_expiry },
+      ];
+    }
+
+    function worstStatus(emp) {
+      const rank = { expired: 0, expiring: 1, missing: 2, valid: 3 };
+      let worst = 'valid';
+      empDocSlots(emp).forEach(slot => {
+        const st = docSlotStatus(slot.url, slot.expiry);
+        if (rank[st] < rank[worst]) worst = st;
+      });
+      return worst;
+    }
+
     function statusBadge(status) {
       if (status === 'expired') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">منتهية</span>';
       if (status === 'expiring') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">تنتهي قريباً</span>';
-      if (status === 'missing') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">غير مُدخل</span>';
+      if (status === 'missing') return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">ناقصة</span>';
       return '<span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">سارية</span>';
     }
 
-    function docBtn(url, label) {
-      if (!url) return '<span class="text-gray-400 text-sm">—</span>';
-      const safe = String(url).replace(/'/g, '&#39;');
-      return \`<button onclick="openLightbox('\${safe}')" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors" title="\${label}"><i class="fas fa-eye"></i></button>\`;
-    }
+    function docCell(url, label, expiry) {
+      const st = docSlotStatus(url, expiry);
+      if (st === 'missing') {
+        return '<div class="text-sm text-gray-400">لم يُرفع</div>';
+      }
+      const safe = String(url).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      const isPdf = /\\.pdf($|\\?)/i.test(String(url));
+      const viewBtn = isPdf
+        ? \`<a href="\${safe}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg" title="\${label}"><i class="fas fa-file-pdf"></i> عرض</a>\`
+        : \`<button type="button" onclick="openLightbox('\${safe}')" class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg" title="\${label}"><i class="fas fa-eye"></i></button> <a href="\${safe}" target="_blank" rel="noopener" class="text-xs text-indigo-600 hover:underline">فتح</a>\`;
 
-    function expiryMini(expiry) {
-      if (!expiry) return '';
-      const d = daysUntil(expiry);
-      if (d === null) return '';
-      if (d < 0) return \` <span class="text-red-600 text-xs">منتهية</span>\`;
-      if (d <= 90) return \` <span class="text-yellow-600 text-xs">\${d}ي</span>\`;
-      return '';
+      let meta = '';
+      if (expiry) {
+        const d = daysUntil(expiry);
+        let badge = '';
+        if (d !== null && d < 0) badge = ' <span class="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold">منتهية</span>';
+        else if (d !== null && d <= 90) badge = \` <span class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 text-[10px] font-bold">\${d} يوم</span>\`;
+        meta = \`<div class="text-xs text-gray-500 mt-1">\${expiry}\${badge}</div>\`;
+      } else {
+        meta = '<div class="text-xs text-gray-400 mt-1">بدون تاريخ انتهاء</div>';
+      }
+      return \`<div class="min-w-[7.5rem]">\${viewBtn}\${meta}</div>\`;
     }
 
     function renderTable() {
@@ -1821,17 +1855,27 @@ export const hrDocumentsPage = `
         const num = (emp.id_type === 'iqama' ? emp.iqama_number : emp.national_id) || '';
         if (search && !name.includes(search) && !num.includes(search)) return false;
         const empType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : 'missing'));
-        if (typeF === 'missing') { if (empType !== 'missing' && emp.national_id && emp.iqama_number) return false; if (empType !== 'missing') return false; }
+        if (typeF === 'missing') { if (empType !== 'missing') return false; }
         else if (typeF && empType !== typeF) return false;
-        if (docF === 'has' && !emp.id_document_url && !emp.medical_insurance_document_url && !emp.gosi_document_url) return false;
-        if (docF === 'none' && (emp.id_document_url || emp.medical_insurance_document_url || emp.gosi_document_url)) return false;
-        if (statusF && idStatus(emp) !== statusF) return false;
+
+        const slots = empDocSlots(emp);
+        const uploaded = slots.filter(s => s.url).length;
+        if (docF === 'has' && uploaded === 0) return false;
+        if (docF === 'none' && uploaded > 0) return false;
+        if (docF === 'incomplete' && (uploaded === 0 || uploaded === 3)) return false;
+        if (docF === 'complete' && uploaded !== 3) return false;
+
+        const worst = worstStatus(emp);
+        if (statusF === 'expired' && worst !== 'expired') return false;
+        if (statusF === 'expiring' && worst !== 'expiring') return false;
+        if (statusF === 'missing' && worst !== 'missing') return false;
+        if (statusF === 'valid' && worst !== 'valid') return false;
         return true;
       });
 
       const tbody = document.getElementById('idTableBody');
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-gray-400">لا توجد نتائج</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-gray-400">لا توجد نتائج</td></tr>';
         return;
       }
 
@@ -1839,91 +1883,63 @@ export const hrDocumentsPage = `
         const idType = emp.id_type || (emp.iqama_number ? 'iqama' : (emp.national_id ? 'national' : null));
         const idLabel = idType === 'iqama' ? 'إقامة' : (idType === 'national' ? 'هوية وطنية' : '<span class="text-gray-400">—</span>');
         const idNum = idType === 'iqama' ? (emp.iqama_number || '—') : (idType === 'national' ? (emp.national_id || '—') : '—');
-        const expiry = idType === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
-        const days = expiry ? daysUntil(expiry) : null;
-        const expiryCell = expiry
-          ? (() => {
-              const cls = days < 0 ? 'text-red-600 font-bold' : days <= 90 ? 'text-yellow-600 font-bold' : 'text-gray-700';
-              const label = days < 0 ? \`(\${Math.abs(days)} يوم مضى)\` : days === 0 ? '(اليوم)' : \`(\${days} يوم)\`;
-              return \`<span class="\${cls}">\${expiry} <span class="text-xs">\${label}</span></span>\`;
-            })()
-          : '<span class="text-gray-400">—</span>';
-        const st = idStatus(emp);
-        const medicalCell = docBtn(emp.medical_insurance_document_url, 'تأمين طبي') + expiryMini(emp.medical_insurance_expiry);
-        const gosiCell = docBtn(emp.gosi_document_url, 'تأمينات اجتماعية') + expiryMini(emp.gosi_document_expiry);
+        const worst = worstStatus(emp);
         return \`<tr class="hover:bg-gray-50">
           <td class="px-4 py-3 text-sm font-medium text-gray-900">\${emp.full_name || emp.full_name_ar || '—'}</td>
           <td class="px-4 py-3 text-sm text-gray-600">\${emp.department || '—'}</td>
           <td class="px-4 py-3 text-sm">\${idLabel}</td>
           <td class="px-4 py-3 text-sm font-mono text-gray-800">\${idNum}</td>
-          <td class="px-4 py-3 text-sm">\${expiryCell}</td>
-          <td class="px-4 py-3">\${statusBadge(st)}</td>
-          <td class="px-4 py-3">\${docBtn(emp.id_document_url, 'الهوية')}</td>
-          <td class="px-4 py-3">\${medicalCell}</td>
-          <td class="px-4 py-3">\${gosiCell}</td>
+          <td class="px-4 py-3">\${statusBadge(worst)}</td>
+          <td class="px-4 py-3">\${docCell(emp.id_document_url, 'الهوية', idExpiry(emp))}</td>
+          <td class="px-4 py-3">\${docCell(emp.medical_insurance_document_url, 'تأمين طبي', emp.medical_insurance_expiry)}</td>
+          <td class="px-4 py-3">\${docCell(emp.gosi_document_url, 'تأمينات اجتماعية', emp.gosi_document_expiry)}</td>
         </tr>\`;
       }).join('');
     }
 
-    function docExpiryStatus(expiry) {
-      if (!expiry) return null;
-      const d = daysUntil(expiry);
-      if (d === null) return null;
-      if (d < 0) return 'expired';
-      if (d <= 90) return 'expiring';
-      return 'valid';
+    function collectAttentionItems(kind) {
+      const items = [];
+      allEmployees.forEach(e => {
+        const name = e.full_name || e.full_name_ar || '—';
+        empDocSlots(e).forEach(slot => {
+          const st = docSlotStatus(slot.url, slot.expiry);
+          if (st !== kind) return;
+          const d = slot.expiry ? daysUntil(slot.expiry) : null;
+          const detail = kind === 'expiring' && slot.expiry
+            ? \` (\${slot.expiry}\${d !== null ? ' · ' + d + ' يوم' : ''})\`
+            : (kind === 'expired' && slot.expiry ? \` (\${slot.expiry})\` : '');
+          items.push({ name, label: slot.label, detail });
+        });
+      });
+      return items;
     }
 
     function renderAlerts() {
-      const expired = allEmployees.filter(e => idStatus(e) === 'expired');
-      const expiring = allEmployees.filter(e => idStatus(e) === 'expiring');
-      const medExpired = allEmployees.filter(e => docExpiryStatus(e.medical_insurance_expiry) === 'expired');
-      const medExpiring = allEmployees.filter(e => docExpiryStatus(e.medical_insurance_expiry) === 'expiring');
-      const gosiExpired = allEmployees.filter(e => docExpiryStatus(e.gosi_document_expiry) === 'expired');
-      const gosiExpiring = allEmployees.filter(e => docExpiryStatus(e.gosi_document_expiry) === 'expiring');
+      const expiredItems = collectAttentionItems('expired');
+      const expiringItems = collectAttentionItems('expiring');
       let html = '';
-      if (expired.length) {
+      if (expiredItems.length) {
         html += \`<div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
           <div class="flex items-start gap-3"><i class="fas fa-exclamation-circle text-red-500 text-xl mt-0.5"></i>
-          <div><h3 class="font-bold text-red-800">هويات منتهية الصلاحية (\${expired.length})</h3>
-          <ul class="mt-1 space-y-0.5">\${expired.slice(0,8).map(e => \`<li class="text-red-700 text-sm">• \${e.full_name || e.full_name_ar} — \${e.id_type === 'iqama' ? 'إقامة' : 'هوية وطنية'}</li>\`).join('')}
-          \${expired.length > 8 ? \`<li class="text-red-500 text-sm">و \${expired.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
+          <div><h3 class="font-bold text-red-800">مستندات منتهية الصلاحية (\${expiredItems.length})</h3>
+          <ul class="mt-1 space-y-0.5">\${expiredItems.slice(0,10).map(i => \`<li class="text-red-700 text-sm">• \${i.name} — \${i.label}\${i.detail}</li>\`).join('')}
+          \${expiredItems.length > 10 ? \`<li class="text-red-500 text-sm">و \${expiredItems.length - 10} أخرى...</li>\` : ''}</ul></div></div></div>\`;
       }
-      if (expiring.length) {
+      if (expiringItems.length) {
         html += \`<div class="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4">
           <div class="flex items-start gap-3"><i class="fas fa-clock text-yellow-500 text-xl mt-0.5"></i>
-          <div><h3 class="font-bold text-yellow-800">هويات تنتهي خلال 90 يوم (\${expiring.length})</h3>
-          <ul class="mt-1 space-y-0.5">\${expiring.slice(0,8).map(e => { const exp = e.id_type==='iqama'?e.iqama_expiry:e.national_id_expiry; const d = daysUntil(exp); return \`<li class="text-yellow-700 text-sm">• \${e.full_name||e.full_name_ar} — \${e.id_type==='iqama'?'إقامة':'هوية وطنية'} (تنتهي \${exp}\${d!==null?' · '+d+' يوم':''}) </li>\`; }).join('')}
-          \${expiring.length > 8 ? \`<li class="text-yellow-600 text-sm">و \${expiring.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
-      }
-      if (medExpired.length || gosiExpired.length) {
-        const items = [
-          ...medExpired.map(e => \`<li class="text-red-700 text-sm">• \${e.full_name || e.full_name_ar} — تأمين طبي</li>\`),
-          ...gosiExpired.map(e => \`<li class="text-red-700 text-sm">• \${e.full_name || e.full_name_ar} — تأمينات اجتماعية</li>\`),
-        ];
-        html += \`<div class="bg-red-50 border-l-4 border-red-500 rounded-lg p-4">
-          <div class="flex items-start gap-3"><i class="fas fa-shield-alt text-red-500 text-xl mt-0.5"></i>
-          <div><h3 class="font-bold text-red-800">مستندات تأمين منتهية (\${items.length})</h3>
-          <ul class="mt-1 space-y-0.5">\${items.slice(0,8).join('')}\${items.length > 8 ? \`<li class="text-red-500 text-sm">و \${items.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
-      }
-      if (medExpiring.length || gosiExpiring.length) {
-        const items = [
-          ...medExpiring.map(e => { const d = daysUntil(e.medical_insurance_expiry); return \`<li class="text-yellow-700 text-sm">• \${e.full_name || e.full_name_ar} — تأمين طبي (\${e.medical_insurance_expiry}\${d!==null?' · '+d+' يوم':''})</li>\`; }),
-          ...gosiExpiring.map(e => { const d = daysUntil(e.gosi_document_expiry); return \`<li class="text-yellow-700 text-sm">• \${e.full_name || e.full_name_ar} — تأمينات اجتماعية (\${e.gosi_document_expiry}\${d!==null?' · '+d+' يوم':''})</li>\`; }),
-        ];
-        html += \`<div class="bg-yellow-50 border-l-4 border-yellow-400 rounded-lg p-4">
-          <div class="flex items-start gap-3"><i class="fas fa-shield-alt text-yellow-500 text-xl mt-0.5"></i>
-          <div><h3 class="font-bold text-yellow-800">مستندات تأمين تنتهي خلال 90 يوم (\${items.length})</h3>
-          <ul class="mt-1 space-y-0.5">\${items.slice(0,8).join('')}\${items.length > 8 ? \`<li class="text-yellow-600 text-sm">و \${items.length - 8} آخرين...</li>\` : ''}</ul></div></div></div>\`;
+          <div><h3 class="font-bold text-yellow-800">مستندات تنتهي خلال 90 يوم (\${expiringItems.length})</h3>
+          <ul class="mt-1 space-y-0.5">\${expiringItems.slice(0,10).map(i => \`<li class="text-yellow-700 text-sm">• \${i.name} — \${i.label}\${i.detail}</li>\`).join('')}
+          \${expiringItems.length > 10 ? \`<li class="text-yellow-600 text-sm">و \${expiringItems.length - 10} أخرى...</li>\` : ''}</ul></div></div></div>\`;
       }
       document.getElementById('expiryAlerts').innerHTML = html;
     }
 
     function renderStats() {
-      const hasDoc = allEmployees.filter(e => e.id_document_url || e.medical_insurance_document_url || e.gosi_document_url).length;
-      const noDoc = allEmployees.filter(e => !e.id_document_url && !e.medical_insurance_document_url && !e.gosi_document_url).length;
-      const expired = allEmployees.filter(e => idStatus(e) === 'expired' || docExpiryStatus(e.medical_insurance_expiry) === 'expired' || docExpiryStatus(e.gosi_document_expiry) === 'expired').length;
-      const expiring = allEmployees.filter(e => idStatus(e) === 'expiring' || docExpiryStatus(e.medical_insurance_expiry) === 'expiring' || docExpiryStatus(e.gosi_document_expiry) === 'expiring').length;
+      const hasDoc = allEmployees.filter(e => empDocSlots(e).some(s => s.url)).length;
+      const noDoc = allEmployees.filter(e => empDocSlots(e).every(s => !s.url)).length;
+      const expired = allEmployees.filter(e => worstStatus(e) === 'expired').length;
+      const expiring = allEmployees.filter(e => worstStatus(e) === 'expiring').length;
       document.getElementById('statTotal').textContent = allEmployees.length;
       document.getElementById('statHasDoc').textContent = hasDoc;
       document.getElementById('statExpired').textContent = expired;
@@ -1933,13 +1949,16 @@ export const hrDocumentsPage = `
 
     async function load() {
       try {
-        const res = await axios.get('/api/hr/employee-ids');
+        const token = localStorage.getItem('authToken') || '';
+        const res = await axios.get('/api/hr/employee-ids', {
+          headers: token ? { Authorization: 'Bearer ' + token } : {}
+        });
         allEmployees = res.data.data || [];
         renderStats();
         renderAlerts();
         renderTable();
       } catch(e) {
-        document.getElementById('idTableBody').innerHTML = '<tr><td colspan="9" class="text-center py-8 text-red-500">حدث خطأ في تحميل البيانات</td></tr>';
+        document.getElementById('idTableBody').innerHTML = '<tr><td colspan="8" class="text-center py-8 text-red-500">حدث خطأ في تحميل البيانات</td></tr>';
       }
     }
 

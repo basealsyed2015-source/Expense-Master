@@ -18,6 +18,76 @@ const STATUS_AWAITING_BANK_AGENT_APPROVAL = 'بانتظار موافقة ممث�
 const STATUS_AWAITING_ADMIN_APPROVAL = 'بانتظار موافقة الإدارة'
 const FINAL_APPROVAL_STATUSES = new Set(['نشط', 'بانتظار التمويل', 'مكتمل'])
 
+/**
+ * Display name for the bank agent waiting on / assigned to a contract.
+ * Prefer the linked financing request, then customers.assigned_bank_agent_id,
+ * then any FR for the customer (same fallback as the customers list), then
+ * bank_agent_approved_by (post-approval audit). Without the customer-FR
+ * fallback, awaiting-bank-agent contracts with a null financing_request_id
+ * (or an FR missing assigned_bank_agent_id) show a bare status with no name.
+ */
+const BANK_AGENT_DISPLAY_NAME_SQL = `COALESCE(
+  NULLIF(TRIM(ba_fr.full_name), ''), NULLIF(TRIM(ba_fr.username), ''),
+  NULLIF(TRIM(ba_cust.full_name), ''), NULLIF(TRIM(ba_cust.username), ''),
+  (
+    SELECT COALESCE(NULLIF(TRIM(ub.full_name), ''), NULLIF(TRIM(ub.username), ''))
+    FROM financing_requests frx
+    JOIN users ub ON ub.id = frx.assigned_bank_agent_id
+    WHERE frx.customer_id = contracts.customer_id
+      AND frx.assigned_bank_agent_id IS NOT NULL
+      AND frx.assigned_bank_agent_id != 0
+    ORDER BY frx.id DESC
+    LIMIT 1
+  ),
+  NULLIF(TRIM(ba_appr.full_name), ''), NULLIF(TRIM(ba_appr.username), '')
+)`
+
+const CONTRACTS_BANK_AGENT_JOINS_SQL = `
+         LEFT JOIN financing_requests fr ON fr.id = contracts.financing_request_id
+         LEFT JOIN users ba_fr ON ba_fr.id = NULLIF(fr.assigned_bank_agent_id, 0)
+         LEFT JOIN customers cust ON cust.id = contracts.customer_id
+         LEFT JOIN users ba_cust ON ba_cust.id = NULLIF(cust.assigned_bank_agent_id, 0)
+         LEFT JOIN users ba_appr ON ba_appr.id = contracts.bank_agent_approved_by`
+
+/** One small D1 row per blocked create. Never throws — audit must not break the API response. */
+async function logContractCreateDenial(
+  db: D1Database,
+  opts: {
+    tenantId: number
+    userId: number | null
+    roleId: number | null
+    customerId: number | null
+    errorCode: string
+    detail: string | null
+    partyTwoName?: string | null
+  }
+): Promise<void> {
+  try {
+    const party =
+      opts.partyTwoName != null && String(opts.partyTwoName).trim()
+        ? String(opts.partyTwoName).trim().slice(0, 200)
+        : null
+    await db
+      .prepare(
+        `INSERT INTO contract_create_denials
+          (tenant_id, user_id, role_id, customer_id, error_code, detail, party_two_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        opts.tenantId,
+        opts.userId,
+        opts.roleId,
+        opts.customerId,
+        opts.errorCode,
+        opts.detail,
+        party
+      )
+      .run()
+  } catch (e) {
+    console.warn('[contracts] create-denial audit write failed', e)
+  }
+}
+
 async function resolveContractAdminUserIds(
   db: D1Database,
   tenantId: number,
@@ -309,6 +379,44 @@ async function withEffectiveTenantForContractsApi(c: Context, info: UserInfo): P
 }
 
 export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
+  app.get('/api/contract-create-denials', async (c) => {
+    const { info: rawInfo, error } = await auth(c, getUserInfo)
+    if (error) return error
+    const info = await withEffectiveTenantForContractsApi(c, rawInfo)
+    if (!isFinalApprover(info) && info.roleId !== 1) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+    if (info.tenantId == null) return c.json({ error: 'Missing tenant' }, 400)
+    const daysRaw = Number(c.req.query('days') ?? 7)
+    const days = Number.isFinite(daysRaw) ? Math.min(90, Math.max(1, Math.floor(daysRaw))) : 7
+    const limitRaw = Number(c.req.query('limit') ?? 100)
+    const limit = Number.isFinite(limitRaw) ? Math.min(500, Math.max(1, Math.floor(limitRaw))) : 100
+    try {
+      const { results } = await c.env.DB.prepare(
+        `SELECT d.id, d.tenant_id, d.user_id, d.role_id, d.customer_id, d.error_code, d.detail,
+                d.party_two_name, d.created_at,
+                u.full_name AS user_name,
+                cust.full_name AS customer_name
+         FROM contract_create_denials d
+         LEFT JOIN users u ON u.id = d.user_id
+         LEFT JOIN customers cust ON cust.id = d.customer_id
+         WHERE d.tenant_id = ?
+           AND d.created_at >= datetime('now', ?)
+         ORDER BY d.id DESC
+         LIMIT ?`
+      )
+        .bind(info.tenantId, `-${days} days`, limit)
+        .all()
+      return c.json({ data: results || [], days, limit })
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || e || '')
+      if (/no such table:\s*contract_create_denials/i.test(msg)) {
+        return c.json({ data: [], days, limit, detail: 'migration_pending' })
+      }
+      throw e
+    }
+  })
+
   // Dedicated customer lookup for the new-contract form — fetches customers table
   // directly so the contracts module never depends on the generic :table route for this.
   app.get('/api/contract-tables/customer-list', async (c) => {
@@ -451,14 +559,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       // Enrich with creator (employee) and assigned bank-agent display names for the list table.
       const enrichedSql = `SELECT contracts.*,
                 emp.full_name AS employee_name,
-                COALESCE(ba_fr.full_name, ba_cust.full_name, ba_appr.full_name) AS bank_agent_name
+                ${BANK_AGENT_DISPLAY_NAME_SQL} AS bank_agent_name
          FROM contracts
          LEFT JOIN users emp ON emp.id = contracts.created_by
-         LEFT JOIN financing_requests fr ON fr.id = contracts.financing_request_id
-         LEFT JOIN users ba_fr ON ba_fr.id = fr.assigned_bank_agent_id
-         LEFT JOIN customers cust ON cust.id = contracts.customer_id
-         LEFT JOIN users ba_cust ON ba_cust.id = cust.assigned_bank_agent_id
-         LEFT JOIN users ba_appr ON ba_appr.id = contracts.bank_agent_approved_by
+         ${CONTRACTS_BANK_AGENT_JOINS_SQL}
          WHERE 1=1 ${tsql} ${rowScopeSql}
          ORDER BY contracts.id DESC LIMIT ?`
       try {
@@ -503,15 +607,18 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     let rowScopeSqlId = ''
     let rowScopeBindsId: (number | string)[] = []
     if (table === 'contracts' && info.roleId === 4 && info.userId) {
-      rowScopeSqlId = ' AND customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?) '
+      // Qualify columns: enriched SELECT joins financing_requests (also has customer_id).
+      rowScopeSqlId =
+        ' AND contracts.customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?) '
       rowScopeBindsId = [info.userId]
     } else if (table === 'contracts' && info.roleId === 5 && info.userId && info.tenantId) {
-      rowScopeSqlId = ' AND (created_by = ? OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+      rowScopeSqlId =
+        ' AND (contracts.created_by = ? OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     } else if (table === 'contracts' && info.roleId === 6 && info.userId && info.tenantId) {
       rowScopeSqlId =
-        ' AND (customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?)' +
-        ' OR customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
+        ' AND (contracts.customer_id IN (SELECT customer_id FROM customer_assignments WHERE employee_id = ?)' +
+        ' OR contracts.customer_id IN (SELECT customer_id FROM financing_requests WHERE assigned_bank_agent_id = ? AND tenant_id = ?)) '
       rowScopeBindsId = [info.userId, info.userId, info.tenantId]
     }
     if (table === 'contracts') {
@@ -519,14 +626,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         const enriched = await c.env.DB.prepare(
           `SELECT contracts.*,
                   emp.full_name AS employee_name,
-                  COALESCE(ba_fr.full_name, ba_cust.full_name, ba_appr.full_name) AS bank_agent_name
+                  ${BANK_AGENT_DISPLAY_NAME_SQL} AS bank_agent_name
            FROM contracts
            LEFT JOIN users emp ON emp.id = contracts.created_by
-           LEFT JOIN financing_requests fr ON fr.id = contracts.financing_request_id
-           LEFT JOIN users ba_fr ON ba_fr.id = fr.assigned_bank_agent_id
-           LEFT JOIN customers cust ON cust.id = contracts.customer_id
-           LEFT JOIN users ba_cust ON ba_cust.id = cust.assigned_bank_agent_id
-           LEFT JOIN users ba_appr ON ba_appr.id = contracts.bank_agent_approved_by
+           ${CONTRACTS_BANK_AGENT_JOINS_SQL}
            WHERE contracts.id = ? ${tsql} ${rowScopeSqlId}`
         )
           .bind(id, ...tbinds, ...rowScopeBindsId)
@@ -623,123 +726,179 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
 
+      const customerId = body.customer_id != null ? Number(body.customer_id) : null
+      if (!customerId || !Number.isFinite(customerId) || customerId <= 0) {
+        const detail =
+          'يجب اختيار عميل موجود لإنشاء العقد. لا يمكن إنشاء عقد ببيانات عميل يدوية فقط'
+        await logContractCreateDenial(c.env.DB, {
+          tenantId,
+          userId: info.userId,
+          roleId: info.roleId,
+          customerId: null,
+          errorCode: 'customer_required',
+          detail,
+          partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+        })
+        return c.json({ error: 'customer_required', detail }, 400)
+      }
+      body.customer_id = customerId
+
       let role6IsBothColumns = false
 
       // Role 5 (bank agent): must have active FR assigned to this agent + no blocking contract.
       if (info.roleId === 5 && info.userId) {
-        const customerId = body.customer_id != null ? Number(body.customer_id) : null
-        if (customerId) {
-          let denial: string | null = null
-          try {
-            denial = await explainContractCreateDenial(c.env.DB, {
-              customerId,
-              tenantId,
-              userId: info.userId,
-              roleId: 5,
-            })
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e)
-            return c.json({ error: 'database_error', detail: msg }, 500)
-          }
-          if (denial) {
-            console.warn('[contracts] create denied', {
-              roleId: 5,
-              userId: info.userId,
-              tenantId,
-              customerId,
-              reason: denial,
-            })
-            return c.json({ error: 'Forbidden', detail: denial }, 403)
-          }
+        let denial: string | null = null
+        try {
+          denial = await explainContractCreateDenial(c.env.DB, {
+            customerId,
+            tenantId,
+            userId: info.userId,
+            roleId: 5,
+          })
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          await logContractCreateDenial(c.env.DB, {
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+            customerId,
+            errorCode: 'database_error',
+            detail: msg,
+            partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+          })
+          return c.json({ error: 'database_error', detail: msg }, 500)
+        }
+        if (denial) {
+          console.warn('[contracts] create denied', {
+            roleId: 5,
+            userId: info.userId,
+            tenantId,
+            customerId,
+            reason: denial,
+          })
+          await logContractCreateDenial(c.env.DB, {
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+            customerId,
+            errorCode: 'Forbidden',
+            detail: denial,
+            partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+          })
+          return c.json({ error: 'Forbidden', detail: denial }, 403)
+        }
 
-          let frRow: { id: number } | null = null
-          try {
+        let frRow: { id: number } | null = null
+        try {
+          frRow = await c.env.DB.prepare(
+            `SELECT id FROM financing_requests
+             WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
+               AND COALESCE(is_completed, 0) = 0
+             ORDER BY id DESC LIMIT 1`
+          )
+            .bind(customerId, tenantId, info.userId)
+            .first<{ id: number }>()
+        } catch (e: unknown) {
+          const msg = String((e as { message?: string })?.message || e || '')
+          if (/no such column:\s*is_completed/i.test(msg)) {
             frRow = await c.env.DB.prepare(
               `SELECT id FROM financing_requests
                WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
-                 AND COALESCE(is_completed, 0) = 0
                ORDER BY id DESC LIMIT 1`
             )
               .bind(customerId, tenantId, info.userId)
               .first<{ id: number }>()
-          } catch (e: unknown) {
-            const msg = String((e as { message?: string })?.message || e || '')
-            if (/no such column:\s*is_completed/i.test(msg)) {
-              frRow = await c.env.DB.prepare(
-                `SELECT id FROM financing_requests
-                 WHERE customer_id = ? AND tenant_id = ? AND assigned_bank_agent_id = ?
-                 ORDER BY id DESC LIMIT 1`
-              )
-                .bind(customerId, tenantId, info.userId)
-                .first<{ id: number }>()
-            } else {
-              return c.json({ error: 'database_error', detail: msg }, 500)
-            }
+          } else {
+            await logContractCreateDenial(c.env.DB, {
+              tenantId,
+              userId: info.userId,
+              roleId: info.roleId,
+              customerId,
+              errorCode: 'database_error',
+              detail: msg,
+              partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+            })
+            return c.json({ error: 'database_error', detail: msg }, 500)
           }
-          if (frRow) body.financing_request_id = frRow.id
         }
+        if (frRow) body.financing_request_id = frRow.id
       }
 
       // Role 4 / Role 6: validate customer scope (employee and/or bank-agent for role 6), active FR, no blocking contract.
       if ((info.roleId === 4 || info.roleId === 6) && info.userId) {
-        const customerId = body.customer_id != null ? Number(body.customer_id) : null
-        if (customerId) {
-          let denial: string | null = null
-          try {
-            denial = await explainContractCreateDenial(c.env.DB, {
-              customerId,
-              tenantId,
-              userId: info.userId,
-              roleId: info.roleId,
-            })
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e)
-            return c.json({ error: 'database_error', detail: msg }, 500)
-          }
-          if (denial) {
-            console.warn('[contracts] create denied', {
-              roleId: info.roleId,
-              userId: info.userId,
-              tenantId,
-              customerId,
-              reason: denial,
-            })
-            return c.json({ error: 'Forbidden', detail: denial }, 403)
-          }
+        let denial: string | null = null
+        try {
+          denial = await explainContractCreateDenial(c.env.DB, {
+            customerId,
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+          })
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          await logContractCreateDenial(c.env.DB, {
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+            customerId,
+            errorCode: 'database_error',
+            detail: msg,
+            partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+          })
+          return c.json({ error: 'database_error', detail: msg }, 500)
+        }
+        if (denial) {
+          console.warn('[contracts] create denied', {
+            roleId: info.roleId,
+            userId: info.userId,
+            tenantId,
+            customerId,
+            reason: denial,
+          })
+          await logContractCreateDenial(c.env.DB, {
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+            customerId,
+            errorCode: 'Forbidden',
+            detail: denial,
+            partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+          })
+          return c.json({ error: 'Forbidden', detail: denial }, 403)
+        }
 
-          let frRow: { id: number } | null = null
-          try {
+        let frRow: { id: number } | null = null
+        try {
+          frRow = await c.env.DB.prepare(
+            `SELECT id FROM financing_requests
+             WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
+             ORDER BY id DESC LIMIT 1`
+          )
+            .bind(customerId, tenantId)
+            .first<{ id: number }>()
+        } catch (e: unknown) {
+          const msg = String((e as { message?: string })?.message || e || '')
+          if (/no such column:\s*is_completed/i.test(msg)) {
             frRow = await c.env.DB.prepare(
               `SELECT id FROM financing_requests
-               WHERE customer_id = ? AND tenant_id = ? AND COALESCE(is_completed, 0) = 0
+               WHERE customer_id = ? AND tenant_id = ?
                ORDER BY id DESC LIMIT 1`
             )
               .bind(customerId, tenantId)
               .first<{ id: number }>()
-          } catch (e: unknown) {
-            const msg = String((e as { message?: string })?.message || e || '')
-            if (/no such column:\s*is_completed/i.test(msg)) {
-              frRow = await c.env.DB.prepare(
-                `SELECT id FROM financing_requests
-                 WHERE customer_id = ? AND tenant_id = ?
-                 ORDER BY id DESC LIMIT 1`
-              )
-                .bind(customerId, tenantId)
-                .first<{ id: number }>()
-            } else {
-              return c.json({ error: 'database_error', detail: msg }, 500)
-            }
+          } else {
+            return c.json({ error: 'database_error', detail: msg }, 500)
           }
-          if (frRow) {
-            body.financing_request_id = frRow.id
-            if (info.roleId === 6) {
-              const agentRow = await c.env.DB.prepare(
-                `SELECT 1 FROM financing_requests WHERE id = ? AND assigned_bank_agent_id = ? LIMIT 1`
-              )
-                .bind(frRow.id, info.userId)
-                .first()
-              role6IsBothColumns = Boolean(agentRow)
-            }
+        }
+        if (frRow) {
+          body.financing_request_id = frRow.id
+          if (info.roleId === 6) {
+            const agentRow = await c.env.DB.prepare(
+              `SELECT 1 FROM financing_requests WHERE id = ? AND assigned_bank_agent_id = ? LIMIT 1`
+            )
+              .bind(frRow.id, info.userId)
+              .first()
+            role6IsBothColumns = Boolean(agentRow)
           }
         }
       }
@@ -803,6 +962,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         if (/no such column/i.test(msg)) {
+          await logContractCreateDenial(c.env.DB, {
+            tenantId,
+            userId: info.userId,
+            roleId: info.roleId,
+            customerId,
+            errorCode: 'database_schema',
+            detail: msg,
+            partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+          })
           return c.json(
             {
               error: 'database_schema',
@@ -812,6 +980,15 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             500
           )
         }
+        await logContractCreateDenial(c.env.DB, {
+          tenantId,
+          userId: info.userId,
+          roleId: info.roleId,
+          customerId,
+          errorCode: 'database_error',
+          detail: msg,
+          partyTwoName: body.party_two_name != null ? String(body.party_two_name) : null,
+        })
         return c.json({ error: 'database_error', detail: msg }, 500)
       }
       const id = r.meta.last_row_id as number

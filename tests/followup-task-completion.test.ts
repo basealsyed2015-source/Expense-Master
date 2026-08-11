@@ -5,7 +5,8 @@
  * originating follow-up task is marked `completed` and any pending pass-request
  * for that task is cancelled. From that point forward the task must:
  *   - Disappear from the "open task" lookup used to gate manual re-enrollment.
- *   - Still be findable via the global dashboard search (see dashboard-search.test.ts).
+ *   - Disappear from admin Follow-ups and My Tasks default lists.
+ *   - Stay excluded from global dashboard search (see dashboard-search.test.ts).
  *
  * These tests seed the two tables the enrollment handler updates and then verify
  * both the state transition and its tenant scoping.
@@ -83,6 +84,23 @@ describe('follow-up task completion — source invariants', () => {
     // manual enrollments (no task_id) must not accidentally complete some other task.
     assert.match(INDEX_SRC, /if \(hasTaskEnrollId && createdCustomerId && tenant_id\)/)
   })
+
+  it('hides completed/cancelled tasks from admin Follow-ups list and My Tasks default list', () => {
+    // Admin /api/follow-ups: exclude follow-ups whose task is completed/cancelled
+    // (same "ceases to exist" rule as My Tasks), except deep-link by followupId.
+    assert.match(
+      INDEX_SRC,
+      /closedTaskClause[\s\S]{0,400}IN\s*\(\s*'completed'\s*,\s*'cancelled'\s*\)/
+    )
+    // My Tasks default ("all") must also exclude completed/cancelled — not only pending filter.
+    const myTasksIdx = INDEX_SRC.indexOf("app.get('/api/my-followup-tasks'")
+    assert.ok(myTasksIdx > 0, 'my-followup-tasks route must exist')
+    const slice = INDEX_SRC.slice(myTasksIdx, myTasksIdx + 3500)
+    assert.match(
+      slice,
+      /NOT IN\s*\(\s*'completed'\s*,\s*'cancelled'\s*\)/
+    )
+  })
 })
 
 describe('follow-up task completion — DB behavior', () => {
@@ -115,6 +133,42 @@ describe('follow-up task completion — DB behavior', () => {
       `SELECT status FROM company_contact_followup_tasks WHERE id = ?`
     ).get(taskId) as { status: string }
     assert.equal(row.status, 'completed')
+  })
+
+  it('admin Follow-ups list SQL excludes follow-ups with a completed task', () => {
+    const raw = createDb()
+    const pendingId = seedTask(raw, 7, '966511111111', 'Pending Lead')
+    const completedId = seedTask(raw, 7, '966522222222', 'Enrolled Lead')
+    raw.prepare(
+      `UPDATE company_contact_followup_tasks SET status = 'completed' WHERE id = ?`
+    ).run(completedId)
+
+    // Mirrors closedTaskClause on GET /api/follow-ups.
+    const rows = raw.prepare(`
+      SELECT f.id
+      FROM company_contact_followups f
+      WHERE f.tenant_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM company_contact_followup_tasks closed_t
+          WHERE closed_t.followup_id = f.id
+            AND LOWER(TRIM(COALESCE(closed_t.status, ''))) IN ('completed', 'cancelled')
+        )
+      ORDER BY f.id
+    `).all(7) as { id: number }[]
+
+    const pendingFollowup = raw.prepare(
+      `SELECT followup_id FROM company_contact_followup_tasks WHERE id = ?`
+    ).get(pendingId) as { followup_id: number }
+    const completedFollowup = raw.prepare(
+      `SELECT followup_id FROM company_contact_followup_tasks WHERE id = ?`
+    ).get(completedId) as { followup_id: number }
+
+    assert.deepEqual(
+      rows.map((r) => r.id),
+      [pendingFollowup.followup_id],
+      'completed-task follow-up must be hidden from admin Follow-ups'
+    )
+    assert.ok(!rows.some((r) => r.id === completedFollowup.followup_id))
   })
 
   it('cancels any pending pass-request for the same task on completion', async () => {

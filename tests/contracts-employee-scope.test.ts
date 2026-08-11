@@ -30,6 +30,7 @@ function seedSchema(db: Database.Database) {
     CREATE TABLE users (
       id INTEGER PRIMARY KEY,
       full_name TEXT,
+      username TEXT,
       tenant_id INTEGER,
       role_id INTEGER,
       is_active INTEGER DEFAULT 1
@@ -37,7 +38,8 @@ function seedSchema(db: Database.Database) {
     CREATE TABLE customers (
       id INTEGER PRIMARY KEY,
       tenant_id INTEGER,
-      full_name TEXT
+      full_name TEXT,
+      assigned_bank_agent_id INTEGER
     );
     CREATE TABLE customer_assignments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

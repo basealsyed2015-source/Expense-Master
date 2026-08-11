@@ -1009,12 +1009,13 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
             <!-- Customer lookup — options injected server-side by GET /admin/contracts/new -->
             <div class="form-group form-full" style="margin-bottom:16px;">
-              <label class="form-label"><i class="fas fa-users" style="color:var(--secondary);margin-left:6px;"></i> اختيار عميل موجود <span style="font-weight:400;color:var(--text-muted);">(اختياري)</span></label>
-              <select class="form-control" id="customer_lookup" onchange="fillFromCustomer(this.value)">
-                <option value="">— اختر عميلاً لتعبئة الحقول أو أدخل البيانات يدوياً —</option>
+              <label class="form-label"><i class="fas fa-users" style="color:var(--secondary);margin-left:6px;"></i> اختيار عميل موجود <span class="required">*</span></label>
+              <select class="form-control" id="customer_lookup" onchange="fillFromCustomer(this.value)" required>
+                <option value="">— اختر عميلاً من القائمة —</option>
                 <!--CONTRACTS_CUSTOMERS_OPTIONS-->
               </select>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> اختيار عميل يملأ الحقول تلقائياً · تعديل الحقول يدوياً بعد الاختيار يلغي الربط بالعميل</div>
+              <div class="invalid-feedback">يجب اختيار عميل موجود لإنشاء العقد</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> العقود تُنشأ لعملاء موجودين فقط · بيانات الطرف الثاني تُعبَّأ تلقائياً من العميل</div>
             </div>
 
             <!-- Funding request — populated automatically when a customer is selected -->
@@ -1027,28 +1028,28 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
             <input type="hidden" id="financing_request_id" value="" />
 
-            <div class="form-grid">
+            <div class="form-grid" id="party_two_readonly_fields">
               <div class="form-group">
                 <label class="form-label">الاسم الكامل <span class="required">*</span></label>
-                <input type="text" class="form-control" id="party_two_name" placeholder="الاسم الرباعي" required />
-                <div class="invalid-feedback">يرجى إدخال اسم العميل</div>
+                <input type="text" class="form-control" id="party_two_name" placeholder="يُعبَّأ من العميل" required readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" />
+                <div class="invalid-feedback">يرجى اختيار عميل لتعبئة الاسم</div>
               </div>
               <div class="form-group">
-                <label class="form-label">رقم الهوية الوطنية (اختياري)</label>
-                <input type="text" class="form-control" id="party_two_id" placeholder="10 أرقام" maxlength="10" />
-                <div class="invalid-feedback">إن أُدخل، يجب أن يكون 10 أرقام</div>
+                <label class="form-label">رقم الهوية الوطنية</label>
+                <input type="text" class="form-control" id="party_two_id" placeholder="يُعبَّأ من العميل" maxlength="10" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" />
+                <div class="invalid-feedback">إن وُجد، يجب أن يكون 10 أرقام</div>
               </div>
               <div class="form-group">
                 <label class="form-label">رقم الجوال <span class="required">*</span></label>
                 <div class="phone-input-group">
                   <span class="phone-prefix">+966</span>
-                  <input type="text" class="form-control" id="party_two_phone" placeholder="5XXXXXXXX" maxlength="9" />
+                  <input type="text" class="form-control" id="party_two_phone" placeholder="يُعبَّأ من العميل" maxlength="9" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;direction:ltr;text-align:right;" />
                 </div>
-                <div class="invalid-feedback">يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)</div>
+                <div class="invalid-feedback">يرجى اختيار عميل ببيانات جوال صحيحة</div>
               </div>
               <div class="form-group">
                 <label class="form-label">العنوان / المدينة</label>
-                <input type="text" class="form-control" id="party_two_address" placeholder="المدينة / الحي" />
+                <input type="text" class="form-control" id="party_two_address" placeholder="يُعبَّأ من العميل" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" />
               </div>
             </div>
           </div>
@@ -1313,8 +1314,32 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       if (phoneEl) phoneEl.value = phone;
     }
 
+    function lockPartyTwoFields() {
+      ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.readOnly = true;
+        el.setAttribute('readonly', 'readonly');
+        el.tabIndex = -1;
+        el.style.background = '#f3f4f6';
+        el.style.color = '#6b7280';
+        el.style.cursor = 'default';
+        el.onkeydown = (e) => { e.preventDefault(); return false; };
+        el.onpaste = (e) => { e.preventDefault(); return false; };
+        el.onbeforeinput = (e) => { e.preventDefault(); return false; };
+      });
+    }
+
     function fillFromCustomer(customerId) {
-      if (!customerId) return;
+      if (!customerId) {
+        document.getElementById('party_two_name').value = '';
+        document.getElementById('party_two_id').value = '';
+        document.getElementById('party_two_phone').value = '';
+        document.getElementById('party_two_address').value = '';
+        updateFinancingRequestsDropdown('');
+        lockPartyTwoFields();
+        return;
+      }
       const select = document.getElementById('customer_lookup');
       const opt = select.querySelector(\`option[value="\${customerId}"]\`);
       if (!opt) return;
@@ -1329,6 +1354,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         const wrapper = el.closest('.phone-input-group');
         if (wrapper) wrapper.classList.remove('is-invalid');
       });
+      lockPartyTwoFields();
       updateFinancingRequestsDropdown(customerId);
       showToast('تم تعبئة بيانات العميل تلقائياً', 'success');
     }
@@ -1653,10 +1679,16 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
 
     function validateForm() {
       let valid = true;
+      const customerLookup = document.getElementById('customer_lookup');
+      if (customerLookup) {
+        const hasCustomer = !!String(customerLookup.value || '').trim();
+        customerLookup.classList.toggle('is-invalid', !hasCustomer);
+        if (!hasCustomer) valid = false;
+      }
       const fields = [
-        { id: 'party_two_name', msg: 'يرجى إدخال اسم العميل', check: v => v.trim().length >= 3 },
-        { id: 'party_two_id', msg: 'إن أُدخل، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\\d{10}$/.test(t); } },
-        { id: 'party_two_phone', msg: 'يرجى إدخال رقم جوال صحيح (9 أرقام تبدأ بـ 5)', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
+        { id: 'party_two_name', msg: 'يرجى اختيار عميل لتعبئة الاسم', check: v => v.trim().length >= 3 },
+        { id: 'party_two_id', msg: 'إن وُجد، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\\d{10}$/.test(t); } },
+        { id: 'party_two_phone', msg: 'يرجى اختيار عميل ببيانات جوال صحيحة', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }
@@ -1981,6 +2013,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     // Auto-calc commission on amount change
       document.addEventListener('DOMContentLoaded', async () => {
       configureContractStatusSectionVisibility();
+      lockPartyTwoFields();
 
 
       document.getElementById('finance_amount')?.addEventListener('input', () => {
@@ -1994,14 +2027,6 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       });
       document.getElementById('date_hijri')?.addEventListener('blur', syncContractDateFromHijri);
       initContractHijriDatePicker();
-
-      // Manual edits to any Party Two field after autofill → clear dropdown so customer_id becomes null
-      ['party_two_name', 'party_two_id', 'party_two_phone', 'party_two_address'].forEach(fieldId => {
-        document.getElementById(fieldId)?.addEventListener('input', () => {
-          const lookup = document.getElementById('customer_lookup');
-          if (lookup && lookup.value) lookup.value = '';
-        });
-      });
 
       const editId = getParam('edit');
       if (editId) {
@@ -2060,6 +2085,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           document.getElementById('party_two_id').value = c.party_two_id || '';
           document.getElementById('party_two_phone').value = normalizePhone(c.party_two_phone || '');
           document.getElementById('party_two_address').value = c.party_two_address || '';
+          lockPartyTwoFields();
           setFinanceTypeValue(c.finance_type || '');
           document.getElementById('finance_amount').value = c.finance_amount || '';
           document.getElementById('bank_name').value = c.bank_name || '';

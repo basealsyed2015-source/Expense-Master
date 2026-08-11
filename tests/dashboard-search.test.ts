@@ -80,17 +80,14 @@ describe('dashboard search endpoint — source invariants', () => {
     const slice = sliceEndpoint()
     assert.match(slice, /\/admin\/follow-ups/)
     assert.match(slice, /\/admin\/my-tasks/)
-    // Deep-link uses local 5XXXXXXXX (customerPhoneInputValue), not stored 966… —
-    // follow-ups client search matches against displayPhone (05…).
+    // Deep-link uses local 05… phone (via customerPhoneInputValue) + followupId.
     assert.match(slice, /customerPhoneInputValue\(phone\)/)
     assert.match(slice, /q=\$\{encodeURIComponent\(phoneQ\)\}/)
+    assert.match(slice, /followupId=\$\{fid\}/)
     assert.doesNotMatch(slice, /highlightTask=/)
   })
 
   it('normalizes task deep-link phones away from 966 before putting them in q', () => {
-    // Pin the helper contract the endpoint relies on: stored 9665… → local 5….
-    // (customerPhoneInputValue is defined earlier in index.tsx; we assert via a tiny
-    // reimplementation matching its documented behavior so this stays a unit check.)
     function customerPhoneInputValue(rawPhone: string | null | undefined): string {
       const digits = String(rawPhone ?? '').trim().replace(/[^\d]/g, '')
       if (!digits) return ''
@@ -102,6 +99,10 @@ describe('dashboard search endpoint — source invariants', () => {
     assert.equal(customerPhoneInputValue('966501234567'), '501234567')
     assert.equal(customerPhoneInputValue('0501234567'), '501234567')
     assert.equal(customerPhoneInputValue('501234567'), '501234567')
+    // Destination search box uses display form 05…
+    const local = customerPhoneInputValue('966501234567')
+    const phoneQ = local && /^5\d{8}$/.test(local) ? `0${local}` : local
+    assert.equal(phoneQ, '0501234567')
   })
 
   it('returns customerTotal + taskTotal so the UI can label result counts distinctly', () => {

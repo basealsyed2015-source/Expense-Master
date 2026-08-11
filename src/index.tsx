@@ -76,6 +76,8 @@ import {
   isEmployeeAssignableRole,
   isBankAgentAssignableRole,
 } from './notification-access'
+import { extractCronSecretFromHeaders, isValidCronSecret } from './cron-auth'
+import { attachNoResponseTransferLogs, listNoResponseTransferStaff, pickNextNoResponseAssignee } from './followup-transfer-logs'
 import {
   assignBankAgentToCustomer,
   setCustomerAssignedBankAgent,
@@ -93,6 +95,7 @@ import {
 import {
   buildCustomerEnrollFromTaskHref,
   findOpenFollowupTaskByPhone,
+  phoneMatchVariants,
 } from './followup-task-enroll-guard'
 import { banksReportPage } from './banks-report'
 import { performanceReportPage } from './performance-report'
@@ -161,6 +164,12 @@ type Bindings = {
   RESEND_API_KEY?: string;
   /** Verified sender, e.g. `Tamweel <noreply@yourdomain.com>` (Worker var or secret) */
   EMAIL_FROM?: string;
+  /**
+   * Shared secret for companion cron Worker (`wrangler.cron.toml`).
+   * Pages: `wrangler pages secret put CRON_SECRET --project-name tamweel-calc-prod`
+   * Cron Worker: `wrangler secret put CRON_SECRET -c wrangler.cron.toml`
+   */
+  CRON_SECRET?: string;
   /** When "1"/"true", enable verbose auth logs */
   DEBUG_AUTH?: string;
   /** When "1"/"true", emit [perf] timing logs */
@@ -8835,11 +8844,20 @@ app.get('/api/dashboard-search', async (c) => {
     // Role 2 (company admin) can access both; we keep them on /admin/follow-ups since that's
     // the marketing module they normally work in.
     const usesMarketingModule = (roleNorm === 1 || roleNorm === 2 || roleNorm === 3)
-    // Deep-link by local phone (5XXXXXXXX) — storage is 966…, but destination pages
-    // display/search as 05… / 5…, so a raw 966 q would never match the client filter.
-    function taskHrefFor(state: 'archived' | 'no_response' | 'active', phone: string | null | undefined): string {
-      const phoneQ = customerPhoneInputValue(phone)
-      const qs = phoneQ ? `q=${encodeURIComponent(phoneQ)}` : ''
+    // Deep-link: local 05… phone for the visible search filter + followupId so the API can
+    // return the exact row (phone-only matching is brittle against 966 storage / LIMIT 300).
+    function taskHrefFor(
+      state: 'archived' | 'no_response' | 'active',
+      phone: string | null | undefined,
+      followupId: number | null | undefined,
+    ): string {
+      const local = customerPhoneInputValue(phone)
+      const phoneQ = local && /^5\d{8}$/.test(local) ? `0${local}` : local
+      const parts: string[] = []
+      if (phoneQ) parts.push(`q=${encodeURIComponent(phoneQ)}`)
+      const fid = Number(followupId)
+      if (Number.isFinite(fid) && fid > 0) parts.push(`followupId=${fid}`)
+      const qs = parts.join('&')
       const withQs = (base: string) => (qs ? `${base}${base.includes('?') ? '&' : '?'}${qs}` : base)
       if (usesMarketingModule) {
         if (state === 'archived') return withQs('/admin/follow-ups?followupStatusFilter=archived')
@@ -8905,7 +8923,9 @@ app.get('/api/dashboard-search', async (c) => {
       const title = String(r.customer_name || r.task_title || `إعلان #${r.id}`)
       const subtitleBits: string[] = []
       if (r.task_title) subtitleBits.push(String(r.task_title))
-      if (r.customer_phone) subtitleBits.push(String(r.customer_phone))
+      // Show local 05… form (same as follow-ups displayPhone), never raw 966…
+      const localPhone = customerPhoneInputValue(r.customer_phone)
+      if (localPhone) subtitleBits.push(/^5\d{8}$/.test(localPhone) ? `0${localPhone}` : localPhone)
       return {
         type: 'task',
         typeLabel: 'إعلان',
@@ -8916,7 +8936,7 @@ app.get('/api/dashboard-search', async (c) => {
         subtitle: subtitleBits.join(' • '),
         status: statusLabel,
         statusColor,
-        href: taskHrefFor(state, r.customer_phone),
+        href: taskHrefFor(state, r.customer_phone, r.followup_id),
         createdAt: r.created_at,
       }
     })
@@ -18001,6 +18021,12 @@ app.get('/admin/customers/add', async (c) => {
     ).bind(prefillTaskId, userInfo.tenantId).first<{ status: string | null; rating: number | null; rating_note: string | null }>() ?? null
   }
   const prefillTaskIsCompleted = prefillTaskData?.status === 'completed'
+  const fromMyTasksEnrollment = prefillTaskId > 0
+  const addFormBackHref = fromMyTasksEnrollment ? '/admin/my-tasks' : '/admin/customers'
+  const addFormBackRole = normalizeRoleId(userInfo.roleId)
+  const addFormBackLabel = fromMyTasksEnrollment
+    ? ((addFormBackRole === 4 || addFormBackRole === 5 || addFormBackRole === 6) ? '← العودة للإعلانات' : '← العودة لمهامي')
+    : '← العودة لقائمة العملاء'
   const obligationTypeNames = await fetchObligationTypeNamesForTenant(c.env.DB, userInfo.tenantId)
 
   const queryTenantId = Number.parseInt(String(c.req.query('tenant_id') ?? ''), 10)
@@ -18088,7 +18114,7 @@ app.get('/admin/customers/add', async (c) => {
     <body class="bg-gray-50">
       <div class="max-w-4xl mx-auto p-6">
         <div class="mb-6">
-          <a href="/admin/customers" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='/admin/customers'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">← العودة لقائمة العملاء</a>
+          <a href="${addFormBackHref}" onclick="try{var r=document.referrer&amp;&amp;new URL(document.referrer);if(r&amp;&amp;r.origin===location.origin&amp;&amp;r.pathname==='${addFormBackHref}'){history.back();return false;}}catch(e){}" class="text-blue-600 hover:text-blue-800">${addFormBackLabel}</a>
         </div>
         
         <div class="bg-white rounded-xl shadow-lg p-8">
@@ -18537,6 +18563,7 @@ app.get('/admin/customers/add', async (c) => {
               </div>
             </div>
 
+            ${prefillTaskId ? '' : `
             <div>
               <label class="block text-sm font-bold text-gray-700 mb-2">
                 <i class="fas fa-sticky-note text-gray-600 ml-1"></i>
@@ -18546,6 +18573,7 @@ app.get('/admin/customers/add', async (c) => {
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
                         placeholder="أي ملاحظات إضافية عن العميل (اختياري)">${escapeHtml(prefillNotes)}</textarea>
             </div>
+            `}
 
             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -18650,13 +18678,17 @@ app.get('/admin/customers/add', async (c) => {
                 <i class="fas fa-plus ml-2"></i>
                 إضافة العميل
               </button>
-              <a href="/admin/customers" class="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-bold">
+              <a href="${addFormBackHref}" class="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-bold">
                 <i class="fas fa-times ml-2"></i>
                 إلغاء
               </a>
             </div>
             ${prefillTaskId ? `
             <div class="flex gap-3 flex-wrap pt-4 mt-2 border-t border-gray-200">
+              <button type="button" id="btn-task-note" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2">
+                <i class="fas fa-sticky-note ml-1"></i>
+                ملاحظات
+              </button>
               <button type="button" id="btn-archive-task" class="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2">
                 <i class="fas fa-archive ml-1"></i>
                 أرشفة
@@ -18673,6 +18705,34 @@ app.get('/admin/customers/add', async (c) => {
           </form>
         </div>
       </div>
+      ${prefillTaskId ? `
+      <div id="taskNoteModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col" style="max-height:90vh">
+          <div class="bg-gradient-to-r from-fuchsia-600 to-pink-600 px-6 py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+            <h2 class="text-white text-xl font-bold"><i class="fas fa-sticky-note ml-2"></i>ملاحظات المهمة</h2>
+            <button type="button" id="taskNoteCloseBtn" class="text-white hover:text-white/70 text-2xl leading-none">&times;</button>
+          </div>
+          <div class="p-6 space-y-4 overflow-y-auto flex-1">
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-2">إضافة ملاحظة</label>
+              <textarea id="taskNoteInput" rows="4" placeholder="اكتب ملاحظتك هنا..." class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500 resize-none"></textarea>
+              <p id="taskNoteError" class="text-sm text-red-600 hidden mt-2"></p>
+              <p id="taskNoteSuccess" class="text-sm text-emerald-700 hidden mt-2"></p>
+            </div>
+            <div class="border-t border-gray-200 pt-4">
+              <div class="text-sm font-semibold text-gray-700 mb-2"><i class="fas fa-history ml-1 text-indigo-500"></i>سجل الملاحظات</div>
+              <div id="taskNoteHistory" class="space-y-2 max-h-64 overflow-y-auto text-sm text-gray-500">جاري التحميل...</div>
+            </div>
+          </div>
+          <div class="px-6 pb-6 flex gap-3 justify-end flex-shrink-0">
+            <button type="button" id="taskNoteCancelBtn" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm">إغلاق</button>
+            <button type="button" id="taskNoteSaveBtn" class="px-5 py-2.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-sm">
+              <i class="fas fa-save ml-1"></i>حفظ الملاحظة
+            </button>
+          </div>
+        </div>
+      </div>
+      ` : ''}
       ${prefillTaskId && !prefillTaskIsCompleted ? `
       <div id="taskPassModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -19047,8 +19107,133 @@ app.get('/admin/customers/add', async (c) => {
             var noResponseBtn = document.getElementById('btn-no-response-task');
             var reviewBtn = document.getElementById('btn-review-task');
             var passBtn = document.getElementById('btn-pass-task');
+            var noteBtn = document.getElementById('btn-task-note');
             var taskId = ${prefillTaskId || 0};
             if (!taskId) return;
+
+            function authHeaders() {
+              var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              var headers = { 'Content-Type': 'application/json' };
+              if (token) headers['Authorization'] = 'Bearer ' + token;
+              return headers;
+            }
+
+            function formatNoteDate(value) {
+              if (!value) return '-';
+              var d = new Date(value);
+              if (isNaN(d.getTime())) return String(value);
+              try {
+                return d.toLocaleString('ar-SA', {
+                  timeZone: 'Asia/Riyadh',
+                  year: 'numeric', month: 'short', day: 'numeric',
+                  hour: '2-digit', minute: '2-digit', hour12: true
+                });
+              } catch (_) {
+                return d.toLocaleString();
+              }
+            }
+
+            function closeTaskNoteModal() {
+              var m = document.getElementById('taskNoteModal');
+              if (m) { m.classList.add('hidden'); m.style.display = ''; }
+              var err = document.getElementById('taskNoteError');
+              var ok = document.getElementById('taskNoteSuccess');
+              if (err) { err.classList.add('hidden'); err.textContent = ''; }
+              if (ok) { ok.classList.add('hidden'); ok.textContent = ''; }
+            }
+
+            async function loadTaskNoteHistory() {
+              var el = document.getElementById('taskNoteHistory');
+              if (!el) return;
+              el.innerHTML = '<div class="text-gray-400">جاري التحميل...</div>';
+              try {
+                var res = await fetch('/api/my-followup-tasks/' + taskId + '/notes', { headers: authHeaders() });
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok || data.success === false) throw new Error(data.error || 'تعذر تحميل السجل');
+                var notes = Array.isArray(data.data) ? data.data : [];
+                if (!notes.length) {
+                  el.innerHTML = '<div class="text-gray-400">لا يوجد سجل ملاحظات بعد.</div>';
+                  return;
+                }
+                el.innerHTML = notes.map(function (n) {
+                  var typeBadge = n.note_type === 'pass_note'
+                    ? '<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة تمرير</span>'
+                    : n.note_type === 'auto_transfer'
+                    ? '<span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-medium">تحويل لا يرد</span>'
+                    : n.note_type === 'followup_note' || n.source === 'followup'
+                    ? '<span class="bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة متابعة</span>'
+                    : '<span class="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة مهمة</span>';
+                  return '<div class="bg-gray-50 border border-gray-100 rounded-lg p-3">' +
+                    '<div class="flex flex-wrap items-center gap-2 mb-1">' + typeBadge +
+                    '<span class="text-xs font-semibold text-gray-700">' + escapeHtmlMsg(n.user_name || '') + '</span>' +
+                    '<span class="text-xs text-gray-400">' + escapeHtmlMsg(formatNoteDate(n.created_at)) + '</span></div>' +
+                    '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtmlMsg(n.note_text || '') + '</div></div>';
+                }).join('');
+              } catch (e) {
+                el.innerHTML = '<div class="text-red-600">' + escapeHtmlMsg(e.message || 'تعذر تحميل السجل') + '</div>';
+              }
+            }
+
+            async function openTaskNoteModal() {
+              var m = document.getElementById('taskNoteModal');
+              if (!m) return;
+              var input = document.getElementById('taskNoteInput');
+              if (input) input.value = '';
+              var err = document.getElementById('taskNoteError');
+              var ok = document.getElementById('taskNoteSuccess');
+              if (err) { err.classList.add('hidden'); err.textContent = ''; }
+              if (ok) { ok.classList.add('hidden'); ok.textContent = ''; }
+              m.classList.remove('hidden');
+              m.style.display = 'flex';
+              loadTaskNoteHistory();
+              if (input) setTimeout(function () { input.focus(); }, 50);
+            }
+
+            async function saveTaskNote() {
+              var input = document.getElementById('taskNoteInput');
+              var err = document.getElementById('taskNoteError');
+              var ok = document.getElementById('taskNoteSuccess');
+              var saveBtn = document.getElementById('taskNoteSaveBtn');
+              var noteText = input ? String(input.value || '').trim() : '';
+              if (err) { err.classList.add('hidden'); err.textContent = ''; }
+              if (ok) { ok.classList.add('hidden'); ok.textContent = ''; }
+              if (!noteText) {
+                if (err) { err.textContent = 'يرجى إدخال الملاحظة'; err.classList.remove('hidden'); }
+                return;
+              }
+              if (saveBtn) saveBtn.disabled = true;
+              try {
+                var res = await fetch('/api/my-followup-tasks/' + taskId, {
+                  method: 'PATCH',
+                  headers: authHeaders(),
+                  body: JSON.stringify({ note_text: noteText })
+                });
+                var data = await res.json().catch(function () { return {}; });
+                if (!res.ok || !data.success) throw new Error(data.error || 'تعذر حفظ الملاحظة');
+                if (input) input.value = '';
+                if (ok) { ok.textContent = 'تم حفظ الملاحظة'; ok.classList.remove('hidden'); }
+                await loadTaskNoteHistory();
+              } catch (e) {
+                if (err) { err.textContent = e.message || 'حدث خطأ'; err.classList.remove('hidden'); }
+              } finally {
+                if (saveBtn) saveBtn.disabled = false;
+              }
+            }
+
+            if (noteBtn) {
+              noteBtn.addEventListener('click', function () { openTaskNoteModal(); });
+            }
+            var noteModal = document.getElementById('taskNoteModal');
+            if (noteModal) {
+              noteModal.addEventListener('click', function (e) { if (e.target === noteModal) closeTaskNoteModal(); });
+            }
+            var noteCloseBtn = document.getElementById('taskNoteCloseBtn');
+            if (noteCloseBtn) noteCloseBtn.addEventListener('click', closeTaskNoteModal);
+            var noteCancelBtn = document.getElementById('taskNoteCancelBtn');
+            if (noteCancelBtn) noteCancelBtn.addEventListener('click', closeTaskNoteModal);
+            var noteSaveBtn = document.getElementById('taskNoteSaveBtn');
+            if (noteSaveBtn) noteSaveBtn.addEventListener('click', function () { saveTaskNote(); });
+
             if (archiveBtn) {
               archiveBtn.addEventListener('click', async function () {
                 var reason = window.prompt('سيتم أرشفة طلب المتابعة المرتبط بهذه المهمة.\\nأدخل سبب الأرشفة (اختياري) أو اضغط موافق للمتابعة بدون سبب:');
@@ -19057,7 +19242,7 @@ app.get('/admin/customers/add', async (c) => {
                 try {
                   var res = await fetch('/api/my-followup-tasks/' + taskId + '/archive', {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: authHeaders(),
                     body: JSON.stringify({ reason: reason || null })
                   });
                   var data = await res.json().catch(function () { return {}; });
@@ -19074,7 +19259,10 @@ app.get('/admin/customers/add', async (c) => {
                 if (!confirm('هل تريد تصنيف هذا الطلب كـ "لا يرد"?\\nسيُنقل إلى صفحة "لا يرد" وإذا لم تسترجعه خلال 48 ساعة سيُحوَّل تلقائياً إلى الموظف التالي في الطابور.')) return;
                 noResponseBtn.disabled = true;
                 try {
-                  var res = await fetch('/api/my-followup-tasks/' + taskId + '/no-response', { method: 'PATCH' });
+                  var res = await fetch('/api/my-followup-tasks/' + taskId + '/no-response', {
+                    method: 'PATCH',
+                    headers: authHeaders()
+                  });
                   var data = await res.json().catch(function () { return {}; });
                   if (!res.ok || !data.success) throw new Error(data.error || 'تعذر التصنيف');
                   window.location.href = '/admin/my-tasks';
@@ -30407,6 +30595,56 @@ app.get('/admin/customers/:id/workflow', async (c) => {
       ORDER BY cwt.created_at DESC
     `).bind(id).all()
 
+    // ── Ads (follow-up task) notes: pull notes written before enrollment ──
+    // Match by phone variants so all common Saudi formats are covered.
+    const preWorkflowStage = (stages as any[]).find((s: any) => s.stage_name === 'pre_workflow')
+    const preWorkflowStageId: number | null = preWorkflowStage?.id ?? null
+    const customerPhone = String(customer.phone || '').replace(/[^\d]/g, '')
+    const phoneVariants = customerPhone ? phoneMatchVariants(
+      customerPhone.startsWith('5') && customerPhone.length === 9 ? `966${customerPhone}` : customerPhone
+    ) : []
+
+    let adsNotes: any[] = []
+    if (phoneVariants.length > 0 && preWorkflowStageId !== null) {
+      const phonePlaceholders = phoneVariants.map(() => '?').join(', ')
+      const tenantId = customer.tenant_id
+
+      // Notes written on tasks (employee notes + pass notes)
+      const { results: taskNotes } = await c.env.DB.prepare(`
+        SELECT tn.note_text, tn.user_name AS performed_by_name, tn.note_type, tn.created_at,
+               'ads' AS source
+        FROM company_contact_followup_task_notes tn
+        INNER JOIN company_contact_followup_tasks t ON t.id = tn.task_id
+        INNER JOIN company_contact_followups f ON f.id = t.followup_id
+        WHERE f.customer_phone IN (${phonePlaceholders})
+          AND f.tenant_id = ?
+        ORDER BY tn.created_at DESC
+        LIMIT 200
+      `).bind(...phoneVariants, tenantId).all()
+
+      // Notes written on the follow-up itself
+      const { results: followupNotes } = await c.env.DB.prepare(`
+        SELECT n.note_text, COALESCE(u.full_name, '') AS performed_by_name,
+               'followup_note' AS note_type, n.created_at,
+               'ads' AS source
+        FROM company_contact_followup_notes n
+        LEFT JOIN users u ON u.id = n.created_by_user_id
+        INNER JOIN company_contact_followups f ON f.id = n.followup_id
+        WHERE f.customer_phone IN (${phonePlaceholders})
+          AND n.tenant_id = ?
+        ORDER BY n.created_at DESC
+        LIMIT 200
+      `).bind(...phoneVariants, tenantId).all()
+
+      // Tag each note with pre_workflow stage so the timeline places them correctly
+      adsNotes = [...(taskNotes || []), ...(followupNotes || [])].map((n: any) => ({
+        ...n,
+        stage_id: preWorkflowStageId,
+        customer_stage_id: preWorkflowStageId,
+      }))
+    }
+    const mergedCustNotes = [...(custNotes as any[]), ...adsNotes]
+
     // Latest request for this customer (optional second tab)
     const latestRequest = await c.env.DB.prepare(`
       SELECT fr.*, ws.stage_name_ar, ws.stage_color, ws.stage_icon
@@ -30469,7 +30707,7 @@ app.get('/admin/customers/:id/workflow', async (c) => {
       customerId: parseInt(id, 10),
       customer,
       stages,
-      customerTimeline: { transitions: custTransitions, actions: custActions, notes: custNotes, tasks: custTasks },
+      customerTimeline: { transitions: custTransitions, actions: custActions, notes: mergedCustNotes, tasks: custTasks },
       requestId,
       request: latestRequest ?? null,
       requestTimeline,
@@ -35192,14 +35430,20 @@ app.get('/api/my-profile', async (c) => {
                 medical_insurance_document_url, medical_insurance_expiry,
                 gosi_document_url, gosi_document_expiry,
                 department, job_title, hire_date, status
-         FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
+         FROM hr_employees
+         WHERE LOWER(TRIM(COALESCE(email, ''))) = LOWER(TRIM(?))
+           AND (tenant_id = ? OR tenant_id IS NULL)
+         LIMIT 1`
       ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
     } catch {
       // Migration 0144 not applied yet — fall back without insurance columns
       employee = await c.env.DB.prepare(
         `SELECT id, full_name, full_name_ar, email, phone, national_id, national_id_expiry,
                 id_type, iqama_number, iqama_expiry, id_document_url, department, job_title, hire_date, status
-         FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1`
+         FROM hr_employees
+         WHERE LOWER(TRIM(COALESCE(email, ''))) = LOWER(TRIM(?))
+           AND (tenant_id = ? OR tenant_id IS NULL)
+         LIMIT 1`
       ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
       if (employee) {
         employee.medical_insurance_document_url = null;
@@ -35244,7 +35488,10 @@ app.patch('/api/my-profile', async (c) => {
     );
 
     const employee = await c.env.DB.prepare(
-      'SELECT id FROM hr_employees WHERE email = ? AND (tenant_id = ? OR tenant_id IS NULL) LIMIT 1'
+      `SELECT id FROM hr_employees
+       WHERE LOWER(TRIM(COALESCE(email, ''))) = LOWER(TRIM(?))
+         AND (tenant_id = ? OR tenant_id IS NULL)
+       LIMIT 1`
     ).bind(user.email || '', userInfo.tenantId || 1).first() as any;
 
     if (hasContactFields) {
@@ -37674,8 +37921,7 @@ app.get('/api/hr/employees/:id', async (c) => {
     const userInfo = await getUserInfo(c)
     const tenantId = userInfo.tenantId
     const id = c.req.param('id')
-    // Use the same COALESCE mapping as the list API for consistency
-    const selectCols = `SELECT 
+    const baseCols = `
         id,
         tenant_id,
         COALESCE(employee_number, employee_code) AS employee_number,
@@ -37683,6 +37929,11 @@ app.get('/api/hr/employees/:id', async (c) => {
         full_name_ar,
         full_name_en,
         national_id,
+        national_id_expiry,
+        id_type,
+        iqama_number,
+        iqama_expiry,
+        id_document_url,
         COALESCE(birthdate, birth_date) AS birthdate,
         birth_date,
         gender,
@@ -37702,20 +37953,63 @@ app.get('/api/hr/employees/:id', async (c) => {
         status,
         notes,
         created_at,
-        updated_at
-      FROM hr_employees`
-    const query = tenantId != null
-      ? `${selectCols} WHERE id = ? AND tenant_id = ?`
-      : `${selectCols} WHERE id = ?`
-    
-    const employee = tenantId != null
-      ? await c.env.DB.prepare(query).bind(id, tenantId).first()
-      : await c.env.DB.prepare(query).bind(id).first()
-    
+        updated_at`
+    const insuranceCols = `,
+        medical_insurance_document_url,
+        medical_insurance_expiry,
+        gosi_document_url,
+        gosi_document_expiry`
+
+    const runSelect = async (cols: string) => {
+      const selectCols = `SELECT ${cols} FROM hr_employees`
+      const query = tenantId != null
+        ? `${selectCols} WHERE id = ? AND tenant_id = ?`
+        : `${selectCols} WHERE id = ?`
+      return tenantId != null
+        ? await c.env.DB.prepare(query).bind(id, tenantId).first()
+        : await c.env.DB.prepare(query).bind(id).first()
+    }
+
+    let employee: any = null
+    try {
+      employee = await runSelect(baseCols + insuranceCols)
+    } catch {
+      try {
+        employee = await runSelect(baseCols)
+        if (employee) {
+          employee.medical_insurance_document_url = null
+          employee.medical_insurance_expiry = null
+          employee.gosi_document_url = null
+          employee.gosi_document_expiry = null
+        }
+      } catch {
+        // Older schemas without id document columns
+        const legacyCols = `
+          id, tenant_id,
+          COALESCE(employee_number, employee_code) AS employee_number,
+          COALESCE(full_name, full_name_ar, full_name_en) AS full_name,
+          full_name_ar, full_name_en, national_id, iqama_number, iqama_expiry,
+          COALESCE(birthdate, birth_date) AS birthdate, birth_date, gender, email, phone,
+          department, job_title, basic_salary, housing_allowance, transportation_allowance,
+          hire_date, contract_start_date, contract_end_date, direct_manager_id,
+          employment_type, work_schedule, status, notes, created_at, updated_at`
+        employee = await runSelect(legacyCols)
+        if (employee) {
+          employee.id_type = employee.iqama_number ? 'iqama' : (employee.national_id ? 'national' : null)
+          employee.national_id_expiry = null
+          employee.id_document_url = null
+          employee.medical_insurance_document_url = null
+          employee.medical_insurance_expiry = null
+          employee.gosi_document_url = null
+          employee.gosi_document_expiry = null
+        }
+      }
+    }
+
     if (!employee) {
       return c.json({ success: false, error: 'الموظف غير موجود' }, 404)
     }
-    
+
     return c.json({ success: true, data: employee })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -39621,32 +39915,87 @@ app.get('/api/follow-ups', async (c) => {
     } else if (includeArchivedLegacy) {
       statusFilter = 'all'
     }
+    // Deep-link by follow-up id wins over text/status filters — guarantees the exact row
+    // is returned even when phone formatting differs or status in the URL is stale.
+    const followupIdRaw = String(c.req.query('followupId') ?? '').trim()
+    const followupIdFilter =
+      followupIdRaw && /^\d+$/.test(followupIdRaw) ? parseInt(followupIdRaw, 10) : null
+
     const statusClause =
-      statusFilter === 'no_response'
-        ? ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 1'
-        : statusFilter === 'archived'
-          ? ' AND COALESCE(f.is_archived, 0) = 1'
-          : statusFilter === 'all'
-            ? ''
-            : ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 0'
+      followupIdFilter
+        ? ''
+        : statusFilter === 'no_response'
+          ? ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 1'
+          : statusFilter === 'archived'
+            ? ' AND COALESCE(f.is_archived, 0) = 1'
+            : statusFilter === 'all'
+              ? ''
+              : ' AND COALESCE(f.is_archived, 0) = 0 AND COALESCE(f.is_no_response, 0) = 0'
+
+    // Completed/cancelled tasks cease to exist for staff My Tasks; keep the same for admin
+    // Follow-ups so enrollment (or explicit complete) removes the contact from this list.
+    // Deep-link by followupId still returns the exact row.
+    const closedTaskClause = followupIdFilter
+      ? ''
+      : ` AND NOT EXISTS (
+          SELECT 1 FROM company_contact_followup_tasks closed_t
+          WHERE closed_t.followup_id = f.id
+            AND LOWER(TRIM(COALESCE(closed_t.status, ''))) IN ('completed', 'cancelled')
+        ) `
 
     const linkClause =
-      linkFilter === 'company'
-        ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') AND COALESCE(f.source_slug, '') <> 'csv' `
-        : linkFilter === 'affiliate'
-          ? ` AND (f.affiliate_path_segment IS NOT NULL AND TRIM(f.affiliate_path_segment) <> '') `
-          : linkFilter === 'imports'
-            ? ` AND COALESCE(f.source_slug, '') = 'csv' `
-            : linkFilter === 'affiliate-path'
-              ? ` AND f.affiliate_path_segment = ? `
-              : linkFilter === 'import-label'
-                ? ` AND COALESCE(f.source_slug, '') = 'csv' AND f.affiliate_label = ? `
-                : ''
+      followupIdFilter
+        ? ''
+        : linkFilter === 'company'
+          ? ` AND (f.affiliate_path_segment IS NULL OR TRIM(f.affiliate_path_segment) = '') AND COALESCE(f.source_slug, '') <> 'csv' `
+          : linkFilter === 'affiliate'
+            ? ` AND (f.affiliate_path_segment IS NOT NULL AND TRIM(f.affiliate_path_segment) <> '') `
+            : linkFilter === 'imports'
+              ? ` AND COALESCE(f.source_slug, '') = 'csv' `
+              : linkFilter === 'affiliate-path'
+                ? ` AND f.affiliate_path_segment = ? `
+                : linkFilter === 'import-label'
+                  ? ` AND COALESCE(f.source_slug, '') = 'csv' AND f.affiliate_label = ? `
+                  : ''
 
     const priorityClause =
-      priorityFilter === 'important' || priorityFilter === 'regular'
-        ? ` AND EXISTS (SELECT 1 FROM company_contact_followup_tasks t WHERE t.followup_id = f.id AND t.priority = ?) `
-        : ''
+      followupIdFilter
+        ? ''
+        : priorityFilter === 'important' || priorityFilter === 'regular'
+          ? ` AND EXISTS (SELECT 1 FROM company_contact_followup_tasks t WHERE t.followup_id = f.id AND t.priority = ?) `
+          : ''
+
+    // Optional text/phone search (panel deep-link + page search box). Phone matching must
+    // cover stored 966… as well as typed 05… / 5… forms — client-only filtering of the
+    // LIMIT 300 window misses older rows and breaks on country-code mismatch.
+    const searchRaw = String(c.req.query('q') ?? '').trim()
+    const searchNormalized = normalizeListSearchQuery(searchRaw)
+    let searchClause = ''
+    const searchBinds: any[] = []
+    if (followupIdFilter && followupIdFilter > 0) {
+      searchClause = ' AND f.id = ? '
+      searchBinds.push(followupIdFilter)
+    } else if (searchNormalized && searchNormalized.length >= 2) {
+      const like = `%${searchNormalized}%`
+      const digitCore = searchNormalized.replace(/[^\d]/g, '')
+      const local = customerPhoneInputValue(digitCore || searchNormalized)
+      const variants = phoneMatchVariants(local && /^5\d{8}$/.test(local) ? `966${local}` : digitCore)
+      const parts = [
+        `IFNULL(f.customer_name, '') LIKE ?`,
+        `IFNULL(f.customer_phone, '') LIKE ?`,
+        `IFNULL(f.affiliate_label, '') LIKE ?`,
+      ]
+      searchBinds.push(like, like, like)
+      if (local && local.length >= 4) {
+        parts.push(`IFNULL(f.customer_phone, '') LIKE ?`)
+        searchBinds.push(`%${local}%`)
+      }
+      if (variants.length) {
+        parts.push(`f.customer_phone IN (${variants.map(() => '?').join(', ')})`)
+        searchBinds.push(...variants)
+      }
+      searchClause = ` AND (${parts.join(' OR ')}) `
+    }
 
     const roleId = userInfo.roleId
     if (roleId === 1) {
@@ -39661,18 +40010,22 @@ app.get('/api/follow-ups', async (c) => {
           LEFT JOIN tenant_locations tl ON tl.id = f.location_id
           WHERE f.tenant_id = ?
           ${statusClause}
+          ${closedTaskClause}
           ${linkClause}
           ${priorityClause}
+          ${searchClause}
           ORDER BY f.created_at DESC
           LIMIT 300
         `)
         const binds: any[] = [parseInt(String(tenantFilter), 10)]
-        if (linkBindVal) binds.push(linkBindVal)
+        if (linkClause && linkBindVal) binds.push(linkBindVal)
         if (priorityClause) binds.push(priorityFilter)
+        binds.push(...searchBinds)
         const { results } = await (stmt as any).bind(...binds).all()
         const data = (results || []).map((row: Record<string, unknown>) =>
           normalizeContactFollowupRowForApi(row)
         )
+        await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
         return c.json({ success: true, data })
       }
 
@@ -39685,18 +40038,22 @@ app.get('/api/follow-ups', async (c) => {
         LEFT JOIN tenant_locations tl ON tl.id = f.location_id
         WHERE 1 = 1
         ${statusClause}
+        ${closedTaskClause}
         ${linkClause}
         ${priorityClause}
+        ${searchClause}
         ORDER BY f.created_at DESC
         LIMIT 300
       `)
       const binds: any[] = []
-      if (linkBindVal) binds.push(linkBindVal)
+      if (linkClause && linkBindVal) binds.push(linkBindVal)
       if (priorityClause) binds.push(priorityFilter)
+      binds.push(...searchBinds)
       const { results } = await (binds.length ? (stmt as any).bind(...binds) : stmt).all()
       const data = (results || []).map((row: Record<string, unknown>) =>
         normalizeContactFollowupRowForApi(row)
       )
+      await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
       return c.json({ success: true, data })
     }
 
@@ -39713,19 +40070,23 @@ app.get('/api/follow-ups', async (c) => {
       LEFT JOIN tenant_locations tl ON tl.id = f.location_id
       WHERE f.tenant_id = ?
       ${statusClause}
+      ${closedTaskClause}
       ${linkClause}
       ${priorityClause}
+      ${searchClause}
       ORDER BY f.created_at DESC
       LIMIT 300
     `)
     const binds: any[] = [userInfo.tenantId]
-    if (linkBindVal) binds.push(linkBindVal)
+    if (linkClause && linkBindVal) binds.push(linkBindVal)
     if (priorityClause) binds.push(priorityFilter)
+    binds.push(...searchBinds)
     const { results } = await (stmt as any).bind(...binds).all()
 
     const data = (results || []).map((row: Record<string, unknown>) =>
       normalizeContactFollowupRowForApi(row)
     )
+    await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -40597,14 +40958,12 @@ app.get('/api/my-followup-tasks', async (c) => {
         ? " AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) = 'pending') "
         : filter === 'completed'
           ? " AND LOWER(TRIM(t.status)) = 'completed' "
-          : ''
+          // Default ("all"): hide completed/cancelled — they cease to exist after enrollment/complete.
+          : " AND (t.status IS NULL OR TRIM(t.status) = '' OR LOWER(TRIM(t.status)) NOT IN ('completed', 'cancelled')) "
 
     const sortParam = String(c.req.query('sort') ?? 'newest').trim().toLowerCase()
     const validSorts = ['newest', 'oldest', 'scheduled_asc', 'scheduled_desc', 'priority']
     const sort = validSorts.includes(sortParam) ? sortParam : 'newest'
-    const completedLastClause = (filter !== 'pending' && filter !== 'completed')
-      ? "CASE WHEN LOWER(TRIM(COALESCE(t.status, ''))) = 'completed' THEN 1 ELSE 0 END,"
-      : ''
     const innerSort =
       sort === 'oldest'        ? 't.created_at ASC, t.id ASC' :
       sort === 'scheduled_asc' ? 't.scheduled_at_gregorian ASC, t.id DESC' :
@@ -40645,7 +41004,7 @@ app.get('/api/my-followup-tasks', async (c) => {
       ${whereClause}
       ${archivedClause}
       ${statusClause}
-      ORDER BY ${completedLastClause} ${innerSort}
+      ORDER BY ${innerSort}
       LIMIT 300
     `
 
@@ -40663,6 +41022,7 @@ app.get('/api/my-followup-tasks', async (c) => {
     }
 
     const data = results.map((row) => normalizeContactFollowupRowForApi(row))
+    await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'task')
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -40907,22 +41267,87 @@ app.get('/api/my-followup-tasks/:id/notes', async (c) => {
       return c.json({ success: false, error: 'Invalid task id' }, 400)
     }
 
-    // Verify user is assigned to this task
+    // Verify user is assigned to this task (and load followup_id for linked follow-up notes).
     const task = await c.env.DB.prepare(`
-      SELECT id FROM company_contact_followup_tasks
+      SELECT id, followup_id FROM company_contact_followup_tasks
       WHERE id = ? AND tenant_id = ? AND assigned_user_id = ? LIMIT 1
-    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number }>()
+    `).bind(taskId, userInfo.tenantId, userInfo.userId).first<{ id: number; followup_id: number }>()
     if (!task?.id) return c.json({ success: false, error: 'Forbidden' }, 403)
 
-    const { results } = await c.env.DB.prepare(`
+    const { results: taskNotes } = await c.env.DB.prepare(`
       SELECT id, user_id, user_name, note_text, note_type, created_at
       FROM company_contact_followup_task_notes
       WHERE task_id = ? AND tenant_id = ?
       ORDER BY created_at DESC
       LIMIT 200
-    `).bind(taskId, userInfo.tenantId).all()
+    `).bind(taskId, userInfo.tenantId).all<{
+      id: number
+      user_id: number
+      user_name: string
+      note_text: string
+      note_type: string
+      created_at: string
+    }>()
 
-    return c.json({ success: true, data: results || [] })
+    const followupId = Number(task.followup_id)
+    let followupNotes: Array<{
+      id: number
+      user_id: number | null
+      user_name: string
+      note_text: string
+      note_type: string
+      created_at: string
+    }> = []
+    if (Number.isFinite(followupId) && followupId > 0) {
+      const { results } = await c.env.DB.prepare(`
+        SELECT n.id, n.created_by_user_id AS user_id, COALESCE(u.full_name, '') AS user_name,
+               n.note_text, n.created_at
+        FROM company_contact_followup_notes n
+        LEFT JOIN users u ON u.id = n.created_by_user_id
+        WHERE n.followup_id = ? AND n.tenant_id = ?
+        ORDER BY n.created_at DESC, n.id DESC
+        LIMIT 200
+      `).bind(followupId, userInfo.tenantId).all<{
+        id: number
+        user_id: number | null
+        user_name: string
+        note_text: string
+        created_at: string
+      }>()
+      followupNotes = (results || []).map((n) => ({
+        id: n.id,
+        user_id: n.user_id,
+        user_name: n.user_name || '',
+        note_text: n.note_text,
+        note_type: 'followup_note',
+        created_at: n.created_at,
+      }))
+    }
+
+    const merged = [
+      ...(taskNotes || []).map((n) => ({
+        id: n.id,
+        user_id: n.user_id,
+        user_name: n.user_name || '',
+        note_text: n.note_text,
+        note_type: n.note_type || 'employee_note',
+        created_at: n.created_at,
+        source: 'task' as const,
+      })),
+      ...followupNotes.map((n) => ({
+        ...n,
+        source: 'followup' as const,
+      })),
+    ]
+      .sort((a, b) => {
+        const ta = Date.parse(String(a.created_at || '')) || 0
+        const tb = Date.parse(String(b.created_at || '')) || 0
+        if (tb !== ta) return tb - ta
+        return Number(b.id) - Number(a.id)
+      })
+      .slice(0, 200)
+
+    return c.json({ success: true, data: merged })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
   }
@@ -41670,13 +42095,21 @@ app.get('/admin/my-tasks', async (c) => {
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     </head>
     <body class="bg-gray-50 min-h-screen">
-      <div class="max-w-5xl mx-auto p-6">
+      <div class="max-w-7xl mx-auto p-6">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-tasks ml-2 text-indigo-600"></i>${tasksPageTitle}</h1>
             <p class="text-gray-600 mt-2 text-sm">المهام المعيّنة لك من وحدة متابعة التواصل</p>
           </div>
-          <div class="flex gap-2 flex-wrap">
+          <div class="flex gap-2 flex-wrap items-center">
+            <div class="flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-xl p-1" title="طريقة العرض">
+              <button type="button" id="viewCardsBtn" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" title="بطاقات">
+                <i class="fas fa-th-large"></i>
+              </button>
+              <button type="button" id="viewRowsBtn" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors" title="صفوف">
+                <i class="fas fa-list"></i>
+              </button>
+            </div>
             <a href="/admin/my-no-response-tasks" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm">
               <i class="fas fa-phone-slash ml-2"></i>لا يرد
             </a>
@@ -41720,6 +42153,26 @@ app.get('/admin/my-tasks', async (c) => {
           </div>
           <div id="listStatus" class="text-sm text-gray-600 mb-3"></div>
           <div id="cards" class="space-y-3"></div>
+          <div id="rows-container" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">إجراءات</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الهاتف</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">العنوان</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الحالة</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 min-w-[8rem]">المصدر</th>
+                      <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap">الموعد</th>
+                    </tr>
+                  </thead>
+                  <tbody id="task-rows-body" class="divide-y divide-gray-50"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div id="passesPage" class="hidden">
@@ -41812,6 +42265,7 @@ app.get('/admin/my-tasks', async (c) => {
         let activeFilter = 'all';
         let activeSort = 'newest';
         let activePageTab = 'tasks';
+        let tasksViewMode = (localStorage.getItem('my_tasks_view_mode') || 'cards');
         (function applyInitialTabFromUrl() {
           var hash = (window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
           if (hash === 'passes') activePageTab = 'passes';
@@ -42010,6 +42464,27 @@ app.get('/admin/my-tasks', async (c) => {
             : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
         }
 
+        function transferLogHtml(summary) {
+          if (!summary || !summary.initial_name) return '';
+          var chain = Array.isArray(summary.chain) ? summary.chain.filter(Boolean) : [];
+          var chainText = chain.length
+            ? chain.map(function (n) { return escapeHtml(n); }).join(' → ')
+            : escapeHtml(summary.initial_name) + ' → ' + escapeHtml(summary.latest_to_name || '');
+          var dateText = summary.latest_at ? formatDate(summary.latest_at) : '';
+          var titleParts = Array.isArray(summary.hops)
+            ? summary.hops.map(function (h) {
+                return (h.from_name || '') + ' → ' + (h.to_name || '') + (h.created_at ? ' · ' + h.created_at : '');
+              }).join(' | ')
+            : '';
+          return (
+            '<div class="mt-2 text-[11px] leading-tight text-slate-600" title="' + escapeHtml(titleParts) + '">' +
+              '<span class="text-orange-700 font-semibold whitespace-nowrap"><i class="fas fa-exchange-alt ml-1"></i>تحويل لا يرد:</span> ' +
+              '<span class="text-slate-700">' + chainText + '</span>' +
+              (dateText ? ' <span class="text-slate-400">· ' + escapeHtml(dateText) + '</span>' : '') +
+            '</div>'
+          );
+        }
+
         function statusBadge(task) {
           return isCompleted(task)
             ? '<span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">مكتملة</span>'
@@ -42153,6 +42628,97 @@ app.get('/admin/my-tasks', async (c) => {
           document.getElementById('passesPage').classList.toggle('hidden', activePageTab !== 'passes');
         }
 
+        function buildEnrollHref(task) {
+          var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
+            '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim()) +
+            '&task_id=' + encodeURIComponent(String(task.id));
+          var enrollSourceLabel = followupSourceLabel(task);
+          if (enrollSourceLabel) {
+            enrollHref +=
+              '&enrollment_source=affiliate' +
+              '&affiliate_label=' + encodeURIComponent(enrollSourceLabel);
+          }
+          return enrollHref;
+        }
+
+        function updateTasksViewToggleButtons() {
+          var cardsBtn = document.getElementById('viewCardsBtn');
+          var rowsBtn = document.getElementById('viewRowsBtn');
+          if (!cardsBtn || !rowsBtn) return;
+          if (tasksViewMode === 'rows') {
+            cardsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-800 hover:bg-white';
+            rowsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-white text-gray-800 shadow-sm';
+          } else {
+            cardsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-white text-gray-800 shadow-sm';
+            rowsBtn.className = 'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-gray-500 hover:text-gray-800 hover:bg-white';
+          }
+        }
+
+        function switchTasksView(mode) {
+          tasksViewMode = mode === 'rows' ? 'rows' : 'cards';
+          localStorage.setItem('my_tasks_view_mode', tasksViewMode);
+          updateTasksViewToggleButtons();
+          var cardsEl = document.getElementById('cards');
+          var rowsEl = document.getElementById('rows-container');
+          if (!cardsEl || !rowsEl) return;
+          if (tasksViewMode === 'rows') {
+            cardsEl.classList.add('hidden');
+            rowsEl.classList.remove('hidden');
+          } else {
+            rowsEl.classList.add('hidden');
+            cardsEl.classList.remove('hidden');
+          }
+          applySearchFilter();
+        }
+
+        function renderTaskList(tasks) {
+          if (tasksViewMode === 'rows') {
+            renderTaskRows(tasks);
+          } else {
+            renderTasks(tasks);
+          }
+        }
+
+        function renderTaskRows(tasks) {
+          var tbody = document.getElementById('task-rows-body');
+          if (!tbody) return;
+          if (!Array.isArray(tasks) || !tasks.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">لا توجد مهام معيّنة لك في هذا القسم.</td></tr>';
+            return;
+          }
+          tbody.innerHTML = tasks.map(function (task) {
+            var enrollHref = buildEnrollHref(task);
+            var outId = task.outgoing_pass_request_id;
+            var passBadge = (outId != null && outId !== '' && Number(outId) > 0)
+              ? ' <span class="text-[10px] font-bold text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded">تمرير معلّق</span>'
+              : '';
+            var scheduleText = escapeHtml(task.scheduled_at_gregorian || '-');
+            if (task.scheduled_at_hijri) {
+              scheduleText += '<div class="text-[11px] text-gray-400 mt-0.5">' + escapeHtml(task.scheduled_at_hijri) + '</div>';
+            }
+            return (
+              '<tr class="hover:bg-gray-50 transition-colors" data-task-id="' + escapeHtml(String(task.id)) + '">' +
+                '<td class="px-3 py-3 whitespace-nowrap text-right align-middle">' +
+                  '<a href="' + enrollHref + '" class="inline-flex items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded text-xs font-medium transition-colors whitespace-nowrap">' +
+                    '<i class="fas fa-user-plus"></i><span>تسجيل عميل</span></a>' +
+                '</td>' +
+                '<td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">' +
+                  escapeHtml(task.customer_name || '-') + passBadge +
+                '</td>' +
+                '<td class="px-4 py-3 text-gray-700 whitespace-nowrap">' +
+                  '<div class="inline-flex items-center gap-2"><span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span>' +
+                  whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                '</td>' +
+                '<td class="px-4 py-3 text-gray-800 max-w-[14rem]"><div class="truncate" title="' + escapeHtml(task.task_title || '') + '">' + escapeHtml(task.task_title || '-') + '</div></td>' +
+                '<td class="px-4 py-3 whitespace-nowrap"><div class="flex flex-wrap gap-1">' + priorityBadge(task.priority) + statusBadge(task) + '</div></td>' +
+                '<td class="px-4 py-3">' + (followupSourceBadgeHtml(task) || '<span class="text-gray-400">-</span>') + '</td>' +
+                '<td class="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">' + scheduleText + '</td>' +
+              '</tr>'
+            );
+          }).join('');
+          bindWhatsAppButtons(tbody);
+        }
+
         function renderTasks(tasks) {
           const root = document.getElementById('cards');
           if (!Array.isArray(tasks) || !tasks.length) {
@@ -42160,18 +42726,6 @@ app.get('/admin/my-tasks', async (c) => {
             return;
           }
           root.innerHTML = tasks.map(function (task) {
-            var hasNote = task.employee_note_text != null && String(task.employee_note_text).trim() !== '';
-            var noteBlock =
-              '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
-              '<div class="flex items-center justify-between gap-2">' +
-              '<div class="text-xs font-medium text-gray-700"><i class="fas fa-note-sticky ml-1 text-amber-600"></i>ملاحظتك على المهمة</div>' +
-              '<button type="button" data-note="' + task.id + '" class="text-sm font-medium text-amber-800 underline">ملاحظة</button>' +
-              '</div>' +
-              (hasNote
-                ? '<div class="mt-2 text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
-                  (task.employee_note_updated_at ? '<div class="mt-1 text-xs text-gray-400">' + escapeHtml(formatDate(task.employee_note_updated_at)) + '</div>' : '')
-                : '<div class="mt-2 text-sm text-gray-500">لا توجد ملاحظة محفوظة.</div>') +
-              '</div>';
             var historyBlock =
               '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
               '<button type="button" data-history="' + task.id + '" class="flex items-center justify-between w-full text-xs font-medium text-gray-700">' +
@@ -42182,19 +42736,7 @@ app.get('/admin/my-tasks', async (c) => {
               '<div class="text-xs text-gray-400">جاري التحميل...</div>' +
               '</div>' +
               '</div>';
-            var enrollHref = '/admin/customers/add?full_name=' + encodeURIComponent(String(task.customer_name || '').trim()) +
-              '&phone=' + encodeURIComponent(String(task.customer_phone || '').trim()) +
-              '&task_id=' + encodeURIComponent(String(task.id));
-            var enrollSourceLabel = followupSourceLabel(task);
-            if (enrollSourceLabel) {
-              enrollHref +=
-                '&enrollment_source=affiliate' +
-                '&affiliate_label=' + encodeURIComponent(enrollSourceLabel);
-            }
-            var enrollNoteText = String(task.employee_note_text || '').trim();
-            if (enrollNoteText) {
-              enrollHref += '&notes=' + encodeURIComponent(enrollNoteText);
-            }
+            var enrollHref = buildEnrollHref(task);
             var enrollCustomerBtn =
               '<a href="' + enrollHref + '" class="inline-flex items-center justify-center w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg">' +
               '<i class="fas fa-user-plus ml-2"></i>تسجيل عميل</a>';
@@ -42239,7 +42781,7 @@ app.get('/admin/my-tasks', async (c) => {
                     (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
                   '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
                 '</div>' +
-                noteBlock +
+                transferLogHtml(task.transfer_summary) +
                 historyBlock +
                 passBlock +
                 actionBtn +
@@ -42249,23 +42791,6 @@ app.get('/admin/my-tasks', async (c) => {
 
           bindWhatsAppButtons(root);
 
-          root.querySelectorAll('[data-note]').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-              var tid = btn.getAttribute('data-note');
-              var task = (Array.isArray(tasks) ? tasks : []).find(function (t) { return String(t.id) === String(tid); });
-              var existing = task && task.employee_note_text != null ? String(task.employee_note_text) : '';
-              openNoteModal({
-                title: 'ملاحظة للمهمة',
-                hint: '',
-                placeholder: 'اكتب ملاحظتك هنا...',
-                initialValue: existing || '',
-                required: true
-              }).then(function (text) {
-                if (text == null) return;
-                patchTaskNote(tid, text);
-              });
-            });
-          });
           root.querySelectorAll('[data-pass-submit]').forEach(function (btn) {
             btn.addEventListener('click', function () {
               var tid = btn.getAttribute('data-pass-submit');
@@ -42403,7 +42928,7 @@ app.get('/admin/my-tasks', async (c) => {
         function applySearchFilter() {
           var q = String(document.getElementById('taskSearchInput').value || '').trim().toLowerCase();
           if (!q) {
-            renderTasks(allTasks);
+            renderTaskList(allTasks);
             return;
           }
           function localPhoneDigits(raw) {
@@ -42425,12 +42950,18 @@ app.get('/admin/my-tasks', async (c) => {
             }
             return false;
           });
-          renderTasks(filtered);
+          renderTaskList(filtered);
         }
 
         async function loadTasks() {
           setListStatus('جاري التحميل...', 'neutral');
-          document.getElementById('cards').innerHTML = '';
+          var cardsEl = document.getElementById('cards');
+          var tbody = document.getElementById('task-rows-body');
+          if (tasksViewMode === 'rows') {
+            if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">جاري التحميل...</td></tr>';
+          } else if (cardsEl) {
+            cardsEl.innerHTML = '';
+          }
           try {
             var params = new URLSearchParams();
             if (activeFilter === 'pending') params.set('status', activeFilter);
@@ -42438,7 +42969,8 @@ app.get('/admin/my-tasks', async (c) => {
             const res = await axios.get('/api/my-followup-tasks?' + params.toString());
             if (res && res.data && res.data.success === false) {
               setListStatus(String(res.data.error || 'تعذر تحميل المهام'), 'error');
-              document.getElementById('cards').innerHTML = '';
+              if (cardsEl) cardsEl.innerHTML = '';
+              if (tbody) tbody.innerHTML = '';
               return;
             }
             allTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
@@ -42454,7 +42986,8 @@ app.get('/admin/my-tasks', async (c) => {
             } else {
               setListStatus(String(errBody || 'تعذر تحميل المهام'), 'error');
             }
-            document.getElementById('cards').innerHTML = '';
+            if (cardsEl) cardsEl.innerHTML = '';
+            if (tbody) tbody.innerHTML = '';
           }
         }
 
@@ -42484,17 +43017,6 @@ app.get('/admin/my-tasks', async (c) => {
           }
         }
 
-        async function patchTaskNote(id, noteText) {
-          if (!id) return;
-          try {
-            await axios.patch('/api/my-followup-tasks/' + id, { note_text: noteText }, { headers: { 'Content-Type': 'application/json' } });
-            await Promise.all([loadTasks(), loadIncomingPasses()]);
-          } catch (e) {
-            var msg = (e.response && e.response.data && e.response.data.error) ? e.response.data.error : 'تعذر حفظ الملاحظة';
-            alert(msg);
-          }
-        }
-
         async function loadNoteHistory(taskId, containerEl) {
           try {
             const res = await axios.get('/api/my-followup-tasks/' + taskId + '/notes');
@@ -42506,6 +43028,10 @@ app.get('/admin/my-tasks', async (c) => {
             containerEl.innerHTML = notes.map(function(n) {
               var typeBadge = n.note_type === 'pass_note'
                 ? '<span class="bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة تمرير</span>'
+                : n.note_type === 'auto_transfer'
+                ? '<span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded text-xs font-medium">تحويل لا يرد</span>'
+                : n.note_type === 'followup_note' || n.source === 'followup'
+                ? '<span class="bg-fuchsia-100 text-fuchsia-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة متابعة</span>'
                 : '<span class="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs font-medium">ملاحظة مهمة</span>';
               return '<div class="py-2 border-b border-gray-100 last:border-0">' +
                 '<div class="flex flex-wrap items-center gap-2 mb-1">' +
@@ -42577,6 +43103,13 @@ app.get('/admin/my-tasks', async (c) => {
         });
 
         setActiveFilterButtons();
+        updateTasksViewToggleButtons();
+        if (tasksViewMode === 'rows') {
+          document.getElementById('cards').classList.add('hidden');
+          document.getElementById('rows-container').classList.remove('hidden');
+        }
+        document.getElementById('viewCardsBtn').addEventListener('click', function () { switchTasksView('cards'); });
+        document.getElementById('viewRowsBtn').addEventListener('click', function () { switchTasksView('rows'); });
         (async function init() {
           // Prefill search from ?q= (panel search deep-link by task phone).
           var q = String(new URLSearchParams(window.location.search).get('q') || '').trim();
@@ -42734,6 +43267,27 @@ app.get('/admin/my-no-response-tasks', async (c) => {
             : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
         }
 
+        function transferLogHtml(summary) {
+          if (!summary || !summary.initial_name) return '';
+          var chain = Array.isArray(summary.chain) ? summary.chain.filter(Boolean) : [];
+          var chainText = chain.length
+            ? chain.map(function (n) { return escapeHtml(n); }).join(' → ')
+            : escapeHtml(summary.initial_name) + ' → ' + escapeHtml(summary.latest_to_name || '');
+          var dateText = summary.latest_at ? formatDate(summary.latest_at) : '';
+          var titleParts = Array.isArray(summary.hops)
+            ? summary.hops.map(function (h) {
+                return (h.from_name || '') + ' → ' + (h.to_name || '') + (h.created_at ? ' · ' + h.created_at : '');
+              }).join(' | ')
+            : '';
+          return (
+            '<div class="mt-2 text-[11px] leading-tight text-slate-600" title="' + escapeHtml(titleParts) + '">' +
+              '<span class="text-orange-700 font-semibold whitespace-nowrap"><i class="fas fa-exchange-alt ml-1"></i>تحويل لا يرد:</span> ' +
+              '<span class="text-slate-700">' + chainText + '</span>' +
+              (dateText ? ' <span class="text-slate-400">· ' + escapeHtml(dateText) + '</span>' : '') +
+            '</div>'
+          );
+        }
+
         function setStatus(msg, type) {
           var el = document.getElementById('nrListStatus');
           el.textContent = msg || '';
@@ -42777,6 +43331,7 @@ app.get('/admin/my-no-response-tasks', async (c) => {
                     (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
                   '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
                 '</div>' +
+                transferLogHtml(task.transfer_summary) +
                 countdown +
                 noteBlock +
                 '<div class="mt-3 flex flex-wrap gap-2">' +
@@ -46979,9 +47534,9 @@ app.get('/admin/follow-ups', async (c) => {
               <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
               <input type="text" id="followupSearchInput" placeholder="بحث بالاسم أو الهاتف أو المصدر..."
                 class="w-full pr-9 pl-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white"
-                onkeydown="if(event.key==='Enter'){event.preventDefault();applyFollowupClientFilters();}">
+                onkeydown="if(event.key==='Enter'){event.preventDefault();runFollowupSearch();}">
             </div>
-            <button type="button" onclick="applyFollowupClientFilters()" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
+            <button type="button" onclick="runFollowupSearch()" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap">
               <i class="fas fa-search ml-1"></i>بحث
             </button>
             <button type="button" onclick="toggleFollowupFilters()" class="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-600 hover:text-orange-600 bg-white transition-colors whitespace-nowrap">
@@ -47502,6 +48057,27 @@ app.get('/admin/follow-ups', async (c) => {
             : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
         }
 
+        function transferLogHtml(summary) {
+          if (!summary || !summary.initial_name) return '';
+          const chain = Array.isArray(summary.chain) ? summary.chain.filter(Boolean) : [];
+          const chainText = chain.length
+            ? chain.map((n) => escapeHtml(n)).join(' → ')
+            : escapeHtml(summary.initial_name) + ' → ' + escapeHtml(summary.latest_to_name || '');
+          const dateText = summary.latest_at ? formatDate(summary.latest_at) : '';
+          const titleParts = Array.isArray(summary.hops)
+            ? summary.hops.map((h) =>
+                (h.from_name || '') + ' → ' + (h.to_name || '') + (h.created_at ? ' · ' + h.created_at : '')
+              ).join(' | ')
+            : '';
+          return (
+            '<div class="mt-2 text-[11px] leading-tight text-slate-600" title="' + escapeHtml(titleParts) + '">' +
+              '<span class="text-orange-700 font-semibold whitespace-nowrap"><i class="fas fa-exchange-alt ml-1"></i>تحويل لا يرد:</span> ' +
+              '<span class="text-slate-700">' + chainText + '</span>' +
+              (dateText ? ' <span class="text-slate-400">· ' + escapeHtml(dateText) + '</span>' : '') +
+            '</div>'
+          );
+        }
+
         function renderNotes(notes) {
           const history = document.getElementById('notesHistory');
           if (!Array.isArray(notes) || !notes.length) {
@@ -47793,6 +48369,10 @@ app.get('/admin/follow-ups', async (c) => {
             if (filterParams.link && filterParams.link !== 'all') api.searchParams.set('followupLinkFilter', filterParams.link);
             if (filterParams.pr && filterParams.pr !== 'all') api.searchParams.set('followupPriorityFilter', filterParams.pr);
             if (filterParams.status && filterParams.status !== 'active') api.searchParams.set('followupStatusFilter', filterParams.status);
+            const searchQ = ((document.getElementById('followupSearchInput') || {}).value || '').trim();
+            if (searchQ) api.searchParams.set('q', searchQ);
+            const followupIdParam = String(new URLSearchParams(window.location.search).get('followupId') || '').trim();
+            if (followupIdParam && /^\\d+$/.test(followupIdParam)) api.searchParams.set('followupId', followupIdParam);
             const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             if (!rows.length) {
@@ -47838,6 +48418,7 @@ app.get('/admin/follow-ups', async (c) => {
                   <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
                   <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
                   <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                  \${transferLogHtml(row.transfer_summary)}
                   <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
                     <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
                   </div>
@@ -47981,6 +48562,9 @@ app.get('/admin/follow-ups', async (c) => {
         function applyFollowupClientFilters() {
           const searchVal = ((document.getElementById('followupSearchInput') || {}).value || '').trim().toLowerCase();
           const empVal = ((document.getElementById('followupEmployeeFilter') || {}).value || 'all');
+          // When deep-linked by id, the API already returned the exact row — don't hide it
+          // if the phone display format doesn't perfectly match the search box.
+          const deepLinkId = String(new URLSearchParams(window.location.search).get('followupId') || '').trim();
 
           // Local Saudi mobile core (strip 966 / leading 0) so 9665…, 05…, and 5… all match.
           function localPhoneDigits(raw) {
@@ -47992,7 +48576,8 @@ app.get('/admin/follow-ups', async (c) => {
             return d;
           }
 
-          function matchesSearch(name, phone, source) {
+          function matchesSearch(name, phone, source, followupId) {
+            if (deepLinkId && String(followupId) === deepLinkId) return true;
             if (!searchVal) return true;
             if (name.includes(searchVal) || phone.includes(searchVal) || source.includes(searchVal)) return true;
             const qDigits = localPhoneDigits(searchVal);
@@ -48008,7 +48593,8 @@ app.get('/admin/follow-ups', async (c) => {
               const phone = (card.getAttribute('data-customer-phone') || '').toLowerCase();
               const source = (card.getAttribute('data-source-label') || '').toLowerCase();
               const assigned = (card.getAttribute('data-assigned') || '').trim();
-              const matchSearch = matchesSearch(name, phone, source);
+              const fid = card.getAttribute('data-followup-id') || '';
+              const matchSearch = matchesSearch(name, phone, source, fid);
               const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
               card.style.display = (matchSearch && matchEmp) ? '' : 'none';
             });
@@ -48021,11 +48607,44 @@ app.get('/admin/follow-ups', async (c) => {
               const phone = (row.getAttribute('data-customer-phone') || '').toLowerCase();
               const source = (row.getAttribute('data-source-label') || '').toLowerCase();
               const assigned = (row.getAttribute('data-assigned') || '').trim();
-              const matchSearch = matchesSearch(name, phone, source);
+              const fid = row.getAttribute('data-followup-id') || '';
+              const matchSearch = matchesSearch(name, phone, source, fid);
               const matchEmp = empVal === 'all' || (empVal === 'غير مخصص' && !assigned) || assigned === empVal;
               row.style.display = (matchSearch && matchEmp) ? '' : 'none';
             });
           }
+        }
+
+        function syncFollowupSearchQueryInUrl() {
+          const params = new URLSearchParams(window.location.search);
+          const searchQ = ((document.getElementById('followupSearchInput') || {}).value || '').trim();
+          if (searchQ) params.set('q', searchQ);
+          else params.delete('q');
+          const qs = params.toString();
+          window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
+        }
+
+        function runFollowupSearch() {
+          // Manual search replaces an id deep-link — clear followupId so API uses q=.
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('followupId')) {
+            params.delete('followupId');
+            const qs = params.toString();
+            window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
+          }
+          syncFollowupSearchQueryInUrl();
+          return loadFollowUps().then(() => applyFollowupClientFilters());
+        }
+
+        function highlightFollowupFromUrl() {
+          const fid = String(new URLSearchParams(window.location.search).get('followupId') || '').trim();
+          if (!fid || !/^\\d+$/.test(fid)) return;
+          const card = document.querySelector('#cards [data-followup-id="' + fid + '"]');
+          const row = document.querySelector('#followup-rows-body tr[data-followup-id="' + fid + '"]');
+          const el = card || row;
+          if (!el) return;
+          el.classList.add('ring-2', 'ring-orange-400', 'ring-offset-2');
+          try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
         }
 
         function resetFollowupFilters() {
@@ -48034,10 +48653,12 @@ app.get('/admin/follow-ups', async (c) => {
           const empEl = document.getElementById('followupEmployeeFilter');
           if (empEl) empEl.value = 'all';
           setFollowupFilterParamsInUrl({ link: 'all', pr: 'all', status: 'active' });
-          // Drop deep-link search query from the URL as well.
+          // Drop deep-link search / id from the URL as well.
           const params = new URLSearchParams(window.location.search);
-          if (params.has('q')) {
-            params.delete('q');
+          let dirty = false;
+          if (params.has('q')) { params.delete('q'); dirty = true; }
+          if (params.has('followupId')) { params.delete('followupId'); dirty = true; }
+          if (dirty) {
             const qs = params.toString();
             window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
           }
@@ -48440,6 +49061,10 @@ app.get('/admin/follow-ups', async (c) => {
             if (filterParams.link && filterParams.link !== 'all') api.searchParams.set('followupLinkFilter', filterParams.link);
             if (filterParams.pr && filterParams.pr !== 'all') api.searchParams.set('followupPriorityFilter', filterParams.pr);
             if (filterParams.status && filterParams.status !== 'active') api.searchParams.set('followupStatusFilter', filterParams.status);
+            const searchQ = ((document.getElementById('followupSearchInput') || {}).value || '').trim();
+            if (searchQ) api.searchParams.set('q', searchQ);
+            const followupIdParam = String(new URLSearchParams(window.location.search).get('followupId') || '').trim();
+            if (followupIdParam && /^\\d+$/.test(followupIdParam)) api.searchParams.set('followupId', followupIdParam);
             const res = await axios.get(api.pathname + api.search);
             const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
             followupCurrentRows = rows;
@@ -48490,6 +49115,7 @@ app.get('/admin/follow-ups', async (c) => {
                     <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
                     <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
                     <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                    \${transferLogHtml(row.transfer_summary)}
                     <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
                       <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
                     </div>
@@ -48669,7 +49295,10 @@ app.get('/admin/follow-ups', async (c) => {
           if (searchEl && q) searchEl.value = q;
         })();
 
-        loadFollowupAssignableStaff().then(() => loadFollowUps().then(() => applyFollowupClientFilters()));
+        loadFollowupAssignableStaff().then(() => loadFollowUps().then(() => {
+          applyFollowupClientFilters();
+          highlightFollowupFromUrl();
+        }));
 
         ${actionsDropdownScript}
       </script>
@@ -49033,17 +49662,25 @@ async function processCustomerReminders(db: D1Database): Promise<{ created: numb
   return { created, skipped }
 }
 
-// Manual trigger endpoint (admin only) for testing without waiting for the cron.
+/** Allow companion cron Worker (CRON_SECRET) or admin session (roles 1/2). */
+async function authorizeCronOrAdmin(c: { env: Bindings; req: { header: (name: string) => string | undefined }; json: (body: unknown, status?: number) => Response }): Promise<Response | null> {
+  const provided = extractCronSecretFromHeaders({
+    get: (name) => c.req.header(name) ?? null,
+  })
+  if (isValidCronSecret(provided, c.env.CRON_SECRET)) return null
+
+  const userInfo = await getUserInfo(c as any)
+  if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+  const role = normalizeRoleId(userInfo.roleId)
+  if (role !== 1 && role !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+  return null
+}
+
+// Trigger endpoint: admin session or companion cron Worker (CRON_SECRET).
 app.post('/api/customer-reminders/trigger', async (c) => {
   try {
-    const userInfo = await getUserInfo(c)
-    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-
-    // Only role 1 (super admin) or role 2 (tenant admin) may trigger this.
-    const role = normalizeRoleId(userInfo.roleId)
-    if (role !== 1 && role !== 2) {
-      return c.json({ success: false, error: 'Forbidden' }, 403)
-    }
+    const denied = await authorizeCronOrAdmin(c)
+    if (denied) return denied
 
     const result = await processCustomerReminders(c.env.DB)
     return c.json({ success: true, ...result })
@@ -49089,30 +49726,8 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     const tenantId = row.tenant_id
 
     if (!tenantStaffCache.has(tenantId)) {
-      // Same staff query as follow-up CSV import (roles 4/5/6, ordered by name)
-      const { results: staffRows } = await db.prepare(`
-        SELECT u.id, u.full_name
-        FROM users u
-        WHERE u.is_active = 1
-          AND (
-            (u.role_id IN (4, 6, 14) AND u.tenant_id = ?)
-            OR (
-              u.role_id IN (5, 15, 6)
-              AND (
-                u.tenant_id = ?
-                OR EXISTS (SELECT 1 FROM banks b WHERE b.id = u.assigned_bank_id AND b.tenant_id = ?)
-              )
-            )
-          )
-        ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC
-      `).bind(tenantId, tenantId, tenantId).all<{ id: number; full_name: string }>()
-
-      // Deduplicate (role 6 can appear twice from both clauses)
-      const seen = new Set<number>()
-      const dedupedStaff: { id: number; full_name: string }[] = []
-      for (const s of (staffRows || [])) {
-        if (!seen.has(s.id)) { seen.add(s.id); dedupedStaff.push(s) }
-      }
+      // Employees only (4/6/14) — bank agents (5/15) are excluded from auto no-response transfers.
+      const dedupedStaff = await listNoResponseTransferStaff(db, tenantId)
       tenantStaffCache.set(tenantId, dedupedStaff)
       for (const s of dedupedStaff) userNameCache.set(s.id, s.full_name || '')
 
@@ -49127,21 +49742,12 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     if (!staff.length) { skipped++; continue }
 
     const staffIds = staff.map((s) => s.id)
-
-    // Prefer staff other than the current assignee; fall back to full list if only one person
-    const preferred = staffIds.filter((id) => id !== row.assigned_user_id)
-    const eligible = preferred.length ? preferred : staffIds
-    if (!eligible.length) { skipped++; continue }
-
-    // Round-robin pick from eligible using the follow-up cursor
-    const lastId = tenantStateCache.get(tenantId) ?? null
-    const lastIdx = lastId != null ? staffIds.indexOf(lastId) : -1
-    let nextId: number | null = null
-    for (let i = 1; i <= staffIds.length; i++) {
-      const candidate = staffIds[(lastIdx + i) % staffIds.length]
-      if (eligible.includes(candidate)) { nextId = candidate; break }
-    }
-    if (nextId == null) nextId = eligible[0]
+    const nextId = pickNextNoResponseAssignee(
+      staffIds,
+      row.assigned_user_id,
+      tenantStateCache.get(tenantId) ?? null,
+    )
+    if (nextId == null) { skipped++; continue }
 
     // Transfer the task
     await db.prepare(`
@@ -49156,7 +49762,7 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       WHERE id = ? AND tenant_id = ?
     `).bind(row.followup_id, tenantId).run()
 
-    // Audit trail: note visible to anyone reviewing the task
+    // Audit trail: note visible on my-tasks / follow-ups cards (requires migration 0145)
     const fromName = userNameCache.get(row.assigned_user_id) || String(row.assigned_user_id)
     const toName = userNameCache.get(nextId) || String(nextId)
     try {
@@ -49168,7 +49774,9 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
         row.task_id, tenantId,
         `تم تحويل المهمة تلقائياً من ${fromName} إلى ${toName} بسبب عدم الرد خلال 48 ساعة`
       ).run()
-    } catch { /* note table may be missing in test envs */ }
+    } catch (noteErr) {
+      console.error('auto_transfer note insert failed:', noteErr)
+    }
 
     const taskLabel =
       String(row.task_title || row.customer_name || '').trim() || `مهمة #${row.task_id}`
@@ -49212,13 +49820,11 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
   return { transferred, skipped }
 }
 
-// Manual trigger for admins to test without waiting for cron.
+// Trigger endpoint: admin session or companion cron Worker (CRON_SECRET).
 app.post('/api/followup-no-response/trigger', async (c) => {
   try {
-    const userInfo = await getUserInfo(c)
-    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
-    const role = normalizeRoleId(userInfo.roleId)
-    if (role !== 1 && role !== 2) return c.json({ success: false, error: 'Forbidden' }, 403)
+    const denied = await authorizeCronOrAdmin(c)
+    if (denied) return denied
     const result = await processNoResponseTransfers(c.env.DB)
     return c.json({ success: true, ...result })
   } catch (error: any) {

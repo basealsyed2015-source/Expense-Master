@@ -34,11 +34,13 @@ function renderPhaseNoteRow(note: any): string {
   const noteText = String(note.note_text || '').trim()
   const performer = String(note.performed_by_name || '').trim() || '—'
   const when = formatKsaDateTime(note.created_at)
+  const isAds = note.source === 'ads'
   return `
-    <div class="phase-note-item">
+    <div class="phase-note-item${isAds ? ' phase-note-item--ads' : ''}">
       <div class="phase-note-meta">
         <span class="phase-note-author"><i class="fas fa-user ml-1"></i>${escapeHtml(performer)}</span>
         <span class="phase-note-time"><i class="fas fa-clock ml-1"></i>${escapeHtml(when)}</span>
+        ${isAds ? `<span class="ads-note-badge"><i class="fas fa-bullhorn ml-1"></i>إعلانات</span>` : ''}
       </div>
       <div class="phase-note-text">${escapeHtml(noteText || '—')}</div>
     </div>
@@ -326,6 +328,24 @@ const sharedStyles = `
     background: #fffbeb;
     border-right: 3px solid #f59e0b;
   }
+  .phase-note-item--ads {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    border-right-color: #3b82f6;
+  }
+  .ads-note-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+    letter-spacing: 0.01em;
+  }
   .phase-note-meta {
     display: flex;
     flex-wrap: wrap;
@@ -336,6 +356,7 @@ const sharedStyles = `
     color: #78716c;
   }
   .phase-note-author { font-weight: 600; color: #92400e; }
+  .phase-note-item--ads .phase-note-author { color: #1d4ed8; }
   .phase-note-time { color: #6b7280; }
   .phase-note-text {
     font-size: 0.75rem;

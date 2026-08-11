@@ -4,10 +4,10 @@
   "compatibility_date": "2024-12-14",
   "pages_build_output_dir": "./dist",
   "compatibility_flags": ["nodejs_compat"],
-  // Pages Functions do not run Worker [triggers].crons from wrangler.toml.
-  // The `scheduled` export in src/index.tsx is kept for Worker-compatible deploys;
-  // for Pages, trigger reminders via POST /api/customer-reminders/trigger (admin)
-  // or an external scheduler hitting that endpoint.
+  // Pages Functions do not run Worker [triggers].crons.
+  // Production schedule: companion Worker `tamweel-cron` (wrangler.cron.toml) POSTs
+  // /api/customer-reminders/trigger and /api/followup-no-response/trigger with CRON_SECRET.
+  // Set the same secret on Pages + the cron Worker (see wrangler.cron.toml header comments).
   //
   // Perf flags: leave OFF in production (defaults below). Set to "1" only when debugging.
   "vars": {

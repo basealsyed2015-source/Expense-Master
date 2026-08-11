@@ -14,6 +14,7 @@
     "db:docker": "docker compose -f docker-compose.local.yml run --rm db",
     "db:docker:reset": "docker compose -f docker-compose.local.yml run --rm -e FORCE_DB_RESET=1 db",
     "deploy:chat-do": "wrangler deploy -c wrangler.chat-do.toml",
+    "deploy:cron": "wrangler deploy -c wrangler.cron.toml",
     "deploy": "npm run build && wrangler pages deploy dist --project-name tamweel-calc-prod --branch=\"ZAT  _developer\" --commit-dirty=true",
     "test": "node --experimental-strip-types --test tests/**/*.test.ts"
   },

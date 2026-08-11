@@ -19,16 +19,19 @@ bucket_name = "tamweel-calc-r2"
 # Company chat DO: deployed via wrangler.chat-do.toml; Pages binds in wrangler.jsonc (script_name).
 # Do not add durable_objects here — wrangler pages deploy uses wrangler.jsonc, not this file.
 #
-# NOTE: Cloudflare Pages does NOT run [triggers].crons below. The scheduled handler in
-# src/index.tsx only runs for Worker deploys. For Pages, use POST /api/customer-reminders/trigger
-# (roles 1/2) or an external cron hitting that endpoint.
+# Cron: Cloudflare Pages does NOT run [triggers].crons. Production schedule lives on the
+# companion Worker: wrangler.cron.toml (`npx wrangler deploy -c wrangler.cron.toml`).
+# Keep crons empty here so an accidental `wrangler deploy` of this legacy Worker config
+# does not re-attach a stale cron to `tamweel-calc`.
 
 # Forgot-password emails use Resend (https://resend.com).
 # This repo deploys as Cloudflare Pages — use Pages secrets, not Workers secrets:
 #   wrangler pages secret put RESEND_API_KEY --project-name <your-pages-project>
 # Optional: add plain-text var EMAIL_FROM, e.g. "Tamweel <noreply@your-verified-domain.com>"
 # (default without EMAIL_FROM is Resend's onboarding@resend.dev — limited to testing)
+# Cron companion also needs:
+#   wrangler pages secret put CRON_SECRET --project-name tamweel-calc-prod
 
 [triggers]
-crons = ["0 6 * * *"]
+crons = []
 

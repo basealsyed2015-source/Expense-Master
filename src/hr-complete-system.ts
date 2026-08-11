@@ -663,6 +663,30 @@ export const hrEmployeeViewPage = `<!DOCTYPE html>
                                 <h3 class="text-lg font-bold text-gray-700 mb-4">ملاحظات</h3>
                                 <p class="text-gray-700">\${emp.notes || 'لا توجد ملاحظات'}</p>
                             </div>
+
+                            <div class="bg-gray-50 rounded-lg p-4 md:col-span-2">
+                                <h3 class="text-lg font-bold text-gray-700 mb-4">المستندات</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    \${(() => {
+                                      const idLabel = emp.id_type === 'iqama' ? 'إقامة' : 'هوية';
+                                      const idNum = emp.id_type === 'iqama' ? (emp.iqama_number || '-') : (emp.national_id || '-');
+                                      const idExp = emp.id_type === 'iqama' ? emp.iqama_expiry : emp.national_id_expiry;
+                                      const docs = [
+                                        { title: idLabel, url: emp.id_document_url, meta: idNum + (idExp ? ' · ينتهي ' + idExp : '') },
+                                        { title: 'تأمين طبي', url: emp.medical_insurance_document_url, meta: emp.medical_insurance_expiry ? ('ينتهي ' + emp.medical_insurance_expiry) : '' },
+                                        { title: 'تأمينات اجتماعية', url: emp.gosi_document_url, meta: emp.gosi_document_expiry ? ('ينتهي ' + emp.gosi_document_expiry) : '' },
+                                      ];
+                                      return docs.map(d => \`
+                                        <div class="border rounded-lg p-3 bg-white">
+                                          <div class="font-bold text-gray-800 mb-1">\${d.title}</div>
+                                          <div class="text-xs text-gray-500 mb-2">\${d.meta || '—'}</div>
+                                          \${d.url
+                                            ? \`<a href="\${d.url}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-semibold"><i class="fas fa-external-link-alt"></i> عرض المستند</a>\`
+                                            : '<span class="text-sm text-gray-400">لم يُرفع</span>'}
+                                        </div>\`).join('');
+                                    })()}
+                                </div>
+                            </div>
                         </div>
                     \`;
                 } else {

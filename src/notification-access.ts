@@ -797,6 +797,42 @@ export async function explainContractCreateDenial(
     return null
   }
 
+  const hasActiveFrWithBankAgent = async (): Promise<boolean> => {
+    const run = async (frActiveSql: string) =>
+      await db
+        .prepare(
+          `SELECT 1 AS ok FROM financing_requests
+           WHERE customer_id = ? AND tenant_id = ?
+             AND assigned_bank_agent_id IS NOT NULL
+             AND assigned_bank_agent_id != 0
+             AND ${frActiveSql}
+           LIMIT 1`
+        )
+        .bind(customerId, tenantId)
+        .first<{ ok: number }>()
+    try {
+      return (await run('COALESCE(is_completed, 0) = 0')) != null
+    } catch (e: unknown) {
+      const msg = String((e as { message?: string })?.message || e || '')
+      if (/no such column:\s*is_completed/i.test(msg)) {
+        return (await run('1=1')) != null
+      }
+      throw e
+    }
+  }
+
+  // Contracts that enter awaiting-bank-agent need an assignee on the FR up front —
+  // otherwise the queue shows no agent name and nobody can approve.
+  const requireFrBankAgentOrDeny = async (): Promise<string | null> => {
+    if (!(await hasActiveFr(false))) {
+      return 'لا يوجد طلب تمويل نشط لهذا العميل'
+    }
+    if (!(await hasActiveFrWithBankAgent())) {
+      return 'لا يمكن إنشاء العقد: طلب التمويل النشط غير مُسند لممثل بنك. عيّن ممثل البنك على طلب التمويل أولاً'
+    }
+    return null
+  }
+
   if (roleId === 4) {
     const assigned = await db
       .prepare(
@@ -808,10 +844,7 @@ export async function explainContractCreateDenial(
     if (!assigned) {
       return 'هذا العميل غير مُسند إليك'
     }
-    if (!(await hasActiveFr(false))) {
-      return 'لا يوجد طلب تمويل نشط لهذا العميل'
-    }
-    return null
+    return await requireFrBankAgentOrDeny()
   }
 
   if (roleId === 6) {
@@ -837,10 +870,7 @@ export async function explainContractCreateDenial(
     if (!inScope) {
       return 'غير مصرح لك بإنشاء عقد لهذا العميل (غير مُسند إليك كموظف أو ممثل بنك)'
     }
-    if (!(await hasActiveFr(false))) {
-      return 'لا يوجد طلب تمويل نشط لهذا العميل'
-    }
-    return null
+    return await requireFrBankAgentOrDeny()
   }
 
   return null
