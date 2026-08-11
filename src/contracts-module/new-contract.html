@@ -799,8 +799,8 @@
       }
       const fields = [
         { id: 'party_two_name', msg: 'يرجى اختيار عميل لتعبئة الاسم', check: v => v.trim().length >= 3 },
-        { id: 'party_two_id', msg: 'إن وُجد، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\d{10}$/.test(t); } },
-        { id: 'party_two_phone', msg: 'يرجى اختيار عميل ببيانات جوال صحيحة', check: v => /^5\d{8}$/.test(v.replace(/\s/g, '')) },
+        { id: 'party_two_id', msg: '', check: () => true },
+        { id: 'party_two_phone', msg: 'يرجى اختيار عميل لتعبئة رقم الجوال', check: v => v.trim().length > 0 },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }

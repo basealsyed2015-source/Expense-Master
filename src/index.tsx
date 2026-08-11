@@ -3662,16 +3662,26 @@ async function loadCustomersForAdminForms(
       if (tid == null) {
         return { results: [] }
       }
-      customersQuery += ' WHERE tenant_id = ?'
-      customersParams.push(tid)
+      if (opts?.filterRole4ByFundingRequests) {
+        customersQuery += ' WHERE tenant_id = ? AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)'
+        customersParams.push(tid, tid)
+      } else {
+        customersQuery += ' WHERE tenant_id = ?'
+        customersParams.push(tid)
+      }
     }
     // else: legacy — SaaS super-admin sees all customers (e.g. financing request form)
   } else if (userInfo.roleId === 2 || userInfo.roleId === 3) {
     if (!userInfo.tenantId) {
       return { results: [] }
     }
-    customersQuery += ' WHERE tenant_id = ?'
-    customersParams.push(userInfo.tenantId)
+    if (opts?.filterRole4ByFundingRequests) {
+      customersQuery += ' WHERE tenant_id = ? AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)'
+      customersParams.push(userInfo.tenantId, userInfo.tenantId)
+    } else {
+      customersQuery += ' WHERE tenant_id = ?'
+      customersParams.push(userInfo.tenantId)
+    }
   } else if (userInfo.roleId === 4) {
     if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
@@ -3741,14 +3751,28 @@ async function loadCustomersForAdminForms(
     if (!userInfo.tenantId || !userInfo.userId) {
       return { results: [] }
     }
-    customersQuery += ` WHERE tenant_id = ? AND (
-      created_by = ?
-      OR EXISTS (
+    if (opts?.filterRole4ByFundingRequests) {
+      customersQuery += ` WHERE tenant_id = ? AND (
+        created_by = ?
+        OR EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )
+      ) AND EXISTS (
         SELECT 1 FROM financing_requests fr
-        WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
-      )
-    )`
-    customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0
+      )`
+      customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId, userInfo.tenantId)
+    } else {
+      customersQuery += ` WHERE tenant_id = ? AND (
+        created_by = ?
+        OR EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )
+      )`
+      customersParams.push(userInfo.tenantId, userInfo.userId, userInfo.userId)
+    }
   } else {
     customersQuery += ' WHERE 1 = 0'
   }

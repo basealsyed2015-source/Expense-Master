@@ -31090,14 +31090,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> العقود تُنشأ لعملاء موجودين فقط · بيانات الطرف الثاني تُعبَّأ تلقائياً من العميل</div>
             </div>
 
-            <!-- Funding request — populated automatically when a customer is selected -->
-            <div class="form-group form-full" id="financing_request_section" style="display:none;margin-bottom:16px;">
-              <label class="form-label"><i class="fas fa-file-invoice-dollar" style="color:var(--secondary);margin-left:6px;"></i> طلب التمويل</label>
-              <select class="form-control" id="financing_request_lookup" onchange="fillFromFinancingRequest(this.value)">
-                <option value="">— اختر طلب التمويل —</option>
-              </select>
-              <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> يُحدَّد تلقائياً عند اختيار العميل · يمكن تغييره إذا كان للعميل أكثر من طلب</div>
-            </div>
+            <!-- FR lookup kept hidden; auto-filled since each customer has exactly one FR -->
+            <select id="financing_request_lookup" style="display:none;">
+              <option value="">— اختر طلب التمويل —</option>
+            </select>
             <input type="hidden" id="financing_request_id" value="" />
 
             <div class="form-grid" id="party_two_readonly_fields">
@@ -31432,15 +31428,14 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
 
     function updateFinancingRequestsDropdown(customerId, opts) {
-      const section = document.getElementById('financing_request_section');
       const select = document.getElementById('financing_request_lookup');
       const hidden = document.getElementById('financing_request_id');
-      if (!section || !select || !hidden) return;
+      if (!select || !hidden) return;
       select.innerHTML = '<option value="">— اختر طلب التمويل —</option>';
       hidden.value = '';
-      if (!customerId) { section.style.display = 'none'; return; }
+      if (!customerId) return;
       const frs = (window._contractsFRs && window._contractsFRs[String(customerId)]) || [];
-      if (frs.length === 0) { section.style.display = 'none'; return; }
+      if (frs.length === 0) return;
       frs.forEach(function(fr) {
         const o = document.createElement('option');
         o.value = String(fr.id);
@@ -31451,8 +31446,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         o.textContent = parts.length ? parts.join(' — ') : 'طلب #' + fr.id;
         select.appendChild(o);
       });
-      section.style.display = 'block';
-      if (frs.length === 1 && !(opts && opts.skipFill)) {
+      if (!(opts && opts.skipFill)) {
         select.value = String(frs[0].id);
         fillFromFinancingRequest(String(frs[0].id));
       }
@@ -31759,8 +31753,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
       const fields = [
         { id: 'party_two_name', msg: 'يرجى اختيار عميل لتعبئة الاسم', check: v => v.trim().length >= 3 },
-        { id: 'party_two_id', msg: 'إن وُجد، يجب أن يكون رقم الهوية 10 أرقام', check: v => { const t = String(v || '').trim(); return !t || /^\\d{10}$/.test(t); } },
-        { id: 'party_two_phone', msg: 'يرجى اختيار عميل ببيانات جوال صحيحة', check: v => /^5\\d{8}$/.test(v.replace(/\\s/g, '')) },
+        { id: 'party_two_id', msg: '', check: () => true },
+        { id: 'party_two_phone', msg: 'يرجى اختيار عميل لتعبئة رقم الجوال', check: v => v.trim().length > 0 },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
         { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }
@@ -38606,7 +38600,7 @@ ${$r}
         )
       ))
     )
-  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`;async function vs(e,t,a){return on(e,a,t)}async function wd(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function ws(e,t,a){let n="SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers";const r=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let o=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(o=parseInt(String(i),10)),o==null&&t.userId){const l=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();l?.tenant_id!=null&&(o=l.tenant_id)}if(o==null)return{results:[]};n+=" WHERE tenant_id = ?",r.push(o)}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};n+=" WHERE tenant_id = ?",r.push(t.tenantId)}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};a?.filterRole4ByFundingRequests?(n+=` WHERE tenant_id = ? AND EXISTS (
+  ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC`;async function vs(e,t,a){return on(e,a,t)}async function wd(e,t,a){try{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND is_active = 1 AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}catch{return!!await e.prepare("SELECT id FROM banks WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)").bind(a,t).first()}}async function ws(e,t,a){let n="SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers";const r=[];if(t.roleId===1){if(a?.scopeSuperAdminToTenant){let o=null;const i=e.req.query("tenant_id");if(i!=null&&/^\d+$/.test(String(i))&&(o=parseInt(String(i),10)),o==null&&t.userId){const l=await e.env.DB.prepare("SELECT tenant_id FROM users WHERE id = ?").bind(t.userId).first();l?.tenant_id!=null&&(o=l.tenant_id)}if(o==null)return{results:[]};a?.filterRole4ByFundingRequests?(n+=" WHERE tenant_id = ? AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)",r.push(o,o)):(n+=" WHERE tenant_id = ?",r.push(o))}}else if(t.roleId===2||t.roleId===3){if(!t.tenantId)return{results:[]};a?.filterRole4ByFundingRequests?(n+=" WHERE tenant_id = ? AND EXISTS (SELECT 1 FROM financing_requests fr WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0)",r.push(t.tenantId,t.tenantId)):(n+=" WHERE tenant_id = ?",r.push(t.tenantId))}else if(t.roleId===4){if(!t.tenantId||!t.userId)return{results:[]};a?.filterRole4ByFundingRequests?(n+=` WHERE tenant_id = ? AND EXISTS (
         SELECT 1 FROM customer_assignments ca
         WHERE ca.customer_id = customers.id AND ca.employee_id = ?
       ) AND EXISTS (
@@ -38641,13 +38635,22 @@ ${$r}
         WHERE co.customer_id = customers.id AND co.tenant_id = ?
           AND COALESCE(co.is_archived, 0) = 0
           AND co.status NOT IN ('مكتمل', 'مؤرشف')
-      )`,r.push(t.tenantId,t.userId,t.userId,t.userId,t.tenantId,t.tenantId)):(n+=` WHERE tenant_id = ? AND ${o}`,r.push(t.tenantId,t.userId,t.userId,t.userId))}else if(R(t.roleId)===5){if(!t.tenantId||!t.userId)return{results:[]};n+=` WHERE tenant_id = ? AND (
-      created_by = ?
-      OR EXISTS (
+      )`,r.push(t.tenantId,t.userId,t.userId,t.userId,t.tenantId,t.tenantId)):(n+=` WHERE tenant_id = ? AND ${o}`,r.push(t.tenantId,t.userId,t.userId,t.userId))}else if(R(t.roleId)===5){if(!t.tenantId||!t.userId)return{results:[]};a?.filterRole4ByFundingRequests?(n+=` WHERE tenant_id = ? AND (
+        created_by = ?
+        OR EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )
+      ) AND EXISTS (
         SELECT 1 FROM financing_requests fr
-        WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
-      )
-    )`,r.push(t.tenantId,t.userId,t.userId)}else n+=" WHERE 1 = 0";n+=" ORDER BY full_name";let s;try{s=r.length?await e.env.DB.prepare(n).bind(...r).all():await e.env.DB.prepare(n).all()}catch(o){const i=String(o?.message||o||"");if(/no such column:\s*is_completed/i.test(i)&&t.tenantId!=null){const l=n.replace("COALESCE(is_completed, 0) as is_completed","0 as is_completed");s=r.length?await e.env.DB.prepare(l).bind(...r).all():await e.env.DB.prepare(l).all()}else throw o}return{results:s.results||[]}}async function Ea(e,t){const a=Number(t);return!Number.isFinite(a)||a<=0?!1:await e.prepare("SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? LIMIT 1").bind(a).first()!=null}function oe(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const _d=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"],Ed=["/admin/company-settings","/admin/reports/staff-active-time"];function kd(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let n=e.replace(a,"");const r=`
+        WHERE fr.customer_id = customers.id AND fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0
+      )`,r.push(t.tenantId,t.userId,t.userId,t.tenantId)):(n+=` WHERE tenant_id = ? AND (
+        created_by = ?
+        OR EXISTS (
+          SELECT 1 FROM financing_requests fr
+          WHERE fr.customer_id = customers.id AND fr.assigned_bank_agent_id = ?
+        )
+      )`,r.push(t.tenantId,t.userId,t.userId))}else n+=" WHERE 1 = 0";n+=" ORDER BY full_name";let s;try{s=r.length?await e.env.DB.prepare(n).bind(...r).all():await e.env.DB.prepare(n).all()}catch(o){const i=String(o?.message||o||"");if(/no such column:\s*is_completed/i.test(i)&&t.tenantId!=null){const l=n.replace("COALESCE(is_completed, 0) as is_completed","0 as is_completed");s=r.length?await e.env.DB.prepare(l).bind(...r).all():await e.env.DB.prepare(l).all()}else throw o}return{results:s.results||[]}}async function Ea(e,t){const a=Number(t);return!Number.isFinite(a)||a<=0?!1:await e.prepare("SELECT 1 AS ok FROM financing_requests WHERE customer_id = ? LIMIT 1").bind(a).first()!=null}function oe(e){return e.roleId===1&&(e.tokenRoleId===null||e.tokenRoleId===1)}const _d=["/admin/subscriptions","/admin/packages","/admin/tenants","/admin/roles","/admin/saas-settings","/admin/settings","/admin/tenant-calculators"],Ed=["/admin/company-settings","/admin/reports/staff-active-time"];function kd(e){const t="(subscriptions|packages|tenants|roles|saas-settings|tenant-calculators)",a=new RegExp(`<a[^>]*\\bhref=["']\\/admin\\/${t}(?:\\/[^"']*)?["'][^>]*>[\\s\\S]*?<\\/a>`,"g");let n=e.replace(a,"");const r=`
 <style>
   [href^="/admin/subscriptions"],
   [href^="/admin/packages"],
