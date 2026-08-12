@@ -921,10 +921,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           `INSERT INTO contracts (
           tenant_id, created_by, contract_number, template_id, template_name, date_gregorian, day_name,
           party_one_name, party_one_phone, party_one_logo,
-          customer_id, party_two_name, party_two_id, party_two_phone, party_two_address, finance_type, finance_amount,
+          customer_id, party_two_name, party_two_id, party_two_id_expiry, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
           property_description, property_location, bank_name, notes, is_archived, financing_request_id, location_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -940,6 +940,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.customer_id != null ? Number(body.customer_id) : null,
             body.party_two_name ?? null,
             optionalNationalId(body.party_two_id),
+            (body.party_two_id_expiry as string | null | undefined) ?? null,
             body.party_two_phone ?? null,
             body.party_two_address ?? null,
             body.finance_type ?? null,
@@ -1334,6 +1335,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       maybe('customer_id', 'customer_id')
       maybe('party_two_name', 'party_two_name')
       maybe('party_two_id', 'party_two_id')
+      maybe('party_two_id_expiry', 'party_two_id_expiry')
       maybe('party_two_phone', 'party_two_phone')
       maybe('party_two_address', 'party_two_address')
       maybe('finance_type', 'finance_type')

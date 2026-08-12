@@ -3643,7 +3643,7 @@ async function loadCustomersForAdminForms(
   userInfo: { userId: number | null; tenantId: number | null; roleId: number | null },
   opts?: { scopeSuperAdminToTenant?: boolean; filterRole4ByFundingRequests?: boolean }
 ): Promise<{ results: any[] }> {
-  let customersQuery = 'SELECT id, full_name, phone, national_id, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers'
+  let customersQuery = 'SELECT id, full_name, phone, national_id, national_id_expiry, city, tenant_id, COALESCE(is_completed, 0) as is_completed FROM customers'
   const customersParams: any[] = []
 
   if (userInfo.roleId === 1) {
@@ -3870,7 +3870,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/packages',
     '/admin/users',
     '/admin/roles',
-    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/tenants',
@@ -3903,7 +3902,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/follow-ups',
     '/admin/contact-affiliates',
     '/admin/link-stats',
-    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/company-settings',
@@ -3948,7 +3946,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/admin/my-hr',
     '/admin/my-profile',
-    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/chat',
@@ -3971,7 +3968,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/admin/my-hr',
     '/admin/my-profile',
-    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/chat',
@@ -3994,7 +3990,6 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/admin/my-leaves',
     '/admin/my-hr',
     '/admin/my-profile',
-    '/admin/notifications',
     '/calculator',
     '/',
     '/admin/chat',
@@ -4388,10 +4383,10 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
         <a href="/admin/customers?ratingFilter=all&amp;requestsFilter=all" data-customer-rating-filter="all"><i class="fas fa-list"></i>الكل</a>
         <a href="/admin/customers?ratingFilter=0&amp;requestsFilter=all" data-customer-rating-filter="0"><i class="fas fa-minus-circle"></i>بدون تقييم</a>
         <a href="/admin/customers?ratingFilter=5&amp;requestsFilter=all" data-customer-rating-filter="5"><i class="fas fa-star"></i>عميل ممتاز</a>
-        <a href="/admin/customers?ratingFilter=4&amp;requestsFilter=all" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد</a>
-        <a href="/admin/customers?ratingFilter=3&amp;requestsFilter=all" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل مقبول</a>
-        <a href="/admin/customers?ratingFilter=2&amp;requestsFilter=all" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل سيئ</a>
-        <a href="/admin/customers?ratingFilter=1&amp;requestsFilter=all" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقوف</a>
+        <a href="/admin/customers?ratingFilter=4&amp;requestsFilter=all" data-customer-rating-filter="4"><i class="fas fa-thumbs-up"></i>عميل جيد جدا</a>
+        <a href="/admin/customers?ratingFilter=3&amp;requestsFilter=all" data-customer-rating-filter="3"><i class="fas fa-balance-scale"></i>عميل جيد</a>
+        <a href="/admin/customers?ratingFilter=2&amp;requestsFilter=all" data-customer-rating-filter="2"><i class="fas fa-exclamation-triangle"></i>عميل ضعيف</a>
+        <a href="/admin/customers?ratingFilter=1&amp;requestsFilter=all" data-customer-rating-filter="1"><i class="fas fa-ban"></i>عميل موقف</a>
         <a href="/admin/customers/completed" data-completed-customers-link><i class="fas fa-check-double"></i>المكتملة</a>
         <a href="/admin/customers/archived" data-archived-customers-link><i class="fas fa-archive"></i>الأرشيف</a>
       </div>
@@ -4485,7 +4480,6 @@ function injectPersistentAdminSidebar(pathname: string, html: string, opts?: { r
     <hr class="gps-divider">
     <a href="/admin/users"><i class="fas fa-user-shield"></i>المستخدمين</a>
     <a href="/admin/roles" data-superadmin-only="true"><i class="fas fa-user-tag"></i>الأدوار والصلاحيات</a>
-    <a href="/admin/notifications"><i class="fas fa-bell"></i>الإشعارات</a>
     <a href="/admin/company-settings"><i class="fas fa-building"></i>إعدادات الشركة</a>
     <a href="/admin/tenant-calculators" data-superadmin-only="true"><i class="fas fa-calculator"></i>حاسبات الشركات</a>
     <a href="/admin/saas-settings" data-superadmin-only="true"><i class="fas fa-cogs"></i>إعدادات SaaS</a>
@@ -9368,6 +9362,7 @@ app.post('/api/customers', async (c) => {
       national_id_raw != null && String(national_id_raw).trim()
         ? String(national_id_raw).trim()
         : null
+    const national_id_expiry = (formData.get('national_id_expiry') as string || '').trim() || null
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
@@ -9908,6 +9903,12 @@ app.post('/api/customers', async (c) => {
     if (createdCustomerId) {
       await allocateTenantCustomerNumber(c.env.DB, createdCustomerId, tenant_id)
     }
+    if (createdCustomerId && national_id_expiry) {
+      try {
+        await c.env.DB.prepare('UPDATE customers SET national_id_expiry = ? WHERE id = ?')
+          .bind(national_id_expiry, createdCustomerId).run()
+      } catch (_) { /* column may not exist until migration 0147 */ }
+    }
     const normRoleAfterInsert = normalizeRoleId(userInfo.roleId)
     if (creatorUserId && createdCustomerId) {
       try {
@@ -10041,6 +10042,12 @@ app.post('/api/customers', async (c) => {
           await c.env.DB.prepare(
             `INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`
           ).bind(createdCustomerId, full_name, taskRow.rating, taskRow.rating_note || null, userInfo.userId || null, tenant_id).run()
+          if (taskRow.rating === 1) {
+            await c.env.DB.prepare(`
+              UPDATE customers SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, archived_by = ?
+              WHERE id = ?
+            `).bind(userInfo.userId || null, createdCustomerId).run()
+          }
         }
       } catch (_) { /* don't fail customer creation if rating carry-over fails */ }
       try {
@@ -10195,6 +10202,7 @@ app.post('/api/customers/:id', async (c) => {
       national_id_raw != null && String(national_id_raw).trim()
         ? String(national_id_raw).trim()
         : null
+    const national_id_expiry = (formData.get('national_id_expiry') as string || '').trim() || null
     const date_of_birth = formData.get('date_of_birth') as string || null
     const dob_calendar_type = (formData.get('dob_calendar_type') as string) || 'gregorian'
     const employer_name = formData.get('employer_name') as string || null
@@ -10364,7 +10372,12 @@ app.post('/api/customers/:id', async (c) => {
       await syncFinancingRequestsLocationForCustomer(c.env.DB, id, enrollmentLocationUpdate)
     }
     try {
-      await c.env.DB.prepare(`UPDATE customers SET product_type = ? WHERE id = ?`).bind(product_type, id).run()
+      try {
+      await c.env.DB.prepare(`UPDATE customers SET national_id_expiry = ? WHERE id = ?`).bind(national_id_expiry, id).run()
+    } catch (_) {
+      /* column may not exist until migration 0147 */
+    }
+    await c.env.DB.prepare(`UPDATE customers SET product_type = ? WHERE id = ?`).bind(product_type, id).run()
     } catch (_) {
       /* column may not exist until migration 0071 is applied */
     }
@@ -13407,7 +13420,13 @@ app.post('/api/customer-reviews', async (c) => {
       INSERT INTO customer_reviews (customer_id, customer_name, rating, note, user_id, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?)
     `).bind(customer_id, customer_name, r, note || null, userInfo.userId || null, userInfo.tenantId || null).run()
-    return c.json({ success: true, id: result.meta.last_row_id })
+    if (r === 1) {
+      await c.env.DB.prepare(`
+        UPDATE customers SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, archived_by = ?
+        WHERE id = ?
+      `).bind(userInfo.userId || null, customer_id).run()
+    }
+    return c.json({ success: true, id: result.meta.last_row_id, archived: r === 1 })
   } catch (error: any) {
     console.error('Error creating customer review:', error)
     return c.json({ success: false, error: error.message }, 500)
@@ -15681,9 +15700,9 @@ app.get('/admin/reports/requests-followup', async (c) => {
           .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto !important; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); z-index: 81; }
           .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
-          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; pointer-events: auto !important; cursor: pointer; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
           .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
@@ -16217,16 +16236,18 @@ app.get('/admin/reports/requests-followup', async (c) => {
             applyFollowupPagination();
           }
 
+          // Physical scrollBy: left/right are screen directions. Avoids RTL scrollLeft
+          // type mis-detection (positive scrollLeft is a no-op in Chrome negative-RTL).
           window.edgeScrollStep = function(scrollElId, visualDirection) {
             const el = document.getElementById(scrollElId);
             if (!el) return;
             const step = 360;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            let delta = visualDirection === 'left' ? -step : step;
-            if (dir === 'rtl') delta = -delta;
-            const current = getNormalizedScrollLeft(el);
-            animateNormalizedScrollLeft(el, current + delta, 260);
-            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'followupEdgeLeft', 'followupEdgeRight'));
+            const left = visualDirection === 'left' ? -step : step;
+            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' });
+            else el.scrollLeft = el.scrollLeft + left;
+            setTimeout(function() {
+              updateEdgeScrollControls(scrollElId, 'followupEdgeLeft', 'followupEdgeRight');
+            }, 280);
           };
 
           function setNormalizedScrollLeft(el, normalizedLeft) {
@@ -16322,13 +16343,14 @@ app.get('/admin/reports/requests-followup', async (c) => {
               rightWrap.classList.add('edge-hidden');
               return;
             }
-            const maxScrollLeft = el.scrollWidth - el.clientWidth;
-            const sl = getNormalizedScrollLeft(el);
-            const canLeft = sl > 1;
-            const canRight = sl < maxScrollLeft - 1;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            const showLeft = dir === 'rtl' ? canRight : canLeft;
-            const showRight = dir === 'rtl' ? canLeft : canRight;
+            // Probe physical scroll edges (works for all RTL scrollLeft modes)
+            const sl = el.scrollLeft;
+            el.scrollLeft = sl - 1;
+            const showLeft = el.scrollLeft !== sl;
+            el.scrollLeft = sl;
+            el.scrollLeft = sl + 1;
+            const showRight = el.scrollLeft !== sl;
+            el.scrollLeft = sl;
             leftWrap.classList.toggle('edge-hidden', !showLeft);
             rightWrap.classList.toggle('edge-hidden', !showRight);
             if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
@@ -18264,7 +18286,9 @@ app.get('/admin/customers/add', async (c) => {
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="example@domain.com">
               </div>
-              
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-2">
                   <i class="fas fa-id-card text-purple-600 ml-1"></i>
@@ -18274,8 +18298,48 @@ app.get('/admin/customers/add', async (c) => {
                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                        placeholder="1xxxxxxxxx">
                 <p class="text-xs text-gray-500 mt-1">
-                  اتركه فارغاً إن لم تكن متأكداً. يجب أن يكون فريداً داخل الشركة.
+                  اتركه فارغاً إن لم تكن متأكداً. 
                 </p>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">
+                  <i class="fas fa-calendar-times text-purple-600 ml-1"></i>
+                  تاريخ انتهاء الهوية (اختياري)
+                </label>
+                <input type="hidden" name="national_id_expiry" id="nie_value">
+                <div class="flex gap-2 items-center flex-wrap">
+                  <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                    <input type="date" id="nie_gregorian" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                    <div id="nie_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                      <select id="nie_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم"><option value="">يوم</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option></select>
+                      <select id="nie_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر"><option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option></select>
+                      <select id="nie_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة"><option value="">السنة</option><option value="1300">1300</option><option value="1301">1301</option><option value="1302">1302</option><option value="1303">1303</option><option value="1304">1304</option><option value="1305">1305</option><option value="1306">1306</option><option value="1307">1307</option><option value="1308">1308</option><option value="1309">1309</option><option value="1310">1310</option><option value="1311">1311</option><option value="1312">1312</option><option value="1313">1313</option><option value="1314">1314</option><option value="1315">1315</option><option value="1316">1316</option><option value="1317">1317</option><option value="1318">1318</option><option value="1319">1319</option><option value="1320">1320</option><option value="1321">1321</option><option value="1322">1322</option><option value="1323">1323</option><option value="1324">1324</option><option value="1325">1325</option><option value="1326">1326</option><option value="1327">1327</option><option value="1328">1328</option><option value="1329">1329</option><option value="1330">1330</option><option value="1331">1331</option><option value="1332">1332</option><option value="1333">1333</option><option value="1334">1334</option><option value="1335">1335</option><option value="1336">1336</option><option value="1337">1337</option><option value="1338">1338</option><option value="1339">1339</option><option value="1340">1340</option><option value="1341">1341</option><option value="1342">1342</option><option value="1343">1343</option><option value="1344">1344</option><option value="1345">1345</option><option value="1346">1346</option><option value="1347">1347</option><option value="1348">1348</option><option value="1349">1349</option><option value="1350">1350</option><option value="1351">1351</option><option value="1352">1352</option><option value="1353">1353</option><option value="1354">1354</option><option value="1355">1355</option><option value="1356">1356</option><option value="1357">1357</option><option value="1358">1358</option><option value="1359">1359</option><option value="1360">1360</option><option value="1361">1361</option><option value="1362">1362</option><option value="1363">1363</option><option value="1364">1364</option><option value="1365">1365</option><option value="1366">1366</option><option value="1367">1367</option><option value="1368">1368</option><option value="1369">1369</option><option value="1370">1370</option><option value="1371">1371</option><option value="1372">1372</option><option value="1373">1373</option><option value="1374">1374</option><option value="1375">1375</option><option value="1376">1376</option><option value="1377">1377</option><option value="1378">1378</option><option value="1379">1379</option><option value="1380">1380</option><option value="1381">1381</option><option value="1382">1382</option><option value="1383">1383</option><option value="1384">1384</option><option value="1385">1385</option><option value="1386">1386</option><option value="1387">1387</option><option value="1388">1388</option><option value="1389">1389</option><option value="1390">1390</option><option value="1391">1391</option><option value="1392">1392</option><option value="1393">1393</option><option value="1394">1394</option><option value="1395">1395</option><option value="1396">1396</option><option value="1397">1397</option><option value="1398">1398</option><option value="1399">1399</option><option value="1400">1400</option><option value="1401">1401</option><option value="1402">1402</option><option value="1403">1403</option><option value="1404">1404</option><option value="1405">1405</option><option value="1406">1406</option><option value="1407">1407</option><option value="1408">1408</option><option value="1409">1409</option><option value="1410">1410</option><option value="1411">1411</option><option value="1412">1412</option><option value="1413">1413</option><option value="1414">1414</option><option value="1415">1415</option><option value="1416">1416</option><option value="1417">1417</option><option value="1418">1418</option><option value="1419">1419</option><option value="1420">1420</option><option value="1421">1421</option><option value="1422">1422</option><option value="1423">1423</option><option value="1424">1424</option><option value="1425">1425</option><option value="1426">1426</option><option value="1427">1427</option><option value="1428">1428</option><option value="1429">1429</option><option value="1430">1430</option><option value="1431">1431</option><option value="1432">1432</option><option value="1433">1433</option><option value="1434">1434</option><option value="1435">1435</option><option value="1436">1436</option><option value="1437">1437</option><option value="1438">1438</option><option value="1439">1439</option><option value="1440">1440</option><option value="1441">1441</option><option value="1442">1442</option><option value="1443">1443</option><option value="1444">1444</option><option value="1445">1445</option><option value="1446">1446</option><option value="1447">1447</option><option value="1448">1448</option><option value="1449">1449</option><option value="1450">1450</option><option value="1451">1451</option><option value="1452">1452</option><option value="1453">1453</option><option value="1454">1454</option><option value="1455">1455</option><option value="1456">1456</option><option value="1457">1457</option><option value="1458">1458</option><option value="1459">1459</option><option value="1460">1460</option></select>
+                    </div>
+                  </div>
+                  <div class="flex rounded-lg border border-gray-300 bg-gray-50">
+                    <button type="button" id="nie_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                    <button type="button" id="nie_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                  </div>
+                </div>
+                <script>
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g=document.getElementById('nie_gregorian'),hidden=document.getElementById('nie_value'),btnG=document.getElementById('nie_toggle_gregorian'),btnH=document.getElementById('nie_toggle_hijri'),hw=document.getElementById('nie_hijri_wrap'),hd=document.getElementById('nie_hijri_day'),hm=document.getElementById('nie_hijri_month'),hy=document.getElementById('nie_hijri_year');
+                    if(!g||!hidden||!btnG||!btnH||!hw||!hd||!hm||!hy)return;
+                    var syn=false;
+                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                    function gStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+                    function fG(hp){var s=new Date(hp.year+577,0,1,12,0,0),e=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(s);c<=e;c.setDate(c.getDate()+1)){var cur=xHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return gStr(c);}return '';}
+                    function sDD(gv){if(!gv){hd.value='';hm.value='';hy.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=xHP(d);if(!hp)return;hy.value=String(hp.year);hm.value=String(hp.month);hd.value=String(hp.day);}
+                    function sfG(){if(syn)return;syn=true;hidden.value=g.value||'';sDD(g.value);syn=false;}
+                    function sfH(){if(syn)return;var y=Number(hy.value),m=Number(hm.value),d=Number(hd.value);if(!y||!m||!d)return;var gv=fG({year:y,month:m,day:d});if(!gv)return;syn=true;g.value=gv;hidden.value=gv;syn=false;}
+                    function setG(){g.style.display='';hw.style.display='none';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                    function setH(){g.style.display='none';hw.style.display='';sDD(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+                    btnG.onclick=setG;btnH.onclick=setH;
+                    g.onchange=sfG;g.oninput=sfG;
+                    hd.onchange=sfH;hm.onchange=sfH;hy.onchange=sfH;
+                    sfG();setG();
+                  });
+                </script>
               </div>
             </div>
             
@@ -18816,10 +18880,10 @@ app.get('/admin/customers/add', async (c) => {
                 </button>
                 <div id="taskReviewRatingDropdown" class="hidden absolute z-[1200] w-full mt-1 rounded-xl shadow-xl overflow-hidden border border-gray-100">
                   <button type="button" onclick="selectTaskRating(5)" class="w-full px-4 py-3.5 text-right font-bold text-green-800 bg-green-50 hover:bg-green-100 transition-colors border-b border-green-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز</button>
-                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد</button>
-                  <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول</button>
-                  <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ</button>
-                  <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف</button>
+                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد جدا جدا</button>
+                  <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل جيد</button>
+                  <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل ضعيف</button>
+                  <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقف</button>
                 </div>
               </div>
             </div>
@@ -18966,10 +19030,10 @@ app.get('/admin/customers/add', async (c) => {
 
           var TASK_RATING_CFG = {
             5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#22c55e', headerTo: '#16a34a' },
-            4: { label: 'عميل جيد',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#a3e635', headerTo: '#65a30d' },
-            3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#facc15', headerTo: '#ca8a04' },
-            2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#fb923c', headerTo: '#ea580c' },
-            1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
+            4: { label: 'عميل جيد جدا',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#a3e635', headerTo: '#65a30d' },
+            3: { label: 'عميل جيد', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#facc15', headerTo: '#ca8a04' },
+            2: { label: 'عميل ضعيف',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#fb923c', headerTo: '#ea580c' },
+            1: { label: 'عميل موقف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
           };
           var taskReviewRating = 0;
           function openTaskReviewModal(initialRating, initialNote) {
@@ -19042,7 +19106,7 @@ app.get('/admin/customers/add', async (c) => {
                 await fetch('/api/my-followup-tasks/' + taskId + '/archive', {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ reason: note || 'عميل موقوف' })
+                  body: JSON.stringify({ reason: note || 'عميل موقف' })
                 });
               }
               closeTaskReviewModal();
@@ -22566,9 +22630,9 @@ app.get('/admin/customers', async (c) => {
           .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto !important; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); z-index: 81; }
           .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
-          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; pointer-events: auto !important; cursor: pointer; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
           .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
@@ -22708,10 +22772,10 @@ app.get('/admin/customers', async (c) => {
                       <option value="all">التقييم: الكل</option>
                       <option value="0">بدون تقييم</option>
                       <option value="5">عميل ممتاز</option>
-                      <option value="4">عميل جيد</option>
-                      <option value="3">عميل مقبول</option>
-                      <option value="2">عميل سيئ</option>
-                      <option value="1">عميل موقوف</option>
+                      <option value="4">عميل جيد جدا</option>
+                      <option value="3">عميل جيد</option>
+                      <option value="2">عميل ضعيف</option>
+                      <option value="1">عميل موقف</option>
                     </select>
 
                     <select id="employeeFilter" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 bg-white" onchange="filterTable()">
@@ -22829,6 +22893,9 @@ app.get('/admin/customers', async (c) => {
                         ${canReviewCustomers ? `
                         <button type="button" onclick="openReviewModal(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="actions-dropdown-item" style="color:#a16207;">
                           <i class="fas fa-star"></i> تقييم العميل
+                        </button>
+                        <button type="button" onclick="archiveCustomer(${customer.id}, '${(customer.full_name || '').replace(/'/g, "\\'")}')" class="actions-dropdown-item" style="color:#6b7280;">
+                          <i class="fas fa-archive"></i> أرشفة العميل
                         </button>
                         ` : ''}
                         <a href="/admin/customers/${customer.id}/report" class="actions-dropdown-item" style="color:#6d28d9;">
@@ -23031,16 +23098,16 @@ app.get('/admin/customers', async (c) => {
                       <span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز
                     </button>
                     <button type="button" onclick="selectRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2">
-                      <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد
+                      <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد جدا
                     </button>
                     <button type="button" onclick="selectRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2">
-                      <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول
+                      <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل جيد
                     </button>
                     <button type="button" onclick="selectRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2">
-                      <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ
+                      <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل ضعيف
                     </button>
                     <button type="button" onclick="selectRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2">
-                      <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف
+                      <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقف
                     </button>
                   </div>
                 </div>
@@ -23051,16 +23118,11 @@ app.get('/admin/customers', async (c) => {
                 <textarea id="reviewNote" rows="3" placeholder="أدخل ملاحظة أو سبب التقييم..." class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent resize-none"></textarea>
               </div>
             </div>
-            <div class="px-6 pb-6 flex flex-wrap gap-3">
-              <button onclick="archiveAndReview()" class="flex-1 min-w-max px-4 py-2.5 rounded-lg bg-gradient-to-r from-gray-500 to-gray-700 hover:from-gray-600 hover:to-gray-800 text-white font-bold transition-all shadow-md text-sm">
-                <i class="fas fa-archive ml-1"></i> أرشفة العميل
+            <div class="px-6 pb-6 flex gap-3 justify-end">
+              <button onclick="closeReviewModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors text-sm">إلغاء</button>
+              <button onclick="saveReview()" id="reviewSaveBtn" class="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed" disabled>
+                <i class="fas fa-save ml-1"></i> حفظ التقييم
               </button>
-              <div class="flex gap-2 mr-auto">
-                <button onclick="closeReviewModal()" class="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium transition-colors text-sm">إلغاء</button>
-                <button onclick="saveReview()" id="reviewSaveBtn" class="px-5 py-2.5 rounded-lg bg-gray-200 text-gray-500 font-bold transition-all shadow-sm text-sm cursor-not-allowed" disabled>
-                  <i class="fas fa-save ml-1"></i> حفظ التقييم
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -23357,10 +23419,10 @@ app.get('/admin/customers', async (c) => {
 
           const RATING_CONFIG = {
             5: { label: 'عميل ممتاز',  textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d', rowBg: '#f0fdf4', rowText: '#14532d' },
-            4: { label: 'عميل جيد',    textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f', rowBg: '#f7fee7', rowText: '#365314' },
-            3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309', rowBg: '#fefce8', rowText: '#713f12' },
-            2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c', rowBg: '#fff7ed', rowText: '#7c2d12' },
-            1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626', rowBg: '#fef2f2', rowText: '#7f1d1d' },
+            4: { label: 'عميل جيد جدا',    textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f', rowBg: '#f7fee7', rowText: '#365314' },
+            3: { label: 'عميل جيد', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309', rowBg: '#fefce8', rowText: '#713f12' },
+            2: { label: 'عميل ضعيف',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c', rowBg: '#fff7ed', rowText: '#7c2d12' },
+            1: { label: 'عميل موقف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626', rowBg: '#fef2f2', rowText: '#7f1d1d' },
           };
 
           function selectRating(n) {
@@ -23475,30 +23537,26 @@ app.get('/admin/customers', async (c) => {
                 const savedId = reviewCustomerId;
                 const savedRating = reviewRating;
                 closeReviewModal();
-                applyRowRating(savedId, savedRating);
-                showToast('تم حفظ التقييم بنجاح', 'success');
+                if (data.archived || savedRating === 1) {
+                  const row = document.querySelector('#tableBody tr[data-customer-id="' + savedId + '"]');
+                  if (row) row.remove();
+                  applyCustomersPagination();
+                  showToast('تم حفظ التقييم وأرشفة العميل', 'success');
+                } else {
+                  applyRowRating(savedId, savedRating);
+                  showToast('تم حفظ التقييم بنجاح', 'success');
+                }
               } else showToast('حدث خطأ: ' + (data.error || 'غير معروف'), 'error');
             } catch(e) { showToast('فشل الاتصال بالخادم', 'error'); }
           }
 
-          async function archiveAndReview() {
-            if (!confirm('هل تريد أرشفة العميل "' + reviewCustomerName + '"؟ سيتم نقله إلى صفحة الأرشيف.')) return;
-            const note = document.getElementById('reviewNote').value.trim();
-            if (reviewRating) {
-              try {
-                await fetch('/api/customer-reviews', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ customer_id: reviewCustomerId, customer_name: reviewCustomerName, rating: reviewRating, note: note || null })
-                });
-              } catch(e) {}
-            }
+          async function archiveCustomer(customerId, customerName) {
+            if (!confirm('هل تريد أرشفة العميل "' + customerName + '"؟ سيتم نقله إلى صفحة الأرشيف.')) return;
             try {
-              const resp = await fetch('/api/customers/' + reviewCustomerId + '/archive', { method: 'PUT' });
+              const resp = await fetch('/api/customers/' + customerId + '/archive', { method: 'PUT' });
               const data = await resp.json();
               if (data.success) {
-                closeReviewModal();
-                const row = document.querySelector('#tableBody tr[data-customer-id="' + reviewCustomerId + '"]');
+                const row = document.querySelector('#tableBody tr[data-customer-id="' + customerId + '"]');
                 if (row) row.remove();
                 applyCustomersPagination();
                 showToast('تم أرشفة العميل بنجاح', 'success');
@@ -24201,12 +24259,12 @@ app.get('/admin/customers', async (c) => {
             const el = document.getElementById(scrollElId)
             if (!el) return
             const step = 360
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            let delta = visualDirection === 'left' ? -step : step
-            if (dir === 'rtl') delta = -delta
-            const current = getNormalizedScrollLeft(el)
-            animateNormalizedScrollLeft(el, current + delta, 260)
-            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'customersEdgeLeft', 'customersEdgeRight'))
+            const left = visualDirection === 'left' ? -step : step
+            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' })
+            else el.scrollLeft = el.scrollLeft + left
+            setTimeout(function() {
+              updateEdgeScrollControls(scrollElId, 'customersEdgeLeft', 'customersEdgeRight')
+            }, 280)
           }
 
           function setNormalizedScrollLeft(el, normalizedLeft) {
@@ -24310,12 +24368,13 @@ app.get('/admin/customers', async (c) => {
             }
 
             const maxScrollLeft = el.scrollWidth - el.clientWidth
-            const sl = getNormalizedScrollLeft(el)
-            const canLeft = sl > 1
-            const canRight = sl < maxScrollLeft - 1
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            const showLeft = dir === 'rtl' ? canRight : canLeft
-            const showRight = dir === 'rtl' ? canLeft : canRight
+            const sl0 = el.scrollLeft
+            el.scrollLeft = sl0 - 1
+            const showLeft = el.scrollLeft !== sl0
+            el.scrollLeft = sl0
+            el.scrollLeft = sl0 + 1
+            const showRight = el.scrollLeft !== sl0
+            el.scrollLeft = sl0
             leftWrap.classList.toggle('edge-hidden', !showLeft)
             rightWrap.classList.toggle('edge-hidden', !showRight)
 
@@ -27187,9 +27246,9 @@ app.get('/admin/requests', async (c) => {
           .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto !important; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); z-index: 81; }
           .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
-          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; pointer-events: auto !important; cursor: pointer; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
           .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
@@ -27641,12 +27700,12 @@ app.get('/admin/requests', async (c) => {
             const el = document.getElementById(scrollElId)
             if (!el) return
             const step = 360
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            let delta = visualDirection === 'left' ? -step : step
-            if (dir === 'rtl') delta = -delta
-            const current = getNormalizedScrollLeft(el)
-            animateNormalizedScrollLeft(el, current + delta, 260)
-            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'requestsEdgeLeft', 'requestsEdgeRight'))
+            const left = visualDirection === 'left' ? -step : step
+            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' })
+            else el.scrollLeft = el.scrollLeft + left
+            setTimeout(function() {
+              updateEdgeScrollControls(scrollElId, 'requestsEdgeLeft', 'requestsEdgeRight')
+            }, 280)
           }
 
           function setNormalizedScrollLeft(el, normalizedLeft) {
@@ -27750,12 +27809,13 @@ app.get('/admin/requests', async (c) => {
             }
 
             const maxScrollLeft = el.scrollWidth - el.clientWidth
-            const sl = getNormalizedScrollLeft(el)
-            const canLeft = sl > 1
-            const canRight = sl < maxScrollLeft - 1
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            const showLeft = dir === 'rtl' ? canRight : canLeft
-            const showRight = dir === 'rtl' ? canLeft : canRight
+            const sl0 = el.scrollLeft
+            el.scrollLeft = sl0 - 1
+            const showLeft = el.scrollLeft !== sl0
+            el.scrollLeft = sl0
+            el.scrollLeft = sl0 + 1
+            const showRight = el.scrollLeft !== sl0
+            el.scrollLeft = sl0
             leftWrap.classList.toggle('edge-hidden', !showLeft)
             rightWrap.classList.toggle('edge-hidden', !showRight)
 
@@ -29666,9 +29726,48 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
                   <input type="email" name="email" value="${(customer as any).email || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 </div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-gray-700 mb-2">الرقم الوطني</label>
                   <input type="text" name="national_id" value="${(customer as any).national_id || ''}" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+                <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-2">تاريخ انتهاء الهوية</label>
+                  <input type="hidden" name="national_id_expiry" id="edit_nie_value" value="${(customer as any).national_id_expiry || ''}">
+                  <div class="flex gap-2 items-center flex-wrap">
+                    <div class="flex rounded-lg border border-gray-300 overflow-hidden flex-1 min-w-0">
+                      <input type="date" id="edit_nie_gregorian" class="flex-1 min-w-0 px-4 py-3 border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset">
+                      <div id="edit_nie_hijri_wrap" style="display:none" class="flex-1 min-w-0 flex gap-1 items-center px-1 py-1">
+                        <select id="edit_nie_hijri_day" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="يوم"><option value="">يوم</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option><option value="24">24</option><option value="25">25</option><option value="26">26</option><option value="27">27</option><option value="28">28</option><option value="29">29</option><option value="30">30</option></select>
+                        <select id="edit_nie_hijri_month" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="الشهر"><option value="">الشهر</option><option value="1">محرم</option><option value="2">صفر</option><option value="3">ربيع الأول</option><option value="4">ربيع الثاني</option><option value="5">جمادى الأولى</option><option value="6">جمادى الثانية</option><option value="7">رجب</option><option value="8">شعبان</option><option value="9">رمضان</option><option value="10">شوال</option><option value="11">ذو القعدة</option><option value="12">ذو الحجة</option></select>
+                        <select id="edit_nie_hijri_year" class="flex-1 min-w-0 px-1 py-2 text-sm border-0 focus:ring-2 focus:ring-blue-500 focus:ring-inset bg-transparent text-right" title="السنة"><option value="">السنة</option><option value="1300">1300</option><option value="1301">1301</option><option value="1302">1302</option><option value="1303">1303</option><option value="1304">1304</option><option value="1305">1305</option><option value="1306">1306</option><option value="1307">1307</option><option value="1308">1308</option><option value="1309">1309</option><option value="1310">1310</option><option value="1311">1311</option><option value="1312">1312</option><option value="1313">1313</option><option value="1314">1314</option><option value="1315">1315</option><option value="1316">1316</option><option value="1317">1317</option><option value="1318">1318</option><option value="1319">1319</option><option value="1320">1320</option><option value="1321">1321</option><option value="1322">1322</option><option value="1323">1323</option><option value="1324">1324</option><option value="1325">1325</option><option value="1326">1326</option><option value="1327">1327</option><option value="1328">1328</option><option value="1329">1329</option><option value="1330">1330</option><option value="1331">1331</option><option value="1332">1332</option><option value="1333">1333</option><option value="1334">1334</option><option value="1335">1335</option><option value="1336">1336</option><option value="1337">1337</option><option value="1338">1338</option><option value="1339">1339</option><option value="1340">1340</option><option value="1341">1341</option><option value="1342">1342</option><option value="1343">1343</option><option value="1344">1344</option><option value="1345">1345</option><option value="1346">1346</option><option value="1347">1347</option><option value="1348">1348</option><option value="1349">1349</option><option value="1350">1350</option><option value="1351">1351</option><option value="1352">1352</option><option value="1353">1353</option><option value="1354">1354</option><option value="1355">1355</option><option value="1356">1356</option><option value="1357">1357</option><option value="1358">1358</option><option value="1359">1359</option><option value="1360">1360</option><option value="1361">1361</option><option value="1362">1362</option><option value="1363">1363</option><option value="1364">1364</option><option value="1365">1365</option><option value="1366">1366</option><option value="1367">1367</option><option value="1368">1368</option><option value="1369">1369</option><option value="1370">1370</option><option value="1371">1371</option><option value="1372">1372</option><option value="1373">1373</option><option value="1374">1374</option><option value="1375">1375</option><option value="1376">1376</option><option value="1377">1377</option><option value="1378">1378</option><option value="1379">1379</option><option value="1380">1380</option><option value="1381">1381</option><option value="1382">1382</option><option value="1383">1383</option><option value="1384">1384</option><option value="1385">1385</option><option value="1386">1386</option><option value="1387">1387</option><option value="1388">1388</option><option value="1389">1389</option><option value="1390">1390</option><option value="1391">1391</option><option value="1392">1392</option><option value="1393">1393</option><option value="1394">1394</option><option value="1395">1395</option><option value="1396">1396</option><option value="1397">1397</option><option value="1398">1398</option><option value="1399">1399</option><option value="1400">1400</option><option value="1401">1401</option><option value="1402">1402</option><option value="1403">1403</option><option value="1404">1404</option><option value="1405">1405</option><option value="1406">1406</option><option value="1407">1407</option><option value="1408">1408</option><option value="1409">1409</option><option value="1410">1410</option><option value="1411">1411</option><option value="1412">1412</option><option value="1413">1413</option><option value="1414">1414</option><option value="1415">1415</option><option value="1416">1416</option><option value="1417">1417</option><option value="1418">1418</option><option value="1419">1419</option><option value="1420">1420</option><option value="1421">1421</option><option value="1422">1422</option><option value="1423">1423</option><option value="1424">1424</option><option value="1425">1425</option><option value="1426">1426</option><option value="1427">1427</option><option value="1428">1428</option><option value="1429">1429</option><option value="1430">1430</option><option value="1431">1431</option><option value="1432">1432</option><option value="1433">1433</option><option value="1434">1434</option><option value="1435">1435</option><option value="1436">1436</option><option value="1437">1437</option><option value="1438">1438</option><option value="1439">1439</option><option value="1440">1440</option><option value="1441">1441</option><option value="1442">1442</option><option value="1443">1443</option><option value="1444">1444</option><option value="1445">1445</option><option value="1446">1446</option><option value="1447">1447</option><option value="1448">1448</option><option value="1449">1449</option><option value="1450">1450</option><option value="1451">1451</option><option value="1452">1452</option><option value="1453">1453</option><option value="1454">1454</option><option value="1455">1455</option><option value="1456">1456</option><option value="1457">1457</option><option value="1458">1458</option><option value="1459">1459</option><option value="1460">1460</option></select>
+                      </div>
+                    </div>
+                    <div class="flex rounded-lg border border-gray-300 bg-gray-50">
+                      <button type="button" id="edit_nie_toggle_gregorian" class="px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white" title="ميلادي">م</button>
+                      <button type="button" id="edit_nie_toggle_hijri" class="px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100" title="هجري">هـ</button>
+                    </div>
+                  </div>
+                  <script>
+                  document.addEventListener('DOMContentLoaded', function () {
+                    var g=document.getElementById('edit_nie_gregorian'),hidden=document.getElementById('edit_nie_value'),btnG=document.getElementById('edit_nie_toggle_gregorian'),btnH=document.getElementById('edit_nie_toggle_hijri'),hw=document.getElementById('edit_nie_hijri_wrap'),hd=document.getElementById('edit_nie_hijri_day'),hm=document.getElementById('edit_nie_hijri_month'),hy=document.getElementById('edit_nie_hijri_year');
+                    if(!g||!hidden||!btnG||!btnH||!hw||!hd||!hm||!hy)return;
+                    var syn=false;
+                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                    function gStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+                    function fG(hp){var s=new Date(hp.year+577,0,1,12,0,0),e=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(s);c<=e;c.setDate(c.getDate()+1)){var cur=xHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return gStr(c);}return '';}
+                    function sDD(gv){if(!gv){hd.value='';hm.value='';hy.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=xHP(d);if(!hp)return;hy.value=String(hp.year);hm.value=String(hp.month);hd.value=String(hp.day);}
+                    function sfG(){if(syn)return;syn=true;hidden.value=g.value||'';sDD(g.value);syn=false;}
+                    function sfH(){if(syn)return;var y=Number(hy.value),m=Number(hm.value),d=Number(hd.value);if(!y||!m||!d)return;var gv=fG({year:y,month:m,day:d});if(!gv)return;syn=true;g.value=gv;hidden.value=gv;syn=false;}
+                    function setG(){g.style.display='';hw.style.display='none';hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg bg-blue-600 text-white';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg text-gray-600 hover:bg-gray-100';}
+                    function setH(){g.style.display='none';hw.style.display='';sDD(g.value);hidden.value=g.value||'';btnG.className='px-3 py-2 text-sm font-medium rounded-r-lg text-gray-600 hover:bg-gray-100';btnH.className='px-3 py-2 text-sm font-medium rounded-l-lg bg-blue-600 text-white';}
+                    btnG.onclick=setG;btnH.onclick=setH;
+                    g.onchange=sfG;g.oninput=sfG;
+                    hd.onchange=sfH;hm.onchange=sfH;hy.onchange=sfH;
+                    sfG();setG();
+                  });
+                </script>
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -29922,6 +30021,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                   initialAttachments: editCustomerAttachmentsInitialJson
                 });
 
+                var nieG=document.getElementById('edit_nie_gregorian'),nieH=document.getElementById('edit_nie_value');if(nieG&&nieH&&nieH.value){nieG.value=nieH.value;}
                 var g=document.getElementById('edit_date_of_birth_gregorian'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri'),hijriWrap=document.getElementById('edit_dob_hijri_wrap'),hijriDay=document.getElementById('edit_dob_hijri_day'),hijriMonth=document.getElementById('edit_dob_hijri_month'),hijriYear=document.getElementById('edit_dob_hijri_year');
                 if(g&&hidden&&type&&btnG&&btnH&&hijriWrap&&hijriDay&&hijriMonth&&hijriYear){
                   var isDobSyncing=false;
@@ -33111,9 +33211,9 @@ app.get('/admin/users', async (c) => {
           .edge-scroll-zone { position: absolute; top: 0; bottom: 0; width: 64px; z-index: 80; display:flex; align-items:center; justify-content:center; pointer-events:none; }
           .edge-scroll-zone.left { left: 0; background: linear-gradient(90deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
           .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.55) 0%, rgba(249,250,251,0) 100%); }
-          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); }
+          .edge-scroll-zone .edge-scroll-btn { opacity: 1; pointer-events: auto !important; transition: opacity 160ms ease, box-shadow 160ms ease; position:absolute; left:50%; transform: translate(-50%, -50%); z-index: 81; }
           .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) { box-shadow: 0 12px 40px rgba(15,23,42,0.18); }
-          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; }
+          .edge-scroll-btn button { width: 38px; height: 96px; border-radius: 9999px; border: 1px solid rgba(209,213,219,1); background: rgba(255,255,255,0.92); box-shadow: 0 12px 36px rgba(0,0,0,0.14); color: #111827; font-weight: 700; display:flex; align-items:center; justify-content:center; pointer-events: auto !important; cursor: pointer; }
           .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
           .edge-scroll-btn.edge-hidden { opacity: 0 !important; pointer-events: none !important; display: none !important; }
           .edge-scroll-wrap .overflow-x-auto { padding-left: 8px; padding-right: 8px; }
@@ -33471,12 +33571,12 @@ app.get('/admin/users', async (c) => {
             const el = document.getElementById(scrollElId);
             if (!el) return;
             const step = 360;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            let delta = visualDirection === 'left' ? -step : step;
-            if (dir === 'rtl') delta = -delta;
-            const current = getNormalizedScrollLeft(el);
-            animateNormalizedScrollLeft(el, current + delta, 260);
-            requestAnimationFrame(() => updateEdgeScrollControls(scrollElId, 'usersEdgeLeft', 'usersEdgeRight'));
+            const left = visualDirection === 'left' ? -step : step;
+            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' });
+            else el.scrollLeft = el.scrollLeft + left;
+            setTimeout(function() {
+              updateEdgeScrollControls(scrollElId, 'usersEdgeLeft', 'usersEdgeRight');
+            }, 280);
           };
 
           function setNormalizedScrollLeft(el, normalizedLeft) {
@@ -33573,12 +33673,13 @@ app.get('/admin/users', async (c) => {
               return;
             }
             const maxScrollLeft = el.scrollWidth - el.clientWidth;
-            const sl = getNormalizedScrollLeft(el);
-            const canLeft = sl > 1;
-            const canRight = sl < maxScrollLeft - 1;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            const showLeft = dir === 'rtl' ? canRight : canLeft;
-            const showRight = dir === 'rtl' ? canLeft : canRight;
+            const sl0 = el.scrollLeft;
+            el.scrollLeft = sl0 - 1;
+            const showLeft = el.scrollLeft !== sl0;
+            el.scrollLeft = sl0;
+            el.scrollLeft = sl0 + 1;
+            const showRight = el.scrollLeft !== sl0;
+            el.scrollLeft = sl0;
             leftWrap.classList.toggle('edge-hidden', !showLeft);
             rightWrap.classList.toggle('edge-hidden', !showRight);
             if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
@@ -36450,10 +36551,11 @@ app.get('/admin/contracts/new', async (c) => {
   const escText = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const optionsHtml = (results as any[]).map((cust: any) => {
     const natId = (cust.national_id && !String(cust.national_id).startsWith('TEMP-')) ? String(cust.national_id) : ''
+    const natIdExpiry = cust.national_id_expiry ? String(cust.national_id_expiry) : ''
     const label = escText(cust.full_name || '')
       + (cust.phone ? ' — ' + escText(cust.phone) : '')
       + (natId ? ' (' + escText(natId) + ')' : '')
-    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national-id="${escAttr(natId)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
+    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national-id="${escAttr(natId)}" data-national-id-expiry="${escAttr(natIdExpiry)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
   }).join('\n')
 
   let partyOneSummaryHtml = ''
@@ -42239,16 +42341,16 @@ app.get('/admin/my-tasks', async (c) => {
                     <span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز
                   </button>
                   <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد
+                    <span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد جدا
                   </button>
                   <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل مقبول
+                    <span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل جيد
                   </button>
                   <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل سيئ
+                    <span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل ضعيف
                   </button>
                   <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقوف
+                    <span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقف
                   </button>
                 </div>
               </div>
@@ -42315,10 +42417,10 @@ app.get('/admin/my-tasks', async (c) => {
         let taskReviewRating = 0;
         const TASK_RATING_CFG = {
           5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d' },
-          4: { label: 'عميل جيد',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f' },
-          3: { label: 'عميل مقبول', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309' },
-          2: { label: 'عميل سيئ',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c' },
-          1: { label: 'عميل موقوف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
+          4: { label: 'عميل جيد جدا',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f' },
+          3: { label: 'عميل جيد', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309' },
+          2: { label: 'عميل ضعيف',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c' },
+          1: { label: 'عميل موقف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
         };
 
         function openTaskReviewModal(taskId, customerName, currentRating, currentNote) {
@@ -42392,7 +42494,7 @@ app.get('/admin/my-tasks', async (c) => {
             const res = await axios.patch('/api/my-followup-tasks/' + taskReviewTaskId + '/rating', { rating: taskReviewRating, note: note || null });
             if (!res?.data?.success) throw new Error(res?.data?.error || 'تعذر حفظ التقييم');
             if (taskReviewRating === 1) {
-              await axios.patch('/api/my-followup-tasks/' + taskReviewTaskId + '/archive', { reason: note || 'عميل موقوف' });
+              await axios.patch('/api/my-followup-tasks/' + taskReviewTaskId + '/archive', { reason: note || 'عميل موقف' });
             }
             closeTaskReviewModal();
             await loadTasks();
@@ -49622,7 +49724,7 @@ app.get('/:slug', async (c) => {
 
 // ─── Customer Rating Reminder System ─────────────────────────────────────────
 // Runs daily via Cloudflare cron (see wrangler.toml [triggers]).
-// For each customer with a rating (excluding عميل موقوف = 1), inserts a
+// For each customer with a rating (excluding عميل موقف = 1), inserts a
 // customer_alarm for the assigned user when the interval since the last
 // auto-reminder has elapsed.
 
@@ -49630,16 +49732,16 @@ const REMINDER_NOTE_PREFIX = '[تذكير-تلقائي-تقييم]'
 
 const RATING_REMINDER_INTERVALS: Record<number, number> = {
   5: 3, // عميل ممتاز
-  4: 5, // عميل جيد
-  3: 7, // عميل مقبول
-  2: 9, // عميل سيئ
+  4: 5, // عميل جيد جدا
+  3: 7, // عميل جيد
+  2: 9, // عميل ضعيف
 }
 
 const RATING_REMINDER_LABELS: Record<number, string> = {
   5: 'عميل ممتاز',
-  4: 'عميل جيد',
-  3: 'عميل مقبول',
-  2: 'عميل سيئ',
+  4: 'عميل جيد جدا',
+  3: 'عميل جيد',
+  2: 'عميل ضعيف',
 }
 
 async function processCustomerReminders(db: D1Database): Promise<{ created: number; skipped: number }> {

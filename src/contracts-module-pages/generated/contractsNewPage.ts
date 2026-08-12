@@ -1016,6 +1016,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               </select>
               <div class="invalid-feedback">يجب اختيار عميل موجود لإنشاء العقد</div>
               <div style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> العقود تُنشأ لعملاء موجودين فقط · بيانات الطرف الثاني تُعبَّأ تلقائياً من العميل</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:3px;"><i class="fas fa-filter"></i> تظهر هنا فقط العملاء الذين لديهم طلب تمويل (FR) ومُعيَّن لهم وكيل بنكي</div>
             </div>
 
             <!-- FR lookup kept hidden; auto-filled since each customer has exactly one FR -->
@@ -1034,6 +1035,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
                 <label class="form-label">رقم الهوية الوطنية</label>
                 <input type="text" class="form-control" id="party_two_id" placeholder="يُعبَّأ من العميل" maxlength="10" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" />
                 <div class="invalid-feedback">إن وُجد، يجب أن يكون 10 أرقام</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">تاريخ انتهاء الهوية</label>
+                <input type="text" class="form-control" id="party_two_id_expiry" placeholder="يُعبَّأ من العميل" readonly tabindex="-1" style="background:#f3f4f6;color:#6b7280;cursor:default;" />
               </div>
               <div class="form-group">
                 <label class="form-label">رقم الجوال <span class="required">*</span></label>
@@ -1141,17 +1146,14 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             </div>
           </div>
 
-          <!-- Promissory notes temporarily disabled (page + auto-create removed) -->
-          <div class="form-section" id="promissoryNoteSection" hidden>
+          <!-- Promissory note number -->
+          <div class="form-section" id="promissoryNoteSection">
             <div class="form-section-title"><i class="fas fa-money-check-alt"></i> سند الأمر</div>
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">رقم سند الأمر</label>
-                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">تاريخ استحقاق السند</label>
-                <input type="date" class="form-control" id="note_due_date" />
+                <label class="form-label">رقم سند الأمر <span class="required">*</span></label>
+                <input type="text" class="form-control" id="note_order_number" placeholder="أدخل رقماً غير مستخدم" required />
+                <div class="invalid-feedback">يرجى إدخال رقم سند الأمر</div>
               </div>
             </div>
           </div>
@@ -1341,6 +1343,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       if (!opt) return;
       document.getElementById('party_two_name').value = opt.getAttribute('data-name') || '';
       document.getElementById('party_two_id').value = opt.getAttribute('data-national-id') || '';
+      document.getElementById('party_two_id_expiry').value = opt.getAttribute('data-national-id-expiry') || '';
       document.getElementById('party_two_phone').value = normalizePhone(opt.getAttribute('data-phone') || '');
       document.getElementById('party_two_address').value = opt.getAttribute('data-city') || '';
       ['party_two_name','party_two_id','party_two_phone','party_two_address'].forEach(id => {
@@ -1685,7 +1688,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         { id: 'party_two_phone', msg: 'يرجى اختيار عميل لتعبئة رقم الجوال', check: v => v.trim().length > 0 },
         { id: 'finance_amount', msg: 'يرجى إدخال مبلغ التمويل', check: v => Number(v) > 0 },
         { id: 'bank_name', msg: 'يرجى إدخال اسم البنك أو الجهة الممولة', check: v => v.trim().length > 0 },
-        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 }
+        { id: 'commission_amount', msg: 'يرجى إدخال قيمة السعي', check: v => Number(v) >= 0 },
+        { id: 'note_order_number', msg: 'يرجى إدخال رقم سند الأمر', check: v => v.trim().length > 0 }
       ];
       if (isRealEstateFinanceType()) {
         fields.push(
@@ -1915,6 +1919,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         party_one_logo: document.getElementById('party_one_logo')?.value || '',
         party_two_name: document.getElementById('party_two_name').value,
         party_two_id: (document.getElementById('party_two_id').value || '').trim(),
+        party_two_id_expiry: (document.getElementById('party_two_id_expiry').value || '').trim(),
         party_two_phone: (function(){ const v = document.getElementById('party_two_phone').value.trim(); return v ? '+966' + v : ''; })(),
         party_two_address: document.getElementById('party_two_address').value,
         finance_type: resolveFinanceTypeValue(),
@@ -1925,7 +1930,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         commission_type: document.getElementById('commission_type').value,
         commission_rate: parseFloat(document.getElementById('commission_rate').value) || 0,
         commission_amount: parseFloat(document.getElementById('commission_amount').value) || 0,
-        note_order_number: '',
+        note_order_number: document.getElementById('note_order_number').value.trim(),
         note_due_date: '',
         status: statusValue,
         notes: document.getElementById('notes')?.value || '',
@@ -2077,6 +2082,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           if (locSel && c.location_id) locSel.value = String(c.location_id);
           document.getElementById('party_two_name').value = c.party_two_name || '';
           document.getElementById('party_two_id').value = c.party_two_id || '';
+          document.getElementById('party_two_id_expiry').value = c.party_two_id_expiry || '';
           document.getElementById('party_two_phone').value = normalizePhone(c.party_two_phone || '');
           document.getElementById('party_two_address').value = c.party_two_address || '';
           lockPartyTwoFields();

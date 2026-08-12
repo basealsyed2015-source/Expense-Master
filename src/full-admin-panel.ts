@@ -121,11 +121,12 @@ export const fullAdminPanel = `<!DOCTYPE html>
         .edge-scroll-zone.right { right: 0; background: linear-gradient(270deg, rgba(249,250,251,.92) 0%, rgba(249,250,251,0) 100%); }
         .edge-scroll-zone .edge-scroll-btn {
             opacity: 1;
-            pointer-events: auto;
+            pointer-events: auto !important;
             transition: opacity 160ms ease, box-shadow 160ms ease;
             position: absolute;
             left: 50%;
             transform: translate(-50%, -50%);
+            z-index: 81;
         }
         .edge-scroll-wrap:hover .edge-scroll-zone .edge-scroll-btn:not(.edge-hidden) {
             box-shadow: 0 12px 40px rgba(15,23,42,0.18);
@@ -143,6 +144,8 @@ export const fullAdminPanel = `<!DOCTYPE html>
             display: flex;
             align-items: center;
             justify-content: center;
+            pointer-events: auto !important;
+            cursor: pointer;
         }
         .edge-scroll-btn button:hover { background: rgba(255,255,255,1); }
         .edge-scroll-btn.edge-hidden {
@@ -260,9 +263,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                 <i class="fas fa-user-circle text-3xl shrink-0"></i>
             </div>
             <div class="flex items-center space-x-reverse space-x-2 shrink-0">
-                <button type="button" onclick="toggleDarkMode()" class="p-2 hover:bg-white/10 rounded-lg hidden md:inline-block" title="الوضع الليلي">
-                    <i class="fas fa-moon"></i>
-                </button>
                 <button type="button" id="notif-bell-btn" onclick="openAlarmPanel()" class="relative p-2 hover:bg-white/10 rounded-lg" style="display:none" title="الإشعارات">
                     <i class="fas fa-bell"></i>
                     <span id="notif-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 leading-none"></span>
@@ -452,12 +452,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         <i class="fas fa-file-contract text-3xl mb-2"></i>
                         <div class="text-sm font-bold">إدارة العقود</div>
                         <div class="text-xs mt-1 opacity-90">عقود وسندات</div>
-                    </a>
-                    
-                    <!-- زر الإشعارات -->
-                    <a href="/admin/notifications" class="quick-access-btn bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg p-4 transition-all transform hover:scale-105 shadow-lg block text-center">
-                        <i class="fas fa-bell text-3xl mb-2"></i>
-                        <div class="text-sm font-bold">الإشعارات</div>
                     </a>
 
                     <!-- إعدادات الشركة (مدير الشركة — دور 2 فقط عبر القائمة المسموحة) -->
@@ -2221,7 +2215,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/packages',
                         '/admin/users',
                         '/admin/roles',
-                        '/admin/notifications',
                         '/calculator',
                         '/admin/tenants',
                         '/admin/tenant-calculators',
@@ -2252,7 +2245,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/users',
                         '/admin/hr',
                         '/admin/contracts',
-                        '/admin/notifications',
                         '/admin/company-settings',
                         '/admin/company-settings/locations',
                         '/admin/my-archived-tasks',
@@ -2308,7 +2300,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/my-leaves',
                         '/admin/my-hr',
                         '/admin/my-profile',
-                        '/admin/notifications',
                         '/calculator',
                         '/',
                     ],
@@ -2330,7 +2321,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
                         '/admin/my-leaves',
                         '/admin/my-hr',
                         '/admin/my-profile',
-                        '/admin/notifications',
                         '/calculator',
                         '/',
                     ]
@@ -2931,21 +2921,15 @@ export const fullAdminPanel = `<!DOCTYPE html>
             if (!el) return;
 
             const step = 360;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
+            const left = visualDirection === 'left' ? -step : step;
+            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' });
+            else el.scrollLeft = el.scrollLeft + left;
 
-            // visualDirection means "move viewport towards that edge"
-            // normalized scrollLeft is always LTR-like (0..max)
-            let delta = visualDirection === 'left' ? -step : step;
-            if (dir === 'rtl') delta = -delta;
-
-            const current = getNormalizedScrollLeft(el);
-            animateNormalizedScrollLeft(el, current + delta, 260);
-
-            requestAnimationFrame(() => {
+            setTimeout(function() {
                 const leftId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeLeft' : 'requestsEdgeLeft';
                 const rightId = scrollElId.indexOf('customers') >= 0 ? 'customersEdgeRight' : 'requestsEdgeRight';
                 updateEdgeScrollControls(scrollElId, leftId, rightId);
-            });
+            }, 280);
         }
 
         let __rtlScrollType = null;
@@ -3021,14 +3005,13 @@ export const fullAdminPanel = `<!DOCTYPE html>
             }
 
             const maxScrollLeft = el.scrollWidth - el.clientWidth;
-            const sl = getNormalizedScrollLeft(el);
-
-            const canLeft = sl > 1;
-            const canRight = sl < maxScrollLeft - 1;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            const showLeft = dir === 'rtl' ? canRight : canLeft;
-            const showRight = dir === 'rtl' ? canLeft : canRight;
-
+            const sl0 = el.scrollLeft;
+            el.scrollLeft = sl0 - 1;
+            const showLeft = el.scrollLeft !== sl0;
+            el.scrollLeft = sl0;
+            el.scrollLeft = sl0 + 1;
+            const showRight = el.scrollLeft !== sl0;
+            el.scrollLeft = sl0;
             // show only when there is room in that direction
             leftWrap.classList.toggle('edge-hidden', !showLeft);
             rightWrap.classList.toggle('edge-hidden', !showRight);
@@ -3566,10 +3549,6 @@ export const fullAdminPanel = `<!DOCTYPE html>
         }
         
         // Utility functions
-        window.toggleDarkMode = function() {
-            alert('وضع الليل - قيد التطوير');
-        }
-        
         window.logout = function() {
             if (confirm('هل تريد تسجيل الخروج؟')) {
                 window.location.href = '/login';

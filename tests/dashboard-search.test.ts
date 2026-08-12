@@ -21,7 +21,7 @@ function sliceEndpoint(): string {
   const idx = INDEX_SRC.indexOf("app.get('/api/dashboard-search'")
   assert.ok(idx > 0, 'expected /api/dashboard-search route in src/index.tsx')
   // Big enough window to cover the whole handler body.
-  return INDEX_SRC.slice(idx, idx + 12_000)
+  return INDEX_SRC.slice(idx, idx + 15_000)
 }
 
 describe('dashboard search endpoint — source invariants', () => {
@@ -52,9 +52,14 @@ describe('dashboard search endpoint — source invariants', () => {
 
   it('routes each result to its state-appropriate page', () => {
     const slice = sliceEndpoint()
-    // Customer routing by state.
-    assert.match(slice, /\/admin\/customers\/archived\?highlightCustomer=/)
-    assert.match(slice, /\/admin\/customers\/completed\?highlightCustomer=/)
+    // Customer routing by state — list pages with q= + customerId= (same as task deep-links).
+    assert.match(slice, /customerHrefFor\('archived'/)
+    assert.match(slice, /customerHrefFor\('completed'/)
+    assert.match(slice, /customerHrefFor\('active'/)
+    assert.match(slice, /\/admin\/customers\/archived/)
+    assert.match(slice, /\/admin\/customers\/completed/)
+    assert.match(slice, /\/admin\/customers[^/]/)
+    assert.match(slice, /customerId=\$\{cid\}/)
     // Task routing by follow-up flags: marketing-module admins → /admin/follow-ups
     // with the matching status filter; staff → their dedicated list pages.
     assert.match(slice, /\/admin\/follow-ups\?followupStatusFilter=archived/)
@@ -87,6 +92,20 @@ describe('dashboard search endpoint — source invariants', () => {
     assert.doesNotMatch(slice, /highlightTask=/)
   })
 
+  it('routes archived and completed customers to their own list pages (not /admin/customers)', () => {
+    const slice = sliceEndpoint()
+    assert.match(slice, /if \(state === 'archived'\) return withQs\('\/admin\/customers\/archived'\)/)
+    assert.match(slice, /if \(state === 'completed'\) return withQs\('\/admin\/customers\/completed'\)/)
+    assert.match(slice, /return withQs\('\/admin\/customers'\)/)
+    assert.match(slice, /if \(archived\) \{[\s\S]{0,120}customerHrefFor\('archived'/)
+    assert.match(slice, /else if \(completed\) \{[\s\S]{0,120}customerHrefFor\('completed'/)
+    assert.match(slice, /customerPhoneInputValue\(phone\)/)
+    assert.match(slice, /q=\$\{encodeURIComponent\(qVal\)\}/)
+    assert.match(slice, /customerId=\$\{cid\}/)
+    assert.doesNotMatch(slice, /highlightCustomer=/)
+    assert.doesNotMatch(slice, /href = `\/admin\/customers\/\$\{r\.id\}`/)
+  })
+
   it('normalizes task deep-link phones away from 966 before putting them in q', () => {
     function customerPhoneInputValue(rawPhone: string | null | undefined): string {
       const digits = String(rawPhone ?? '').trim().replace(/[^\d]/g, '')
@@ -103,6 +122,18 @@ describe('dashboard search endpoint — source invariants', () => {
     const local = customerPhoneInputValue('966501234567')
     const phoneQ = local && /^5\d{8}$/.test(local) ? `0${local}` : local
     assert.equal(phoneQ, '0501234567')
+  })
+
+  it('collapses 966… phone queries to the local core before LIKE (not just leading 0)', () => {
+    const normIdx = INDEX_SRC.indexOf('function normalizeListSearchQuery')
+    assert.ok(normIdx > 0, 'expected normalizeListSearchQuery')
+    const normSlice = INDEX_SRC.slice(normIdx, normIdx + 900)
+    assert.match(normSlice, /customerPhoneInputValue\(digitsOnly\)/)
+
+    const slice = sliceEndpoint()
+    // Dashboard search also expands phoneMatchVariants (same as follow-ups).
+    assert.match(slice, /phoneMatchVariants/)
+    assert.match(slice, /c\.phone IN \(/)
   })
 
   it('returns customerTotal + taskTotal so the UI can label result counts distinctly', () => {
@@ -291,5 +322,50 @@ describe('dashboard search — SQL behavior', () => {
       `SELECT id FROM customers c WHERE c.tenant_id = ? AND c.phone LIKE ?`
     ).all(7, like) as { id: number }[]
     assert.deepEqual(rows.map(r => r.id), [1])
+  })
+
+  it('normalizes 966… search to local core so it matches 05… / 5… / 966… storage', () => {
+    // Mirror of normalizeListSearchQuery + customerPhoneInputValue (src/index.tsx).
+    function customerPhoneInputValue(rawPhone: string | null | undefined): string {
+      const digits = String(rawPhone ?? '').trim().replace(/[^\d]/g, '')
+      if (!digits) return ''
+      if (digits.startsWith('00966')) return digits.slice(5)
+      if (digits.startsWith('966')) return digits.slice(3)
+      if (digits.startsWith('05') && digits.length === 10) return digits.slice(1)
+      return digits
+    }
+    function normalizeListSearchQuery(raw: string): string {
+      const trimmed = String(raw ?? '').trim()
+      if (!trimmed) return ''
+      const compact = trimmed.replace(/[\s\-().+]/g, '')
+      const digitsOnly = compact.replace(/^\+/, '')
+      if (/^\d+$/.test(digitsOnly)) {
+        const local = customerPhoneInputValue(digitsOnly)
+        if (local && local.length >= 4) return local
+        if (digitsOnly.startsWith('0')) return digitsOnly.replace(/^0+/, '') || trimmed
+        return digitsOnly
+      }
+      return trimmed
+    }
+
+    // The reported miss: typing the full international form.
+    assert.equal(normalizeListSearchQuery('966554154444'), '554154444')
+    assert.equal(normalizeListSearchQuery('+966554154444'), '554154444')
+    assert.equal(normalizeListSearchQuery('0554154444'), '554154444')
+    assert.equal(normalizeListSearchQuery('554154444'), '554154444')
+
+    const db = seedDb()
+    // Mixed storage forms that all represent the same mobile.
+    db.prepare(`INSERT INTO customers (id, full_name, phone, tenant_id) VALUES
+      (1, 'Stored966', '966554154444', 2),
+      (2, 'Stored05', '0554154444', 2),
+      (3, 'StoredLocal', '554154444', 2),
+      (4, 'OtherTenant', '966554154444', 9)`).run()
+
+    const like = `%${normalizeListSearchQuery('966554154444')}%`
+    const rows = db.prepare(
+      `SELECT id FROM customers c WHERE c.tenant_id = ? AND c.phone LIKE ? ORDER BY id`
+    ).all(2, like) as { id: number }[]
+    assert.deepEqual(rows.map(r => r.id), [1, 2, 3])
   })
 })
