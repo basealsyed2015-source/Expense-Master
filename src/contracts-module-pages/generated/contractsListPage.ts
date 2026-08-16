@@ -905,7 +905,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <a href="/admin/contracts/list" class="nav-item active"><i class="fas fa-file-alt"></i><span>العقود</span></a>
       <a href="/admin/contracts/new" class="nav-item"><i class="fas fa-plus-circle"></i><span>عقد جديد</span></a>
       <a href="/admin/contracts/templates" class="nav-item"><i class="fas fa-layer-group"></i><span>القوالب</span></a>
-      <a href="/admin/contracts/notes" class="nav-item"><i class="fas fa-money-check-alt"></i><span>سندات الأمر</span></a>
+      <!-- TEMPORARILY DISABLED: promissory notes page
+      
+      -->
       <a href="/admin/contracts/archive" class="nav-item"><i class="fas fa-archive"></i><span>الأرشيف</span></a>
       
     </nav>

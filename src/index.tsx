@@ -77,7 +77,7 @@ import {
   isBankAgentAssignableRole,
 } from './notification-access'
 import { extractCronSecretFromHeaders, isValidCronSecret } from './cron-auth'
-import { attachNoResponseTransferLogs, listNoResponseTransferStaff, pickNextNoResponseAssignee } from './followup-transfer-logs'
+import { attachNoResponseTransferLogs, attachTransferHistory, listNoResponseTransferStaff, pickNextNoResponseAssignee } from './followup-transfer-logs'
 import {
   assignBankAgentToCustomer,
   setCustomerAssignedBankAgent,
@@ -156,33 +156,9 @@ import {
   withPerfTiming,
   type UserInfo,
 } from './perf-helpers'
-
-type Bindings = {
-  DB: D1Database;
-  ATTACHMENTS: R2Bucket;
-  /** Resend API key — set with `wrangler secret put RESEND_API_KEY` */
-  RESEND_API_KEY?: string;
-  /** Verified sender, e.g. `Tamweel <noreply@yourdomain.com>` (Worker var or secret) */
-  EMAIL_FROM?: string;
-  /**
-   * Shared secret for companion cron Worker (`wrangler.cron.toml`).
-   * Pages: `wrangler pages secret put CRON_SECRET --project-name tamweel-calc-prod`
-   * Cron Worker: `wrangler secret put CRON_SECRET -c wrangler.cron.toml`
-   */
-  CRON_SECRET?: string;
-  /** When "1"/"true", enable verbose auth logs */
-  DEBUG_AUTH?: string;
-  /** When "1"/"true", emit [perf] timing logs */
-  PERF_DEBUG?: string;
-  /** When "1"/"true", inline Tailwind CSS into HTML (legacy fallback) */
-  INLINE_TAILWIND?: string;
-}
-
-type Variables = {
-  tenant: any;
-  tenantId: number | null;
-  userInfo?: UserInfo;
-}
+import type { Bindings, Variables } from './shared/context'
+import { getRoleDisplayName } from './shared/role-display'
+import { authRoutes } from './routes/auth'
 
 function normalizeCustomerSolutionsJson(raw: string | null | undefined): string | null {
   if (raw == null || String(raw).trim() === '') return null
@@ -3221,32 +3197,6 @@ function getAdminAccessDeniedRedirect(roleId: unknown): string {
 
 function jsonForInlineScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c')
-}
-
-function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined): string {
-  const normalizedRoleId = normalizeRoleId(roleId)
-  const raw = (roleName || '').trim()
-  const rn = raw.toLowerCase()
-
-  if (normalizedRoleId === 1) return 'مدير النظام'
-  // Prefer DB label (e.g. حساب شركة) for company accounts
-  if (normalizedRoleId === 2) return raw || 'حساب شركة'
-  // Numeric 3 = sales supervisor (even if an old migration relabeled the roles row as "employee"/موظف)
-  if (normalizedRoleId === 3) return 'مشرف المبيعات'
-  if (normalizedRoleId === 4) return 'موظف'
-  if (normalizedRoleId === 5) return 'موظف التمويل'
-  if (normalizedRoleId === 6) return 'موظف مزدوج'
-
-  // Legacy English keys from older seeds / custom role rows (when role_id is missing or non-standard)
-  if (rn === 'supervisor') return 'مشرف المبيعات'
-  if (rn === 'employee') return 'موظف'
-  if (rn === 'dual_agent') return 'موظف مزدوج'
-  if (rn === 'company_admin') return 'حساب شركة'
-  if (rn === 'super_admin') return 'مدير النظام'
-  if (raw === 'موظف') return 'موظف'
-  if (raw === 'مشرف' || raw.includes('مشرف')) return 'مشرف المبيعات'
-
-  return raw || 'غير محدد'
 }
 
 /** توزيع العملاء: مدير النظام (1) أو حساب شركة (2) فقط — لا يشمل مشرف المبيعات (3) أو الموظف (4) */
@@ -6500,381 +6450,8 @@ app.delete('/api/tenants/:tenantRef', async (c) => {
   }
 })
 
-// AUTHENTICATION & AUTHORIZATION APIs
-
-// Login API
-app.post('/api/auth/login', async (c) => {
-  try {
-    console.log('🔐 [LOGIN] Starting login process...')
-    console.log('🔐 [LOGIN] Request URL:', c.req.url)
-    console.log('🔐 [LOGIN] Request method:', c.req.method)
-    
-    // Check if DB binding is available
-    if (!c.env.DB) {
-      console.error('❌ [LOGIN] DB binding is not available')
-      console.error('❌ [LOGIN] c.env:', JSON.stringify(Object.keys(c.env || {})))
-      return c.json({ 
-        success: false, 
-        error: 'Database connection not available. Please check bindings configuration.',
-        debug: { env_keys: Object.keys(c.env || {}) }
-      }, 500)
-    }
-    
-    console.log('🔐 [LOGIN] DB binding available, parsing request body...')
-    const { username, password } = await c.req.json()
-    
-    console.log(`🔐 [LOGIN] Login attempt: ${username}`)
-    console.log(`🔍 [LOGIN] DB binding check: ${!!c.env.DB}`)
-    
-    // Get user with tenant information
-    // Double-check DB is available before using it
-    if (!c.env?.DB) {
-      console.error('❌ DB binding check failed in login query')
-      return c.json({ 
-        success: false, 
-        error: 'Database connection not available. Please check bindings configuration.' 
-      }, 500)
-    }
-    
-    const user = await c.env.DB.prepare(`
-      SELECT u.id, u.username, u.password, u.full_name, u.email, u.phone,
-             u.role_id, u.subscription_id, u.is_active, 
-             u.tenant_id, u.assigned_bank_id,
-             r.role_name, r.description as role_description,
-             s.company_name as subscription_company_name,
-             t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
-      FROM users u
-      LEFT JOIN roles r ON u.role_id = r.id
-      LEFT JOIN subscriptions s ON u.subscription_id = s.id
-      LEFT JOIN tenants t ON u.tenant_id = t.id
-      WHERE u.username = ? AND u.password = ? AND u.is_active = 1
-    `).bind(username, password).first()
-    
-    if (!user) {
-      console.log(`❌ Login failed: Invalid credentials for ${username}`)
-      return c.json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' }, 401)
-    }
-    
-    console.log(`✅ [LOGIN] User found: ${user.full_name} (Role ID: ${user.role_id})`)
-    console.log(`✅ [LOGIN] User ID: ${user.id}, Tenant ID: ${user.tenant_id}`)
-    
-    // Update last login - check DB again before update
-    if (!c.env?.DB) {
-      console.error('❌ [LOGIN] DB binding lost after user query')
-      // Continue anyway - user is authenticated, just can't update last_login
-    } else {
-      console.log('✅ [LOGIN] Updating last_login timestamp...')
-      const loginTimestamp = new Date().toISOString()
-      await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
-        .bind(loginTimestamp, user.id).run()
-      console.log('✅ [LOGIN] last_login updated successfully')
-    }
-    
-    // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
-    console.log('🔐 [LOGIN] Creating authentication token...')
-    let tenantForAuthToken: number | null =
-      user.tenant_id != null ? Number(user.tenant_id as number) : null
-    const loginNormalizedRoleId = normalizeRoleId(user.role_id)
-    const loginAssignedBankId = (user as { assigned_bank_id?: number | null }).assigned_bank_id
-    const loginBankIdNum =
-      loginAssignedBankId != null && !Number.isNaN(Number(loginAssignedBankId))
-        ? Number(loginAssignedBankId)
-        : null
-    if (
-      tenantForAuthToken == null &&
-      (loginNormalizedRoleId === 5 || loginNormalizedRoleId === 6) &&
-      loginBankIdNum != null &&
-      c.env.DB
-    ) {
-      try {
-        const br = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
-          .bind(loginBankIdNum)
-          .first<{ tenant_id: number | null }>()
-        if (br?.tenant_id != null && !Number.isNaN(Number(br.tenant_id))) {
-          tenantForAuthToken = Number(br.tenant_id)
-        }
-      } catch (_) {
-        /* keep null */
-      }
-    }
-
-    const tokenData = `${user.id}:${tenantForAuthToken ?? 'null'}:${user.role_id}:${Date.now()}`
-    console.log('🔐 [LOGIN] Token data:', tokenData)
-    const token = btoa(tokenData)
-    console.log('🔐 [LOGIN] Token created:', token.substring(0, 30) + '...')
-    
-    // Set cookie for 7 days - use Response headers directly for Cloudflare Pages compatibility
-    const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
-    const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
-    
-    // Determine redirect URL
-    const redirect = '/admin/panel'
-    
-    console.log(`🎯 Redirect to: ${redirect}`)
-    console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
-    
-    // Create response with cookie header set directly (avoids getSetCookie compatibility issue)
-    const response = c.json({ 
-      success: true,
-      token: token,
-      redirect: redirect,
-      user: {
-        id: user.id,
-        username: user.username,
-        full_name: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        role_id: user.role_id,
-        role_name: getRoleDisplayName(user.role_id, user.role_name),  // Role name from roles table
-        role_description: user.role_description,
-        company_name: user.subscription_company_name || user.tenant_name,
-        subscription_id: user.subscription_id,
-        tenant_id: user.tenant_id,
-        tenant_name: user.tenant_name,
-        tenant_slug: user.tenant_slug,
-        assigned_bank_id: (user as { assigned_bank_id?: number | null }).assigned_bank_id ?? null
-      }
-    })
-    
-    // Set cookie header directly on the response to avoid getSetCookie compatibility issue
-    console.log('🍪 [LOGIN] Setting cookie header...')
-    response.headers.set('Set-Cookie', cookieValue)
-    console.log('✅ [LOGIN] Login successful, returning response')
-    return response
-  } catch (error: any) {
-    // Aggressive debug dump - return full error in response
-    const errorDump = {
-      // Basic error info
-      message: error?.message || 'Unknown error',
-      name: error?.name || 'Error',
-      stack: error?.stack || 'No stack trace',
-      
-      // Full error object (try to serialize)
-      error: error ? {
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-        cause: error.cause,
-        toString: error.toString(),
-        // Try to get all enumerable properties
-        ...Object.getOwnPropertyNames(error).reduce((acc, key) => {
-          try {
-            acc[key] = String(error[key])
-          } catch {
-            acc[key] = '[Cannot serialize]'
-          }
-          return acc
-        }, {} as any)
-      } : null,
-      
-      // Environment info
-      DB_available: !!c.env?.DB,
-      env_keys: Object.keys(c.env || {}),
-      env_DB_type: typeof c.env?.DB,
-      
-      // Request info
-      request_url: c.req.url,
-      request_method: c.req.method,
-      request_headers: Object.fromEntries(c.req.raw.headers.entries()),
-      
-      // Try to stringify the whole error
-      error_stringified: (() => {
-        try {
-          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-        } catch (e) {
-          return `Failed to stringify: ${e}`
-        }
-      })()
-    }
-    
-    console.error('❌ [LOGIN] FULL ERROR DUMP:', errorDump)
-    
-    // Return full error dump in response (temporary for debugging)
-    return c.json({ 
-      success: false, 
-      error: 'حدث خطأ في تسجيل الدخول',
-      dd: errorDump // Debug dump
-    }, 500)
-  }
-})
-
-// Logout API (clears auth cookie)
-app.post('/api/auth/logout', async (c) => {
-  // Expire cookie in multiple ways to handle Secure/non-Secure variants across environments
-  const expiredSecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure'
-  const expiredInsecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax'
-
-  const res = c.json({ success: true })
-  // Use append so we can send multiple Set-Cookie headers
-  res.headers.append('Set-Cookie', expiredSecure)
-  res.headers.append('Set-Cookie', expiredInsecure)
-  return res
-})
-
-// Forgot Password - Step 1: Send verification code
-app.post('/api/auth/forgot-password', async (c) => {
-  try {
-    const { email } = await c.req.json()
-    const apiKey = c.env.RESEND_API_KEY?.trim()
-    if (!apiKey) {
-      console.error('Forgot password: RESEND_API_KEY is not set')
-      return c.json(
-        {
-          success: false,
-          message:
-            'خدمة البريد غير مهيأة على الخادم. أضف سر RESEND_API_KEY (راجع إعدادات النشر).',
-        },
-        503
-      )
-    }
-
-    // Check if user exists
-    const user = await c.env.DB.prepare(`
-      SELECT id, email, username FROM users WHERE email = ? OR username = ?
-    `).bind(email, email).first<{ id: number; email: string | null; username: string }>()
-
-    if (!user) {
-      return c.json({ success: false, message: 'البريد الإلكتروني أو اسم المستخدم غير موجود' }, 404)
-    }
-
-    const to = String(user.email ?? '').trim()
-    if (!to) {
-      return c.json(
-        {
-          success: false,
-          message: 'لا يوجد بريد إلكتروني مسجل لهذا الحساب. تواصل مع المسؤول لتحديث بريدك.',
-        },
-        400
-      )
-    }
-
-    // Generate 6-digit verification code
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
-
-    const inserted = await c.env.DB.prepare(`
-      INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
-      VALUES (?, ?, ?, 0)
-      RETURNING id
-    `).bind(user.id, code, expiresAt.toISOString()).first<{ id: number }>()
-
-    if (!inserted?.id) {
-      console.error('Forgot password: INSERT RETURNING id failed')
-      return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
-    }
-
-    const from = (c.env.EMAIL_FROM?.trim() || 'Tamweel <onboarding@resend.dev>').trim()
-    const sent = await sendPasswordResetCodeEmail({ apiKey, from, to, code })
-    if (!sent.ok) {
-      console.error('Resend forgot-password error:', sent.error)
-      await c.env.DB.prepare(`DELETE FROM password_change_notifications WHERE id = ?`).bind(inserted.id).run()
-      return c.json(
-        {
-          success: false,
-          message: 'تعذر إرسال البريد الإلكتروني. تحقق من عنوان المرسل في Resend أو حاول لاحقاً.',
-        },
-        502
-      )
-    }
-
-    return c.json({
-      success: true,
-      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-    })
-  } catch (error: any) {
-    console.error('Forgot password error:', error)
-    return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
-  }
-})
-
-// Forgot Password - Step 2: Verify code
-app.post('/api/auth/verify-reset-code', async (c) => {
-  try {
-    const { email, code } = await c.req.json()
-    
-    // Get user
-    const user = await c.env.DB.prepare(`
-      SELECT id FROM users WHERE email = ? OR username = ?
-    `).bind(email, email).first()
-    
-    if (!user) {
-      return c.json({ success: false, message: 'المستخدم غير موجود' }, 404)
-    }
-    
-    // Check verification code
-    const verification = await c.env.DB.prepare(`
-      SELECT id, verification_code, expires_at, is_used
-      FROM password_change_notifications
-      WHERE user_id = ? AND is_used = 0
-      ORDER BY created_at DESC
-      LIMIT 1
-    `).bind(user.id).first()
-    
-    if (!verification) {
-      return c.json({ success: false, message: 'لم يتم العثور على رمز التحقق' }, 404)
-    }
-    
-    // Check if expired
-    if (new Date(verification.expires_at as string) < new Date()) {
-      return c.json({ success: false, message: 'انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد.' }, 400)
-    }
-    
-    // Check if code matches
-    if (verification.verification_code !== code) {
-      return c.json({ success: false, message: 'رمز التحقق غير صحيح' }, 400)
-    }
-    
-    // Generate reset token
-    const token = Math.random().toString(36).substring(2) + Date.now().toString(36)
-    
-    return c.json({ 
-      success: true, 
-      message: 'تم التحقق بنجاح',
-      token: token
-    })
-  } catch (error: any) {
-    console.error('Verify code error:', error)
-    return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
-  }
-})
-
-// Forgot Password - Step 3: Reset password
-app.post('/api/auth/reset-password', async (c) => {
-  try {
-    const { email, token, newPassword } = await c.req.json()
-    
-    if (!newPassword || newPassword.length < 8) {
-      return c.json({ success: false, message: 'كلمة السر يجب أن تكون 8 أحرف على الأقل' }, 400)
-    }
-    
-    // Get user
-    const user = await c.env.DB.prepare(`
-      SELECT id FROM users WHERE email = ? OR username = ?
-    `).bind(email, email).first()
-    
-    if (!user) {
-      return c.json({ success: false, message: 'المستخدم غير موجود' }, 404)
-    }
-    
-    // Update password
-    await c.env.DB.prepare(`
-      UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `).bind(newPassword, user.id).run()
-    
-    // Mark verification code as used
-    await c.env.DB.prepare(`
-      UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
-    `).bind(user.id).run()
-    
-    return c.json({ 
-      success: true, 
-      message: 'تم تغيير كلمة السر بنجاح'
-    })
-  } catch (error: any) {
-    console.error('Reset password error:', error)
-    return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
-  }
-})
+// AUTHENTICATION & AUTHORIZATION APIs — see src/routes/auth.ts
+app.route('/', authRoutes)
 
 // BANKS APIs
 
@@ -40173,7 +39750,7 @@ app.get('/api/follow-ups', async (c) => {
         const data = (results || []).map((row: Record<string, unknown>) =>
           normalizeContactFollowupRowForApi(row)
         )
-        await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
+        await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'followup')
         return c.json({ success: true, data })
       }
 
@@ -40201,7 +39778,7 @@ app.get('/api/follow-ups', async (c) => {
       const data = (results || []).map((row: Record<string, unknown>) =>
         normalizeContactFollowupRowForApi(row)
       )
-      await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
+      await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'followup')
       return c.json({ success: true, data })
     }
 
@@ -40234,7 +39811,7 @@ app.get('/api/follow-ups', async (c) => {
     const data = (results || []).map((row: Record<string, unknown>) =>
       normalizeContactFollowupRowForApi(row)
     )
-    await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'followup')
+    await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'followup')
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -41056,6 +40633,7 @@ app.get('/api/follow-ups-archived', async (c) => {
       const data = (results || []).map((row: Record<string, unknown>) =>
         normalizeContactFollowupRowForApi(row)
       )
+      await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'followup')
       return c.json({ success: true, data })
     }
 
@@ -41075,6 +40653,7 @@ app.get('/api/follow-ups-archived', async (c) => {
     const data = (results || []).map((row: Record<string, unknown>) =>
       normalizeContactFollowupRowForApi(row)
     )
+    await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'followup')
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -41170,7 +40749,7 @@ app.get('/api/my-followup-tasks', async (c) => {
     }
 
     const data = results.map((row) => normalizeContactFollowupRowForApi(row))
-    await attachNoResponseTransferLogs(c.env.DB, data as Record<string, unknown>[], 'task')
+    await attachTransferHistory(c.env.DB, data as Record<string, unknown>[], 'task')
     return c.json({ success: true, data })
   } catch (error: any) {
     return c.json({ success: false, error: error?.message || 'Server error' }, 500)
@@ -42633,6 +42212,74 @@ app.get('/admin/my-tasks', async (c) => {
           );
         }
 
+        function transferHistoryPopoverHtml(history) {
+          if (!Array.isArray(history) || !history.length) return '<div class="p-3 text-xs text-gray-400">لا يوجد سجل.</div>';
+          return history.map(function(e) {
+            var isAuto = e.kind === 'auto_no_response';
+            var kindBadge = isAuto
+              ? '<span class="inline-flex items-center gap-1 text-orange-700 font-semibold"><i class="fas fa-circle text-orange-400" style="font-size:7px;vertical-align:middle"></i>لا يرد (تلقائي)</span>'
+              : '<span class="inline-flex items-center gap-1 text-violet-700 font-semibold"><i class="fas fa-circle text-violet-400" style="font-size:7px;vertical-align:middle"></i>تمرير يدوي</span>';
+            var dateStr = e.at ? formatDate(e.at) : '';
+            return (
+              '<div class="px-3 py-2 border-b border-gray-50 last:border-b-0">' +
+                '<div class="text-xs mb-0.5">' + kindBadge + '</div>' +
+                '<div class="text-xs text-gray-700">' + escapeHtml(e.from_name || '') + ' → ' + escapeHtml(e.to_name || '') + '</div>' +
+                (dateStr ? '<div class="text-[10px] text-gray-400">' + escapeHtml(dateStr) + '</div>' : '') +
+                (e.note ? '<div class="text-[10px] text-gray-500 mt-0.5 italic">"' + escapeHtml(e.note) + '"</div>' : '') +
+              '</div>'
+            );
+          }).join('');
+        }
+
+        function transferHistoryButtonHtml(row, domId) {
+          var count = Number(row.transfer_count) || 0;
+          if (!count) return '';
+          var history = Array.isArray(row.transfer_history) ? row.transfer_history : [];
+          var hasAuto = history.some(function(e) { return e.kind === 'auto_no_response'; });
+          var iconClass = 'relative text-lg w-10 h-10 flex items-center justify-center rounded-full border cursor-pointer ' +
+            (hasAuto ? 'border-orange-400 text-orange-600 bg-orange-50 hover:bg-orange-100' : 'border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100');
+          return (
+            '<button type="button" data-transfer-btn="' + escapeHtml(String(domId)) + '" ' +
+              'aria-haspopup="true" aria-expanded="false" ' +
+              'title="سجل التحويلات (' + count + ')" ' +
+              'class="' + iconClass + '">' +
+              '<i class="fas fa-exchange-alt"></i>' +
+              '<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-slate-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">' + count + '</span>' +
+            '</button>' +
+            '<div id="transfer-pop-' + escapeHtml(String(domId)) + '" ' +
+              'class="hidden absolute left-0 top-12 z-30 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">' +
+              '<div class="px-3 py-2 border-b border-gray-100 text-xs font-semibold text-gray-700">سجل التحويلات</div>' +
+              transferHistoryPopoverHtml(history) +
+            '</div>'
+          );
+        }
+
+        var _transferPopDocListenerAdded = false;
+        function bindTransferHistoryPopovers(root) {
+          root.querySelectorAll('[data-transfer-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var domId = btn.getAttribute('data-transfer-btn');
+              var pop = document.getElementById('transfer-pop-' + domId);
+              if (!pop) return;
+              var isOpen = !pop.classList.contains('hidden');
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              if (!isOpen) pop.classList.remove('hidden');
+            });
+          });
+          if (!_transferPopDocListenerAdded) {
+            _transferPopDocListenerAdded = true;
+            document.addEventListener('click', function() {
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+            });
+            document.addEventListener('keydown', function(e) {
+              if (e.key === 'Escape') {
+                document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              }
+            });
+          }
+        }
+
         function statusBadge(task) {
           return isCompleted(task)
             ? '<span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">مكتملة</span>'
@@ -43030,33 +42677,39 @@ app.get('/admin/my-tasks', async (c) => {
             var cardBorderStyle = taskRating && CARD_RATING_CFG[taskRating]
               ? 'border-color:' + CARD_RATING_CFG[taskRating].border + ';border-width:2px;'
               : '';
-            return (
-              '<div class="bg-white border rounded-xl p-4 shadow-sm" style="' + cardBorderStyle + '">' +
-                '<div class="flex flex-wrap items-start justify-between gap-2">' +
-                  '<div class="min-w-0 flex-1">' +
-                    '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
-                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) + statusBadge(task) +
-                    followupSourceBadgeHtml(task) +
-                    '</div>' +
+            var railBtn = transferHistoryButtonHtml(task, 'task-' + task.id);
+            var cardContent =
+              '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                '<div class="min-w-0 flex-1">' +
+                  '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
+                  '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) + statusBadge(task) +
+                  followupSourceBadgeHtml(task) +
                   '</div>' +
                 '</div>' +
-                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
-                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
-                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
-                  '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message || '') + '</span></div>' +
-                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
-                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
-                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+              '</div>' +
+              '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message || '') + '</span></div>' +
+                '<div><i class="fas fa-calendar-alt ml-1 text-indigo-500"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                  (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+              '</div>' +
+              historyBlock +
+              passBlock +
+              actionBtn;
+            return (
+              '<div class="bg-white border rounded-xl p-4 shadow-sm" style="' + cardBorderStyle + '">' +
+                '<div class="flex items-stretch gap-3">' +
+                  '<div class="min-w-0 flex-1">' + cardContent + '</div>' +
+                  (railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : '') +
                 '</div>' +
-                transferLogHtml(task.transfer_summary) +
-                historyBlock +
-                passBlock +
-                actionBtn +
               '</div>'
             );
           }).join('');
 
           bindWhatsAppButtons(root);
+          bindTransferHistoryPopovers(root);
 
           root.querySelectorAll('[data-pass-submit]').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -43534,25 +43187,72 @@ app.get('/admin/my-no-response-tasks', async (c) => {
             : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
         }
 
-        function transferLogHtml(summary) {
-          if (!summary || !summary.initial_name) return '';
-          var chain = Array.isArray(summary.chain) ? summary.chain.filter(Boolean) : [];
-          var chainText = chain.length
-            ? chain.map(function (n) { return escapeHtml(n); }).join(' → ')
-            : escapeHtml(summary.initial_name) + ' → ' + escapeHtml(summary.latest_to_name || '');
-          var dateText = summary.latest_at ? formatDate(summary.latest_at) : '';
-          var titleParts = Array.isArray(summary.hops)
-            ? summary.hops.map(function (h) {
-                return (h.from_name || '') + ' → ' + (h.to_name || '') + (h.created_at ? ' · ' + h.created_at : '');
-              }).join(' | ')
-            : '';
+        function transferHistoryPopoverHtml(history) {
+          if (!Array.isArray(history) || !history.length) return '<div class="p-3 text-xs text-gray-400">لا يوجد سجل.</div>';
+          return history.map(function(e) {
+            var isAuto = e.kind === 'auto_no_response';
+            var kindBadge = isAuto
+              ? '<span class="inline-flex items-center gap-1 text-orange-700 font-semibold"><i class="fas fa-circle text-orange-400" style="font-size:7px;vertical-align:middle"></i>لا يرد (تلقائي)</span>'
+              : '<span class="inline-flex items-center gap-1 text-violet-700 font-semibold"><i class="fas fa-circle text-violet-400" style="font-size:7px;vertical-align:middle"></i>تمرير يدوي</span>';
+            var dateStr = e.at ? formatDate(e.at) : '';
+            return (
+              '<div class="px-3 py-2 border-b border-gray-50 last:border-b-0">' +
+                '<div class="text-xs mb-0.5">' + kindBadge + '</div>' +
+                '<div class="text-xs text-gray-700">' + escapeHtml(e.from_name || '') + ' → ' + escapeHtml(e.to_name || '') + '</div>' +
+                (dateStr ? '<div class="text-[10px] text-gray-400">' + escapeHtml(dateStr) + '</div>' : '') +
+                (e.note ? '<div class="text-[10px] text-gray-500 mt-0.5 italic">"' + escapeHtml(e.note) + '"</div>' : '') +
+              '</div>'
+            );
+          }).join('');
+        }
+
+        function transferHistoryButtonHtml(row, domId) {
+          var count = Number(row.transfer_count) || 0;
+          if (!count) return '';
+          var history = Array.isArray(row.transfer_history) ? row.transfer_history : [];
+          var hasAuto = history.some(function(e) { return e.kind === 'auto_no_response'; });
+          var iconClass = 'relative text-lg w-10 h-10 flex items-center justify-center rounded-full border cursor-pointer ' +
+            (hasAuto ? 'border-orange-400 text-orange-600 bg-orange-50 hover:bg-orange-100' : 'border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100');
           return (
-            '<div class="mt-2 text-[11px] leading-tight text-slate-600" title="' + escapeHtml(titleParts) + '">' +
-              '<span class="text-orange-700 font-semibold whitespace-nowrap"><i class="fas fa-exchange-alt ml-1"></i>تحويل لا يرد:</span> ' +
-              '<span class="text-slate-700">' + chainText + '</span>' +
-              (dateText ? ' <span class="text-slate-400">· ' + escapeHtml(dateText) + '</span>' : '') +
+            '<button type="button" data-transfer-btn="' + escapeHtml(String(domId)) + '" ' +
+              'aria-haspopup="true" aria-expanded="false" ' +
+              'title="سجل التحويلات (' + count + ')" ' +
+              'class="' + iconClass + '">' +
+              '<i class="fas fa-exchange-alt"></i>' +
+              '<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-slate-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">' + count + '</span>' +
+            '</button>' +
+            '<div id="transfer-pop-' + escapeHtml(String(domId)) + '" ' +
+              'class="hidden absolute left-0 top-12 z-30 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">' +
+              '<div class="px-3 py-2 border-b border-gray-100 text-xs font-semibold text-gray-700">سجل التحويلات</div>' +
+              transferHistoryPopoverHtml(history) +
             '</div>'
           );
+        }
+
+        var _transferPopDocListenerAdded = false;
+        function bindTransferHistoryPopovers(root) {
+          root.querySelectorAll('[data-transfer-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var domId = btn.getAttribute('data-transfer-btn');
+              var pop = document.getElementById('transfer-pop-' + domId);
+              if (!pop) return;
+              var isOpen = !pop.classList.contains('hidden');
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              if (!isOpen) pop.classList.remove('hidden');
+            });
+          });
+          if (!_transferPopDocListenerAdded) {
+            _transferPopDocListenerAdded = true;
+            document.addEventListener('click', function() {
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+            });
+            document.addEventListener('keydown', function(e) {
+              if (e.key === 'Escape') {
+                document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              }
+            });
+          }
         }
 
         function setStatus(msg, type) {
@@ -43580,34 +43280,40 @@ app.get('/admin/my-no-response-tasks', async (c) => {
                 '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
                 '</div>'
               : '';
-            return (
-              '<div class="bg-white border border-orange-200 rounded-xl p-4 shadow-sm">' +
-                '<div class="flex flex-wrap items-start justify-between gap-2">' +
-                  '<div class="min-w-0 flex-1">' +
-                    '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
-                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
-                    '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-phone-slash ml-1"></i>لا يرد</span>' +
-                    '</div>' +
+            var railBtn = transferHistoryButtonHtml(task, 'task-' + task.id);
+            var cardContent =
+              '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                '<div class="min-w-0 flex-1">' +
+                  '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
+                  '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
+                  '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-phone-slash ml-1"></i>لا يرد</span>' +
                   '</div>' +
                 '</div>' +
-                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
-                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
-                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
-                  (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
-                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
-                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
-                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
-                '</div>' +
-                transferLogHtml(task.transfer_summary) +
-                countdown +
-                noteBlock +
-                '<div class="mt-3 flex flex-wrap gap-2">' +
-                  '<button type="button" data-revoke="' + task.id + '" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-undo ml-1"></i>استرجاع للقائمة الرئيسية</button>' +
+              '</div>' +
+              '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
+                '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                  (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+              '</div>' +
+              countdown +
+              noteBlock +
+              '<div class="mt-3 flex flex-wrap gap-2">' +
+                '<button type="button" data-revoke="' + task.id + '" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-undo ml-1"></i>استرجاع للقائمة الرئيسية</button>' +
+              '</div>';
+            return (
+              '<div class="bg-white border border-orange-200 rounded-xl p-4 shadow-sm">' +
+                '<div class="flex items-stretch gap-3">' +
+                  '<div class="min-w-0 flex-1">' + cardContent + '</div>' +
+                  (railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : '') +
                 '</div>' +
               '</div>'
             );
           }).join('');
           bindWhatsAppButtons(root);
+          bindTransferHistoryPopovers(root);
           root.querySelectorAll('[data-revoke]').forEach(function (btn) {
             btn.addEventListener('click', async function () {
               var tid = btn.getAttribute('data-revoke');
@@ -43833,6 +43539,74 @@ app.get('/admin/my-archived-tasks', async (c) => {
           el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
         }
 
+        function transferHistoryPopoverHtml(history) {
+          if (!Array.isArray(history) || !history.length) return '<div class="p-3 text-xs text-gray-400">لا يوجد سجل.</div>';
+          return history.map(function(e) {
+            var isAuto = e.kind === 'auto_no_response';
+            var kindBadge = isAuto
+              ? '<span class="inline-flex items-center gap-1 text-orange-700 font-semibold"><i class="fas fa-circle text-orange-400" style="font-size:7px;vertical-align:middle"></i>لا يرد (تلقائي)</span>'
+              : '<span class="inline-flex items-center gap-1 text-violet-700 font-semibold"><i class="fas fa-circle text-violet-400" style="font-size:7px;vertical-align:middle"></i>تمرير يدوي</span>';
+            var dateStr = e.at ? formatDate(e.at) : '';
+            return (
+              '<div class="px-3 py-2 border-b border-gray-50 last:border-b-0">' +
+                '<div class="text-xs mb-0.5">' + kindBadge + '</div>' +
+                '<div class="text-xs text-gray-700">' + escapeHtml(e.from_name || '') + ' → ' + escapeHtml(e.to_name || '') + '</div>' +
+                (dateStr ? '<div class="text-[10px] text-gray-400">' + escapeHtml(dateStr) + '</div>' : '') +
+                (e.note ? '<div class="text-[10px] text-gray-500 mt-0.5 italic">"' + escapeHtml(e.note) + '"</div>' : '') +
+              '</div>'
+            );
+          }).join('');
+        }
+
+        function transferHistoryButtonHtml(row, domId) {
+          var count = Number(row.transfer_count) || 0;
+          if (!count) return '';
+          var history = Array.isArray(row.transfer_history) ? row.transfer_history : [];
+          var hasAuto = history.some(function(e) { return e.kind === 'auto_no_response'; });
+          var iconClass = 'relative text-lg w-10 h-10 flex items-center justify-center rounded-full border cursor-pointer ' +
+            (hasAuto ? 'border-orange-400 text-orange-600 bg-orange-50 hover:bg-orange-100' : 'border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100');
+          return (
+            '<button type="button" data-transfer-btn="' + escapeHtml(String(domId)) + '" ' +
+              'aria-haspopup="true" aria-expanded="false" ' +
+              'title="سجل التحويلات (' + count + ')" ' +
+              'class="' + iconClass + '">' +
+              '<i class="fas fa-exchange-alt"></i>' +
+              '<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-slate-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">' + count + '</span>' +
+            '</button>' +
+            '<div id="transfer-pop-' + escapeHtml(String(domId)) + '" ' +
+              'class="hidden absolute left-0 top-12 z-30 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">' +
+              '<div class="px-3 py-2 border-b border-gray-100 text-xs font-semibold text-gray-700">سجل التحويلات</div>' +
+              transferHistoryPopoverHtml(history) +
+            '</div>'
+          );
+        }
+
+        var _transferPopDocListenerAdded = false;
+        function bindTransferHistoryPopovers(root) {
+          root.querySelectorAll('[data-transfer-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var domId = btn.getAttribute('data-transfer-btn');
+              var pop = document.getElementById('transfer-pop-' + domId);
+              if (!pop) return;
+              var isOpen = !pop.classList.contains('hidden');
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              if (!isOpen) pop.classList.remove('hidden');
+            });
+          });
+          if (!_transferPopDocListenerAdded) {
+            _transferPopDocListenerAdded = true;
+            document.addEventListener('click', function() {
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+            });
+            document.addEventListener('keydown', function(e) {
+              if (e.key === 'Escape') {
+                document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              }
+            });
+          }
+        }
+
         function renderCards(tasks) {
           var root = document.getElementById('archivedCards');
           if (!tasks.length) {
@@ -43857,31 +43631,38 @@ app.get('/admin/my-archived-tasks', async (c) => {
             var assignedUserBlock = IS_ADMIN_VIEW && task.assigned_user_name
               ? '<div><i class="fas fa-user-tie ml-1 text-indigo-400"></i>مُعيَّن لـ: ' + escapeHtml(task.assigned_user_name) + '</div>'
               : '';
-            return (
-              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm opacity-90">' +
-                '<div class="flex flex-wrap items-start justify-between gap-2">' +
-                  '<div class="min-w-0 flex-1">' +
-                    '<div class="text-base font-semibold text-gray-700">' + escapeHtml(task.task_title || '') + '</div>' +
-                    '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
-                    '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-archive ml-1"></i>مؤرشفة</span>' +
-                    '</div>' +
+            var railBtn = transferHistoryButtonHtml(task, 'task-' + task.id);
+            var cardContent =
+              '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                '<div class="min-w-0 flex-1">' +
+                  '<div class="text-base font-semibold text-gray-700">' + escapeHtml(task.task_title || '') + '</div>' +
+                  '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
+                  '<span class="inline-block bg-amber-100 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-archive ml-1"></i>مؤرشفة</span>' +
                   '</div>' +
                 '</div>' +
-                '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
-                  '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
-                  '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
-                  assignedUserBlock +
-                  (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
-                  '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
-                    (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
-                  '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+              '</div>' +
+              '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
+                '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+                '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+                assignedUserBlock +
+                (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
+                '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                  (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+                '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+              '</div>' +
+              archiveBlock +
+              noteBlock;
+            return (
+              '<div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm opacity-90">' +
+                '<div class="flex items-stretch gap-3">' +
+                  '<div class="min-w-0 flex-1">' + cardContent + '</div>' +
+                  (railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : '') +
                 '</div>' +
-                archiveBlock +
-                noteBlock +
               '</div>'
             );
           }).join('');
           bindWhatsAppButtons(root);
+          bindTransferHistoryPopovers(root);
         }
 
         function applySearch() {
@@ -46639,6 +46420,74 @@ app.get('/admin/follow-ups/archived', async (c) => {
           return String((row.affiliate_label || '')).trim() || (row.affiliate_path_segment ? 'أفلييت' : 'رابط الشركة');
         }
 
+        function transferHistoryPopoverHtmlArchived(history) {
+          if (!Array.isArray(history) || !history.length) return '<div class="p-3 text-xs text-gray-400">لا يوجد سجل.</div>';
+          return history.map(function(e) {
+            var isAuto = e.kind === 'auto_no_response';
+            var kindBadge = isAuto
+              ? '<span class="inline-flex items-center gap-1 text-orange-700 font-semibold"><i class="fas fa-circle text-orange-400" style="font-size:7px;vertical-align:middle"></i>لا يرد (تلقائي)</span>'
+              : '<span class="inline-flex items-center gap-1 text-violet-700 font-semibold"><i class="fas fa-circle text-violet-400" style="font-size:7px;vertical-align:middle"></i>تمرير يدوي</span>';
+            var dateStr = e.at ? formatDate(e.at) : '';
+            return (
+              '<div class="px-3 py-2 border-b border-gray-50 last:border-b-0">' +
+                '<div class="text-xs mb-0.5">' + kindBadge + '</div>' +
+                '<div class="text-xs text-gray-700">' + escapeHtml(e.from_name || '') + ' → ' + escapeHtml(e.to_name || '') + '</div>' +
+                (dateStr ? '<div class="text-[10px] text-gray-400">' + escapeHtml(dateStr) + '</div>' : '') +
+                (e.note ? '<div class="text-[10px] text-gray-500 mt-0.5 italic">"' + escapeHtml(e.note) + '"</div>' : '') +
+              '</div>'
+            );
+          }).join('');
+        }
+
+        function transferHistoryRailHtmlArchived(row, domId) {
+          var count = Number(row.transfer_count) || 0;
+          if (!count) return '';
+          var history = Array.isArray(row.transfer_history) ? row.transfer_history : [];
+          var hasAuto = history.some(function(e) { return e.kind === 'auto_no_response'; });
+          var iconClass = 'relative text-lg w-10 h-10 flex items-center justify-center rounded-full border cursor-pointer ' +
+            (hasAuto ? 'border-orange-400 text-orange-600 bg-orange-50 hover:bg-orange-100' : 'border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100');
+          return (
+            '<button type="button" data-transfer-btn="' + escapeHtml(String(domId)) + '" ' +
+              'aria-haspopup="true" aria-expanded="false" ' +
+              'title="سجل التحويلات (' + count + ')" ' +
+              'class="' + iconClass + '">' +
+              '<i class="fas fa-exchange-alt"></i>' +
+              '<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-slate-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">' + count + '</span>' +
+            '</button>' +
+            '<div id="transfer-pop-' + escapeHtml(String(domId)) + '" ' +
+              'class="hidden absolute left-0 top-12 z-30 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">' +
+              '<div class="px-3 py-2 border-b border-gray-100 text-xs font-semibold text-gray-700">سجل التحويلات</div>' +
+              transferHistoryPopoverHtmlArchived(history) +
+            '</div>'
+          );
+        }
+
+        var _archivedTransferPopListenerAdded = false;
+        function bindArchivedTransferPopovers(root) {
+          root.querySelectorAll('[data-transfer-btn]').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+              e.stopPropagation();
+              var domId = btn.getAttribute('data-transfer-btn');
+              var pop = document.getElementById('transfer-pop-' + domId);
+              if (!pop) return;
+              var isOpen = !pop.classList.contains('hidden');
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              if (!isOpen) pop.classList.remove('hidden');
+            });
+          });
+          if (!_archivedTransferPopListenerAdded) {
+            _archivedTransferPopListenerAdded = true;
+            document.addEventListener('click', function() {
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+            });
+            document.addEventListener('keydown', function(e) {
+              if (e.key === 'Escape') {
+                document.querySelectorAll('[id^="transfer-pop-"]').forEach(function(p) { p.classList.add('hidden'); });
+              }
+            });
+          }
+        }
+
         function renderArchivedFollowupCards(rows) {
           const cards = document.getElementById('archivedCards');
           const status = document.getElementById('archivedListStatus');
@@ -46651,6 +46500,7 @@ app.get('/admin/follow-ups/archived', async (c) => {
           cards.innerHTML = rows.map((row) => {
             const sourceLabel = archivedSourceLabel(row);
             const phoneDisp = displayPhone(row.customer_phone);
+            const railBtn = transferHistoryRailHtmlArchived(row, 'fu-archived-' + Number(row.id));
             return \`
               <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 opacity-80"
                 data-followup-id="\${Number(row.id)}"
@@ -46658,30 +46508,36 @@ app.get('/admin/follow-ups/archived', async (c) => {
                 data-customer-phone="\${escapeHtml(phoneDisp)}"
                 data-customer-phone-raw="\${escapeHtml(row.customer_phone || '')}"
                 data-source-label="\${escapeHtml(sourceLabel)}">
-                <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="flex items-stretch gap-3">
                   <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
-                      <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>
+                    <div class="flex items-start justify-between gap-3 mb-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                          <span class="inline-flex items-center rounded-full bg-gray-100 text-gray-600 border border-gray-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                      </div>
+                      <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                    <div class="space-y-2">
+                      <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(phoneDisp)}</p>
+                      <p class="text-sm text-gray-700"><i class="fas fa-tag ml-2 text-blue-600"></i>\${escapeHtml(sourceLabel)}</p>
+                      <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                      \${row.archive_reason ? '<div class="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"><i class="fas fa-sticky-note mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(row.archive_reason) + '</span></div>' : ''}
+                      <div class="pt-2">
+                        <button onclick="openUnarchiveModal(this)" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
+                          <i class="fas fa-undo ml-2"></i>استعادة من الأرشيف
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                </div>
-                <div class="space-y-2">
-                  <p class="text-sm text-gray-700"><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(phoneDisp)}</p>
-                  <p class="text-sm text-gray-700"><i class="fas fa-tag ml-2 text-blue-600"></i>\${escapeHtml(sourceLabel)}</p>
-                  <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
-                  \${row.archive_reason ? '<div class="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2"><i class="fas fa-sticky-note mt-0.5 flex-shrink-0"></i><span>' + escapeHtml(row.archive_reason) + '</span></div>' : ''}
-                  <div class="pt-2">
-                    <button onclick="openUnarchiveModal(this)" class="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-sm font-medium px-3 py-2 rounded-lg transition-colors">
-                      <i class="fas fa-undo ml-2"></i>استعادة من الأرشيف
-                    </button>
-                  </div>
+                  \${railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : ''}
                 </div>
               </div>
             \`;
           }).join('');
+          bindArchivedTransferPopovers(cards);
         }
 
         function applyArchivedFollowupSearch() {
@@ -47439,9 +47295,11 @@ app.get('/admin/follow-ups/import', async (c) => {
         }
         if (!rows || rows.length < 2) { alert('الملف فارغ أو غير صالح'); return }
 
-        // Store raw data and move to mapping step
-        rawHeaders = rows[0].map(function(h) { return String(h == null ? '' : h) })
-        rawSheetRows = rows.slice(1)
+        // Store raw data and move to mapping step — filter blank-header columns
+        var allHeaders = rows[0].map(function(h) { return String(h == null ? '' : h) })
+        var keptCols = allHeaders.map(function(h, i) { return i }).filter(function(i) { return allHeaders[i].trim() !== '' })
+        rawHeaders = keptCols.map(function(i) { return allHeaders[i] })
+        rawSheetRows = rows.slice(1).map(function(row) { return keptCols.map(function(i) { return row[i] == null ? '' : row[i] }) })
         columnMapping = suggestColumnMapping(rawHeaders, rawSheetRows.slice(0, 20))
 
         document.getElementById('fileName').textContent = file.name
@@ -48608,25 +48466,72 @@ app.get('/admin/follow-ups', async (c) => {
             : '<span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">عادي</span>';
         }
 
-        function transferLogHtml(summary) {
-          if (!summary || !summary.initial_name) return '';
-          const chain = Array.isArray(summary.chain) ? summary.chain.filter(Boolean) : [];
-          const chainText = chain.length
-            ? chain.map((n) => escapeHtml(n)).join(' → ')
-            : escapeHtml(summary.initial_name) + ' → ' + escapeHtml(summary.latest_to_name || '');
-          const dateText = summary.latest_at ? formatDate(summary.latest_at) : '';
-          const titleParts = Array.isArray(summary.hops)
-            ? summary.hops.map((h) =>
-                (h.from_name || '') + ' → ' + (h.to_name || '') + (h.created_at ? ' · ' + h.created_at : '')
-              ).join(' | ')
-            : '';
+        function transferHistoryPopoverHtml(history) {
+          if (!Array.isArray(history) || !history.length) return '<div class="p-3 text-xs text-gray-400">لا يوجد سجل.</div>';
+          return history.map((e) => {
+            const isAuto = e.kind === 'auto_no_response';
+            const kindBadge = isAuto
+              ? '<span class="inline-flex items-center gap-1 text-orange-700 font-semibold"><i class="fas fa-circle text-orange-400" style="font-size:7px;vertical-align:middle"></i>لا يرد (تلقائي)</span>'
+              : '<span class="inline-flex items-center gap-1 text-violet-700 font-semibold"><i class="fas fa-circle text-violet-400" style="font-size:7px;vertical-align:middle"></i>تمرير يدوي</span>';
+            const dateStr = e.at ? formatDate(e.at) : '';
+            return (
+              '<div class="px-3 py-2 border-b border-gray-50 last:border-b-0">' +
+                '<div class="text-xs mb-0.5">' + kindBadge + '</div>' +
+                '<div class="text-xs text-gray-700">' + escapeHtml(e.from_name || '') + ' → ' + escapeHtml(e.to_name || '') + '</div>' +
+                (dateStr ? '<div class="text-[10px] text-gray-400">' + escapeHtml(dateStr) + '</div>' : '') +
+                (e.note ? '<div class="text-[10px] text-gray-500 mt-0.5 italic">"' + escapeHtml(e.note) + '"</div>' : '') +
+              '</div>'
+            );
+          }).join('');
+        }
+
+        function transferHistoryButtonHtml(row, domId) {
+          const count = Number(row.transfer_count) || 0;
+          if (!count) return '';
+          const history = Array.isArray(row.transfer_history) ? row.transfer_history : [];
+          const hasAuto = history.some((e) => e.kind === 'auto_no_response');
+          const iconClass = 'relative text-lg w-10 h-10 flex items-center justify-center rounded-full border cursor-pointer ' +
+            (hasAuto ? 'border-orange-400 text-orange-600 bg-orange-50 hover:bg-orange-100' : 'border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100');
           return (
-            '<div class="mt-2 text-[11px] leading-tight text-slate-600" title="' + escapeHtml(titleParts) + '">' +
-              '<span class="text-orange-700 font-semibold whitespace-nowrap"><i class="fas fa-exchange-alt ml-1"></i>تحويل لا يرد:</span> ' +
-              '<span class="text-slate-700">' + chainText + '</span>' +
-              (dateText ? ' <span class="text-slate-400">· ' + escapeHtml(dateText) + '</span>' : '') +
+            '<button type="button" data-transfer-btn="' + escapeHtml(String(domId)) + '" ' +
+              'aria-haspopup="true" aria-expanded="false" ' +
+              'title="سجل التحويلات (' + count + ')" ' +
+              'class="' + iconClass + '">' +
+              '<i class="fas fa-exchange-alt"></i>' +
+              '<span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-slate-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-0.5">' + count + '</span>' +
+            '</button>' +
+            '<div id="transfer-pop-' + escapeHtml(String(domId)) + '" ' +
+              'class="hidden absolute left-0 top-12 z-30 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">' +
+              '<div class="px-3 py-2 border-b border-gray-100 text-xs font-semibold text-gray-700">سجل التحويلات</div>' +
+              transferHistoryPopoverHtml(history) +
             '</div>'
           );
+        }
+
+        let _followupTransferPopListenerAdded = false;
+        function bindTransferHistoryPopovers(root) {
+          root.querySelectorAll('[data-transfer-btn]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const domId = btn.getAttribute('data-transfer-btn');
+              const pop = document.getElementById('transfer-pop-' + domId);
+              if (!pop) return;
+              const isOpen = !pop.classList.contains('hidden');
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach((p) => p.classList.add('hidden'));
+              if (!isOpen) pop.classList.remove('hidden');
+            });
+          });
+          if (!_followupTransferPopListenerAdded) {
+            _followupTransferPopListenerAdded = true;
+            document.addEventListener('click', () => {
+              document.querySelectorAll('[id^="transfer-pop-"]').forEach((p) => p.classList.add('hidden'));
+            });
+            document.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') {
+                document.querySelectorAll('[id^="transfer-pop-"]').forEach((p) => p.classList.add('hidden'));
+              }
+            });
+          }
         }
 
         function renderNotes(notes) {
@@ -48941,6 +48846,7 @@ app.get('/admin/follow-ups', async (c) => {
                 : \`<button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
                     <i class="fas fa-archive"></i>
                   </button>\`;
+              const railBtn = transferHistoryButtonHtml(row, 'fu-' + Number(row.id));
               return \`
               <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 \${isArchived ? 'opacity-80 border-slate-200' : ''}"
                 data-followup-id="\${Number(row.id)}"
@@ -48950,43 +48856,48 @@ app.get('/admin/follow-ups', async (c) => {
                 data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}"
                 data-archived="\${isArchived ? '1' : '0'}"
                 data-no-response="\${isNoResponse ? '1' : '0'}">
-                <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="flex items-stretch gap-3">
                   <div class="min-w-0 flex-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
-                      \${followupSourceBadgeHtml(row)}
-                      \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
-                      \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
+                    <div class="flex items-start justify-between gap-3 mb-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                          \${followupSourceBadgeHtml(row)}
+                          \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
+                          \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                      </div>
+                      <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                        \${archiveBtn}
+                      </div>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                    <div class="space-y-2">
+                      <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
+                      <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
+                      <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                      <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
+                        <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
+                      </div>
+                      <div class="pt-2 grid grid-cols-2 gap-2">
+                        <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                          <i class="fas fa-sticky-note ml-2"></i>الملاحظات
+                        </button>
+                        <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                          <i class="fas fa-tasks ml-2"></i>المهام
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div class="flex items-center gap-1.5 flex-shrink-0">
-                    <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                    \${archiveBtn}
-                  </div>
-                </div>
-                <div class="space-y-2">
-                  <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
-                  <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
-                  <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
-                  \${transferLogHtml(row.transfer_summary)}
-                  <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
-                    <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
-                  </div>
-                  <div class="pt-2 grid grid-cols-2 gap-2">
-                    <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
-                      <i class="fas fa-sticky-note ml-2"></i>الملاحظات
-                    </button>
-                    <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
-                      <i class="fas fa-tasks ml-2"></i>المهام
-                    </button>
-                  </div>
+                  \${railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : ''}
                 </div>
               </div>
             \`;
             }).join('');
 
             bindWhatsAppButtons(cards);
+            bindTransferHistoryPopovers(cards);
             rows.forEach((row) => loadCardTasks(Number(row.id)));
           } catch (e) {
             cards.innerHTML = '<div class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">حدث خطأ أثناء تحميل البيانات</div>';
@@ -49638,6 +49549,7 @@ app.get('/admin/follow-ups', async (c) => {
                   : \`<button onclick="openArchiveModal(this)" class="flex items-center gap-1 text-amber-500 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-colors px-1.5 py-0.5 rounded text-xs font-medium" title="أرشفة">
                       <i class="fas fa-archive"></i>
                     </button>\`;
+                const railBtn = transferHistoryButtonHtml(row, 'fu-admin-' + Number(row.id));
                 return \`
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 \${isArchived ? 'opacity-80 border-slate-200' : ''}"
                   data-followup-id="\${Number(row.id)}"
@@ -49647,42 +49559,47 @@ app.get('/admin/follow-ups', async (c) => {
                   data-assigned="\${escapeHtml(staffNameById(row.task_assigned_user_id) || '')}"
                   data-archived="\${isArchived ? '1' : '0'}"
                   data-no-response="\${isNoResponse ? '1' : '0'}">
-                  <div class="flex items-start justify-between gap-3 mb-3">
+                  <div class="flex items-stretch gap-3">
                     <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
-                        \${followupSourceBadgeHtml(row)}
-                        \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
-                        \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
+                      <div class="flex items-start justify-between gap-3 mb-3">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-lg font-bold text-gray-900">\${escapeHtml(row.customer_name || '-')}</h3>
+                            \${followupSourceBadgeHtml(row)}
+                            \${isNoResponse ? '<span class="inline-flex items-center rounded-full bg-orange-100 text-orange-800 border border-orange-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-phone-slash ml-1 text-xs"></i>لا يرد</span>' : ''}
+                            \${isArchived ? '<span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 text-xs font-semibold"><i class="fas fa-archive ml-1 text-xs"></i>مؤرشف</span>' : ''}
+                          </div>
+                          <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                          <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
+                          \${archiveBtn}
+                        </div>
                       </div>
-                      <p class="text-sm text-gray-500 mt-1">شركة: \${escapeHtml(row.company_name || '-')}</p>
+                      <div class="space-y-2">
+                        <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
+                        <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
+                        <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
+                        <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
+                          <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
+                        </div>
+                        <div class="pt-2 grid grid-cols-2 gap-2">
+                          <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                            <i class="fas fa-sticky-note ml-2"></i>الملاحظات
+                          </button>
+                          <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
+                            <i class="fas fa-tasks ml-2"></i>المهام
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                      <span class="text-xs text-gray-500 whitespace-nowrap">\${formatDate(row.created_at)}</span>
-                      \${archiveBtn}
-                    </div>
-                  </div>
-                  <div class="space-y-2">
-                    <p class="text-sm text-gray-700 flex items-center gap-2 flex-wrap"><span><i class="fas fa-phone ml-2 text-emerald-600"></i>\${escapeHtml(displayPhone(row.customer_phone))}</span>\${whatsappBtnHtml(row.customer_phone, row.customer_name)}</p>
-                    <p class="text-sm text-gray-700"><i class="fas fa-link ml-2 text-blue-600"></i>المسار: \${escapeHtml(followupPublicPath(row))}</p>
-                    <div class="mt-3 p-3 bg-gray-50 rounded-lg text-gray-800 whitespace-pre-wrap break-words">\${escapeHtml(row.customer_message || '-')}</div>
-                    \${transferLogHtml(row.transfer_summary)}
-                    <div id="card-tasks-\${Number(row.id)}" class="min-h-6">
-                      <div class="text-xs text-gray-400 mt-1">جاري تحميل المهام...</div>
-                    </div>
-                    <div class="pt-2 grid grid-cols-2 gap-2">
-                      <button onclick="openNotesModal(\${Number(row.id)})" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
-                        <i class="fas fa-sticky-note ml-2"></i>الملاحظات
-                      </button>
-                      <button onclick="openTasksModal(\${Number(row.id)})" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-2 rounded-lg">
-                        <i class="fas fa-tasks ml-2"></i>المهام
-                      </button>
-                    </div>
+                    \${railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : ''}
                   </div>
                 </div>
               \`;
               }).join('');
               bindWhatsAppButtons(cards);
+              bindTransferHistoryPopovers(cards);
               rows.forEach((row) => loadCardTasks(Number(row.id)));
             }
 

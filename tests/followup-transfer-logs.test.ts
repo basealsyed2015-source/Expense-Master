@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   buildTransferSummary,
   parseAutoTransferNote,
+  type TransferHistoryEntry,
 } from '../src/followup-transfer-logs.ts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -39,11 +40,40 @@ describe('followup transfer logs', () => {
     assert.match(sql, /employee_note',\s*'pass_note',\s*'auto_transfer'/)
   })
 
-  it('my-tasks and follow-ups cards render transferLogHtml', () => {
+  it('transfer_count equals auto + accepted-pass entries', () => {
+    const history: TransferHistoryEntry[] = [
+      { kind: 'auto_no_response', from_name: 'A', to_name: 'B', at: '2026-08-01 06:00:00' },
+      { kind: 'auto_no_response', from_name: 'B', to_name: 'C', at: '2026-08-03 06:00:00' },
+      { kind: 'manual_pass', from_name: 'C', to_name: 'D', at: '2026-08-04 10:15:00', note: 'العميل ما رد' },
+    ]
+    assert.equal(history.length, 3)
+    assert.equal(history.filter((e) => e.kind === 'auto_no_response').length, 2)
+    assert.equal(history.filter((e) => e.kind === 'manual_pass').length, 1)
+  })
+
+  it('transfer history entries sort oldest-first', () => {
+    const entries: TransferHistoryEntry[] = [
+      { kind: 'manual_pass', from_name: 'C', to_name: 'D', at: '2026-08-04 10:15:00' },
+      { kind: 'auto_no_response', from_name: 'A', to_name: 'B', at: '2026-08-01 06:00:00' },
+      { kind: 'auto_no_response', from_name: 'B', to_name: 'C', at: '2026-08-03 06:00:00' },
+    ]
+    const sorted = [...entries].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
+    assert.equal(sorted[0].from_name, 'A')
+    assert.equal(sorted[1].from_name, 'B')
+    assert.equal(sorted[2].from_name, 'C')
+  })
+
+  it('card UI uses transferHistoryButtonHtml instead of inline transferLogHtml in card renders', () => {
     const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    // New shared helper must exist
+    assert.match(src, /function transferHistoryButtonHtml/)
+    assert.match(src, /function bindTransferHistoryPopovers/)
+    // transferLogHtml still exists (used in expand panel row view)
     assert.match(src, /function transferLogHtml\(summary\)/)
-    assert.match(src, /transferLogHtml\(task\.transfer_summary\)/)
-    assert.match(src, /transferLogHtml\(row\.transfer_summary\)/)
+    // transferLogHtml must NOT be called inline in follow-up card renders (row.transfer_summary pattern removed)
+    assert.doesNotMatch(src, /transferLogHtml\(row\.transfer_summary\)/)
+    // attachTransferHistory replaces the old function in the API layer
+    assert.match(src, /attachTransferHistory/)
     assert.match(src, /attachNoResponseTransferLogs/)
   })
 

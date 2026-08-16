@@ -18,6 +18,15 @@ export type TransferSummary = {
   hops: TransferLogEntry[]
 }
 
+export type TransferHistoryEntry = {
+  kind: 'auto_no_response' | 'manual_pass'
+  from_name: string
+  to_name: string
+  at: string
+  note?: string
+  task_id?: number
+}
+
 /** Employees eligible for auto no-response transfers (bank agents 5/15 excluded). */
 export const NO_RESPONSE_TRANSFER_STAFF_SQL = `
   SELECT u.id, u.full_name
@@ -169,5 +178,184 @@ export async function attachNoResponseTransferLogs(
     const logs = byId.get(id) || []
     row.transfer_logs = logs
     row.transfer_summary = buildTransferSummary(logs)
+  }
+}
+
+// ── New unified transfer history (auto + accepted passes, chunked) ────────────
+
+const CHUNK_SIZE = 90
+
+async function loadAutoTransferNotes(
+  db: D1Database,
+  ids: number[],
+  mode: 'task' | 'followup',
+): Promise<Array<{ map_id: number; task_id: number; note_text: string; at: string }>> {
+  const out: Array<{ map_id: number; task_id: number; note_text: string; at: string }> = []
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE)
+    const ph = chunk.map(() => '?').join(',')
+    const sql =
+      mode === 'task'
+        ? `SELECT tn.task_id AS map_id, tn.task_id, tn.note_text, tn.created_at AS at
+           FROM company_contact_followup_task_notes tn
+           WHERE tn.note_type = 'auto_transfer' AND tn.task_id IN (${ph})
+           ORDER BY tn.created_at ASC, tn.id ASC`
+        : `SELECT t.followup_id AS map_id, tn.task_id, tn.note_text, tn.created_at AS at
+           FROM company_contact_followup_task_notes tn
+           INNER JOIN company_contact_followup_tasks t ON t.id = tn.task_id
+           WHERE tn.note_type = 'auto_transfer' AND t.followup_id IN (${ph})
+           ORDER BY tn.created_at ASC, tn.id ASC`
+    try {
+      const r = await db
+        .prepare(sql)
+        .bind(...chunk)
+        .all<{ map_id: number; task_id: number; note_text: string; at: string }>()
+      out.push(...(r.results || []))
+    } catch {
+      // migration 0145 not yet applied or chunk error — skip
+    }
+  }
+  return out
+}
+
+async function loadAcceptedPassTransfers(
+  db: D1Database,
+  ids: number[],
+  mode: 'task' | 'followup',
+): Promise<
+  Array<{ map_id: number; task_id: number; from_name: string; to_name: string; at: string; note_text: string | null }>
+> {
+  const out: Array<{
+    map_id: number
+    task_id: number
+    from_name: string
+    to_name: string
+    at: string
+    note_text: string | null
+  }> = []
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE)
+    const ph = chunk.map(() => '?').join(',')
+    const sql =
+      mode === 'task'
+        ? `SELECT pr.task_id AS map_id, pr.task_id,
+                  COALESCE(fu.full_name, '') AS from_name,
+                  COALESCE(tu.full_name, '') AS to_name,
+                  pr.resolved_at AS at, pr.note_text
+           FROM company_contact_followup_task_pass_requests pr
+           LEFT JOIN users fu ON fu.id = pr.from_user_id
+           LEFT JOIN users tu ON tu.id = pr.to_user_id
+           WHERE pr.status = 'accepted' AND pr.task_id IN (${ph})
+           ORDER BY pr.resolved_at ASC`
+        : `SELECT t.followup_id AS map_id, pr.task_id,
+                  COALESCE(fu.full_name, '') AS from_name,
+                  COALESCE(tu.full_name, '') AS to_name,
+                  pr.resolved_at AS at, pr.note_text
+           FROM company_contact_followup_task_pass_requests pr
+           INNER JOIN company_contact_followup_tasks t ON t.id = pr.task_id
+           LEFT JOIN users fu ON fu.id = pr.from_user_id
+           LEFT JOIN users tu ON tu.id = pr.to_user_id
+           WHERE pr.status = 'accepted' AND t.followup_id IN (${ph})
+           ORDER BY pr.resolved_at ASC`
+    try {
+      const r = await db
+        .prepare(sql)
+        .bind(...chunk)
+        .all<{
+          map_id: number
+          task_id: number
+          from_name: string
+          to_name: string
+          at: string
+          note_text: string | null
+        }>()
+      out.push(...(r.results || []))
+    } catch {
+      // pass_requests table may not exist in older setups — skip chunk
+    }
+  }
+  return out
+}
+
+function mergeTransferHistory(
+  autoNotes: Array<{ map_id: number; task_id: number; note_text: string; at: string }>,
+  passes: Array<{ map_id: number; task_id: number; from_name: string; to_name: string; at: string; note_text: string | null }>,
+): Map<number, TransferHistoryEntry[]> {
+  const byId = new Map<number, TransferHistoryEntry[]>()
+
+  for (const n of autoNotes) {
+    const parsed = parseAutoTransferNote(n.note_text)
+    if (!parsed) continue
+    const mapId = Number(n.map_id)
+    if (!byId.has(mapId)) byId.set(mapId, [])
+    byId.get(mapId)!.push({
+      kind: 'auto_no_response',
+      from_name: parsed.from_name,
+      to_name: parsed.to_name,
+      at: String(n.at || ''),
+      task_id: Number(n.task_id),
+    })
+  }
+
+  for (const p of passes) {
+    const mapId = Number(p.map_id)
+    if (!byId.has(mapId)) byId.set(mapId, [])
+    byId.get(mapId)!.push({
+      kind: 'manual_pass',
+      from_name: String(p.from_name || ''),
+      to_name: String(p.to_name || ''),
+      at: String(p.at || ''),
+      note: p.note_text ? String(p.note_text) : undefined,
+      task_id: Number(p.task_id),
+    })
+  }
+
+  for (const [id, entries] of byId) {
+    byId.set(
+      id,
+      entries.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)),
+    )
+  }
+
+  return byId
+}
+
+/**
+ * Attach `transfer_history` + `transfer_count` (and backward-compat `transfer_summary`)
+ * to each row. Queries are chunked at 90 IDs to stay under D1's 100-bind limit.
+ */
+export async function attachTransferHistory(
+  db: D1Database,
+  rows: Record<string, unknown>[],
+  mode: 'task' | 'followup',
+): Promise<void> {
+  if (!rows.length) return
+
+  const idSet = new Set<number>()
+  for (const row of rows) {
+    const id = Number(row.id)
+    if (Number.isFinite(id) && id > 0) idSet.add(id)
+  }
+  const ids = Array.from(idSet)
+  if (!ids.length) return
+
+  const [autoNotes, passes] = await Promise.all([
+    loadAutoTransferNotes(db, ids, mode),
+    loadAcceptedPassTransfers(db, ids, mode),
+  ])
+
+  const byId = mergeTransferHistory(autoNotes, passes)
+
+  for (const row of rows) {
+    const id = Number(row.id)
+    const history = byId.get(id) || []
+    row.transfer_history = history
+    row.transfer_count = history.length
+    // Backward compat: build transfer_summary from auto entries so row expand panels keep working
+    const autoLogs: TransferLogEntry[] = history
+      .filter((e) => e.kind === 'auto_no_response')
+      .map((e) => ({ from_name: e.from_name, to_name: e.to_name, created_at: e.at, task_id: e.task_id }))
+    row.transfer_logs = autoLogs
+    row.transfer_summary = buildTransferSummary(autoLogs)
   }
 }
