@@ -4,6 +4,8 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   buildCustomerEnrollFromTaskHref,
   enrollPrefillPhone,
@@ -11,6 +13,8 @@ import {
   phoneMatchVariants,
 } from '../src/followup-task-enroll-guard.ts'
 import { createSqliteD1 } from './helpers/sqlite-d1.ts'
+
+const INDEX_SRC = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
 
 function createFollowupDb(): Database.Database {
   const db = new Database(':memory:')
@@ -118,5 +122,21 @@ describe('followup task enroll guard', () => {
     const d1 = createSqliteD1(raw)
     const hit = await findOpenFollowupTaskByPhone(d1, 3, '966512345678')
     assert.equal(hit?.task_id, taskId)
+  })
+
+  it('exposes rating modal helpers globally on the my-tasks enrollment add page', () => {
+    // Inline onclick on the add-customer rating popup requires window.* helpers.
+    // They are defined inside the page IIFE, so they must also be assigned globally.
+    const addIdx = INDEX_SRC.indexOf("app.get('/admin/customers/add'")
+    assert.ok(addIdx > 0, 'add-customer route must exist')
+    const nextIdx = INDEX_SRC.indexOf("app.get('/admin/customer-assignment'", addIdx)
+    const slice = INDEX_SRC.slice(addIdx, nextIdx > addIdx ? nextIdx : addIdx + 20000)
+    assert.match(slice, /onclick="toggleTaskRatingDropdown\(event\)"/)
+    assert.match(slice, /onclick="selectTaskRating\(5\)"/)
+    assert.match(slice, /onclick="saveTaskReview\(\)"/)
+    assert.match(slice, /window\.toggleTaskRatingDropdown\s*=\s*toggleTaskRatingDropdown/)
+    assert.match(slice, /window\.selectTaskRating\s*=\s*selectTaskRating/)
+    assert.match(slice, /window\.closeTaskReviewModal\s*=\s*closeTaskReviewModal/)
+    assert.match(slice, /window\.saveTaskReview\s*=\s*saveTaskReview/)
   })
 })

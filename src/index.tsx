@@ -18880,7 +18880,7 @@ app.get('/admin/customers/add', async (c) => {
                 </button>
                 <div id="taskReviewRatingDropdown" class="hidden absolute z-[1200] w-full mt-1 rounded-xl shadow-xl overflow-hidden border border-gray-100">
                   <button type="button" onclick="selectTaskRating(5)" class="w-full px-4 py-3.5 text-right font-bold text-green-800 bg-green-50 hover:bg-green-100 transition-colors border-b border-green-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></span> عميل ممتاز</button>
-                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد جدا جدا</button>
+                  <button type="button" onclick="selectTaskRating(4)" class="w-full px-4 py-3.5 text-right font-bold text-lime-800 bg-lime-50 hover:bg-lime-100 transition-colors border-b border-lime-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-lime-500 flex-shrink-0"></span> عميل جيد جدا</button>
                   <button type="button" onclick="selectTaskRating(3)" class="w-full px-4 py-3.5 text-right font-bold text-yellow-800 bg-yellow-50 hover:bg-yellow-100 transition-colors border-b border-yellow-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400 flex-shrink-0"></span> عميل جيد</button>
                   <button type="button" onclick="selectTaskRating(2)" class="w-full px-4 py-3.5 text-right font-bold text-orange-800 bg-orange-50 hover:bg-orange-100 transition-colors border-b border-orange-100 flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 flex-shrink-0"></span> عميل ضعيف</button>
                   <button type="button" onclick="selectTaskRating(1)" class="w-full px-4 py-3.5 text-right font-bold text-red-800 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span> عميل موقف</button>
@@ -19095,9 +19095,12 @@ app.get('/admin/customers/add', async (c) => {
             var saveBtn = document.getElementById('taskReviewSaveBtn');
             saveBtn.disabled = true;
             try {
+              var token = localStorage.getItem('authToken') || localStorage.getItem('token') || '';
+              var headers = { 'Content-Type': 'application/json' };
+              if (token) headers['Authorization'] = 'Bearer ' + token;
               var res = await fetch('/api/my-followup-tasks/' + taskId + '/rating', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: headers,
                 body: JSON.stringify({ rating: taskReviewRating, note: note || null })
               });
               var data = await res.json().catch(function() { return {}; });
@@ -19105,7 +19108,7 @@ app.get('/admin/customers/add', async (c) => {
               if (taskReviewRating === 1) {
                 await fetch('/api/my-followup-tasks/' + taskId + '/archive', {
                   method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: headers,
                   body: JSON.stringify({ reason: note || 'عميل موقف' })
                 });
               }
@@ -19115,6 +19118,13 @@ app.get('/admin/customers/add', async (c) => {
               saveBtn.disabled = false;
             }
           }
+          // Inline onclick on the modal looks up globals; these helpers live in this IIFE.
+          window.openTaskReviewModal = openTaskReviewModal;
+          window.closeTaskReviewModal = closeTaskReviewModal;
+          window.selectTaskRating = selectTaskRating;
+          window.toggleTaskRatingDropdown = toggleTaskRatingDropdown;
+          window.resetTaskReviewRating = resetTaskReviewRating;
+          window.saveTaskReview = saveTaskReview;
           (function reviewModalEvents() {
             var modal = document.getElementById('taskReviewModal');
             if (!modal) return;
@@ -42416,11 +42426,11 @@ app.get('/admin/my-tasks', async (c) => {
         let taskReviewTaskId = null;
         let taskReviewRating = 0;
         const TASK_RATING_CFG = {
-          5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d' },
-          4: { label: 'عميل جيد جدا',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f' },
-          3: { label: 'عميل جيد', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309' },
-          2: { label: 'عميل ضعيف',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c' },
-          1: { label: 'عميل موقف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626' },
+          5: { label: 'عميل ممتاز', textColor: '#14532d', bgColor: '#dcfce7', borderColor: '#16a34a', headerFrom: '#16a34a', headerTo: '#15803d', rowBg: '#f0fdf4' },
+          4: { label: 'عميل جيد جدا',   textColor: '#365314', bgColor: '#ecfccb', borderColor: '#65a30d', headerFrom: '#65a30d', headerTo: '#4d7c0f', rowBg: '#f7fee7' },
+          3: { label: 'عميل جيد', textColor: '#713f12', bgColor: '#fef9c3', borderColor: '#ca8a04', headerFrom: '#d97706', headerTo: '#b45309', rowBg: '#fefce8' },
+          2: { label: 'عميل ضعيف',   textColor: '#7c2d12', bgColor: '#ffedd5', borderColor: '#ea580c', headerFrom: '#f97316', headerTo: '#ea580c', rowBg: '#fff7ed' },
+          1: { label: 'عميل موقف', textColor: '#7f1d1d', bgColor: '#fee2e2', borderColor: '#dc2626', headerFrom: '#ef4444', headerTo: '#dc2626', rowBg: '#fef2f2' },
         };
 
         function openTaskReviewModal(taskId, customerName, currentRating, currentNote) {
@@ -42836,6 +42846,12 @@ app.get('/admin/my-tasks', async (c) => {
             if (task.scheduled_at_hijri) {
               scheduleText += '<div class="text-[11px] text-gray-400 mt-0.5">' + escapeHtml(task.scheduled_at_hijri) + '</div>';
             }
+            var taskRating = Number(task.rating) || 0;
+            var ratingCfg = (taskRating >= 1 && taskRating <= 5) ? TASK_RATING_CFG[taskRating] : null;
+            var mainRowStyle = (ratingCfg && ratingCfg.rowBg) ? ' style="background-color:' + ratingCfg.rowBg + ';"' : '';
+            var mainRowClass = (ratingCfg && ratingCfg.rowBg)
+              ? 'transition-colors border-b border-gray-100'
+              : 'hover:bg-gray-50 transition-colors border-b border-gray-100';
 
             // ── expansion panel pieces ──
             var expandParts = [];
@@ -42864,7 +42880,6 @@ app.get('/admin/my-tasks', async (c) => {
                 '</div>'
               );
             }
-            var taskRating = Number(task.rating) || 0;
             if (taskRating >= 1 && taskRating <= 5) {
               var stars = '';
               for (var s = 1; s <= 5; s++) {
@@ -42905,7 +42920,7 @@ app.get('/admin/my-tasks', async (c) => {
               '</a>';
 
             return (
-              '<tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">' +
+              '<tr class="' + mainRowClass + '"' + mainRowStyle + '>' +
                 '<td class="px-3 py-3 align-middle">' +
                   '<button type="button" data-expand-task="' + tid + '" class="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" aria-expanded="false">' +
                     '<i class="fas fa-chevron-left text-xs" id="rowChevron-' + tid + '"></i>' +
@@ -46768,8 +46783,8 @@ app.get('/admin/follow-ups/import', async (c) => {
       <label for="importFile" id="dropZone" class="block border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-all">
         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
         <p class="text-gray-700 font-bold mb-1">اسحب الملف هنا أو انقر لاختياره</p>
-        <p class="text-xs text-gray-500">العمود المطلوب: الهاتف. اختياري: الاسم، عنوان المهمة، الأولوية، موعد المهمة</p>
-        <p class="text-xs text-gray-400 mt-1">عنوان المهمة الفارغ يُستبدل بـ «متابعة العروض». الموعد الفارغ أو غير الصالح يُجدول إلى الوقت الحالي</p>
+        <p class="text-xs text-gray-500">أي ملف CSV أو Excel — يمكن ربط الأعمدة في الخطوة التالية. عمود الهاتف مطلوب.</p>
+        <p class="text-xs text-gray-400 mt-1">عنوان المهمة الفارغ يُستبدل بـ «متابعة العروض». الموعد الفارغ أو غير الصالح يُجدول بعد 5 أيام</p>
         <p class="text-xs text-gray-400 mt-1">سيتم تخطي الأرقام الموجودة مسبقاً كعملاء أو كمتابعات</p>
         <input type="file" id="importFile" accept=".csv,.xlsx,.xls" class="hidden">
       </label>
@@ -46779,11 +46794,36 @@ app.get('/admin/follow-ups/import', async (c) => {
       </div>
     </div>
 
-    <!-- Step 2: Preview + submit (revealed after parse) -->
+    <!-- Step 2: Map columns (NEW) -->
+    <div id="mappingSection" class="hidden">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-800">٢. ربط الأعمدة</h2>
+          <button type="button" onclick="clearFile()" class="text-sm text-gray-500 hover:text-gray-700">
+            <i class="fas fa-times ml-1"></i> تغيير الملف
+          </button>
+        </div>
+        <div id="mappingError" class="hidden mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
+        <p class="text-xs text-gray-500 mb-3">تحقق من ربط الأعمدة الصحيحة. عمود الهاتف مطلوب. يمكنك تغيير أي ربط من القائمة المنسدلة.</p>
+        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+          <table id="mappingTable" class="text-sm w-full border-collapse">
+            <tbody id="mappingTableBody"></tbody>
+          </table>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button id="confirmMappingBtn" type="button" onclick="confirmMappingAndPreview()"
+            class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+            متابعة إلى المعاينة ←
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Preview + submit (revealed after mapping confirmed) -->
     <div id="previewSection" class="hidden">
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-gray-800">٢. معاينة البيانات (<span id="rowCount">0</span> صف)</h2>
+          <h2 class="text-lg font-bold text-gray-800">٣. معاينة البيانات (<span id="rowCount">0</span> صف)</h2>
           <div class="flex items-center gap-3">
             <span id="previewNote" class="text-xs text-gray-500"></span>
             <button onclick="downloadPreviewXlsx()" id="downloadPreviewBtn" class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1">
@@ -46813,7 +46853,12 @@ app.get('/admin/follow-ups/import', async (c) => {
       </div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <h2 class="text-lg font-bold text-gray-800 mb-4">٣. خيارات الاستيراد</h2>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-800">٤. خيارات الاستيراد</h2>
+          <button type="button" onclick="editMapping()" class="text-sm text-orange-600 hover:text-orange-800">
+            <i class="fas fa-edit ml-1"></i> تعديل ربط الأعمدة
+          </button>
+        </div>
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-700 mb-1">مصدر المتابعات <span class="text-red-500">*</span></label>
           <input type="text" id="sourceLabel" placeholder="مثال: حملة يوليو" maxlength="100"
@@ -46970,11 +47015,290 @@ app.get('/admin/follow-ups/import', async (c) => {
     let precheckState = null // null | { loading: true } | { existingCustomers: Set, existingFollowups: Set }
     let taskTitleOverride = ''
     let staffLoadPromise = null
+    let rawSheetRows = []
+    let rawHeaders = []
+    let columnMapping = {}
 
     function normalizeCsvCell(v) {
       return String(v == null ? '' : v).replace(/^\\uFEFF/, '').replace(/\\u200F/g, '').trim()
     }
-    function normalizeHeader(v) { return normalizeCsvCell(v).toLowerCase() }
+
+    // ── Mapping engine (mirrors src/followups-import.ts) ────────────────────
+    function normalizeImportHeader(raw) {
+      var s = String(raw == null ? '' : raw)
+      s = s.replace(/\\uFEFF/g, '').replace(/[\\u200F\\u200E]/g, '')
+      s = s.replace(/[\\u0660-\\u0669]/g, function(d) { return String(d.charCodeAt(0) - 1632) })
+      s = s.replace(/[\\u06F0-\\u06F9]/g, function(d) { return String(d.charCodeAt(0) - 1776) })
+      s = s.trim()
+      s = s.replace(/[a-zA-Z]+/g, function(m) { return m.toLowerCase() })
+      s = s.replace(/[\\u0610-\\u061A\\u064B-\\u065F]/g, '')
+      s = s.replace(/\\s+/g, ' ').trim()
+      s = s.replace(/[.,;:()\\[\\]#@\\-_]/g, ' ')
+      s = s.replace(/\\s+/g, ' ').trim()
+      return s
+    }
+
+    var FOLLOWUP_IMPORT_FIELDS = [
+      { key: 'phone', labelAr: 'الهاتف', required: true, synonyms: [
+        'phone','mobile','tel','telephone','cell','whatsapp','wa','contact','contacts',
+        'customer phone','client phone','mob','number','phonenumber','mobilenumber',
+        'الهاتف','الجوال','جوال','رقم','رقم الجوال','رقم الهاتف','موبايل','واتساب',
+        'هاتف','هاتف العميل','رقم الموبايل','رقم التواصل','رقم الواتس',
+      ]},
+      { key: 'name', labelAr: 'الاسم', required: false, synonyms: [
+        'name','full name','fullname','customer name','client name','customer','client',
+        'lead name','person','contact name',
+        'الاسم','اسم العميل','اسم','الاسم الكامل','العميل',
+      ]},
+      { key: 'task_title', labelAr: 'عنوان المهمة', required: false, synonyms: [
+        'task','task title','title','subject','task name','task subject',
+        'عنوان المهمة','عنوان','المهمة','موضوع',
+      ]},
+      { key: 'priority', labelAr: 'الأولوية', required: false, synonyms: [
+        'priority','importance','level','urgency','الأولوية','أولوية','الأهمية',
+      ]},
+      { key: 'scheduled_at', labelAr: 'موعد المهمة', required: false, synonyms: [
+        'date','scheduled','scheduled at','schedule','time','datetime','appointment',
+        'follow up date','followup date','due date','duedate',
+        'موعد المهمة','موعد','تاريخ','الموعد','التاريخ','وقت',
+      ]},
+    ]
+
+    function levenshtein(a, b) {
+      var m = a.length, n = b.length
+      if (!m) return n; if (!n) return m
+      var dp = Array.from({ length: n + 1 }, function(_, i) { return i })
+      for (var i = 1; i <= m; i++) {
+        var prev = i
+        for (var j = 1; j <= n; j++) {
+          var curr = a[i-1] === b[j-1] ? dp[j-1] : 1 + Math.min(dp[j], prev, dp[j-1])
+          dp[j-1] = prev; prev = curr
+        }
+        dp[n] = prev
+      }
+      return dp[n]
+    }
+
+    function scoreHeaderMatch(normalizedHeader, field) {
+      if (!normalizedHeader) return 0
+      var best = 0, h = normalizedHeader
+      for (var si = 0; si < field.synonyms.length; si++) {
+        var syn = normalizeImportHeader(field.synonyms[si])
+        if (!syn) continue
+        if (h === syn) return 100
+        if (syn.length >= 5 && (h.indexOf(syn) !== -1 || syn.indexOf(h) !== -1)) { best = Math.max(best, 85); continue }
+        var hT = h.split(' ').filter(Boolean), sT = syn.split(' ').filter(Boolean)
+        if (hT.length && sT.length) {
+          var hSet = {}, sSet = {}, shared = 0, all = {}
+          hT.forEach(function(t) { hSet[t] = 1; all[t] = 1 })
+          sT.forEach(function(t) { sSet[t] = 1; all[t] = 1 })
+          Object.keys(hSet).forEach(function(t) { if (sSet[t]) shared++ })
+          var total = Object.keys(all).length
+          if (total) best = Math.max(best, Math.round(shared / total * 80))
+        }
+        if (h.length >= 3 && syn.length >= 3) {
+          var dist = levenshtein(h, syn), maxLen = Math.max(h.length, syn.length)
+          var ratio = 1 - dist / maxLen
+          if (ratio >= 0.6) best = Math.max(best, Math.round(ratio * 70))
+        }
+      }
+      return best
+    }
+
+    function isSaudiMobileCell(val) {
+      var s = String(val).trim()
+        .replace(/[\\u0660-\\u0669]/g, function(d) { return String(d.charCodeAt(0) - 1632) })
+        .replace(/[\\u06F0-\\u06F9]/g, function(d) { return String(d.charCodeAt(0) - 1776) })
+      var digits = s.replace(/\\D/g, '')
+      if (!digits) return false
+      var local = digits.startsWith('00966') ? digits.slice(5)
+        : digits.startsWith('966') ? digits.slice(3)
+        : digits.startsWith('0') ? digits.slice(1)
+        : digits
+      return /^5\\d{8}$/.test(local)
+    }
+
+    function suggestColumnMapping(headers, sampleRows) {
+      var normalizedHeaders = headers.map(normalizeImportHeader)
+      var fields = FOLLOWUP_IMPORT_FIELDS
+      var scores = normalizedHeaders.map(function(h) {
+        return fields.map(function(field) { return scoreHeaderMatch(h, field) })
+      })
+      // content heuristic for phone
+      for (var c = 0; c < headers.length; c++) {
+        if (scores[c][0] >= 50) continue
+        var dataCells = (sampleRows || []).slice(0, 20).map(function(row) { return String(row[c] == null ? '' : row[c]) })
+        var nonEmpty = dataCells.filter(function(v) { return v.trim() })
+        if (!nonEmpty.length) continue
+        var phoneCount = nonEmpty.filter(isSaudiMobileCell).length
+        if (phoneCount / nonEmpty.length >= 0.7) scores[c][0] = Math.max(scores[c][0], 75)
+      }
+      // greedy assign
+      var candidates = []
+      for (var ci = 0; ci < normalizedHeaders.length; ci++) {
+        for (var fi = 0; fi < fields.length; fi++) {
+          if (scores[ci][fi] >= 50) candidates.push({ score: scores[ci][fi], col: ci, fieldIdx: fi })
+        }
+      }
+      candidates.sort(function(a, b) { return b.score - a.score })
+      var usedCols = {}, usedFields = {}, mapping = {}
+      candidates.forEach(function(x) {
+        if (usedCols[x.col] || usedFields[x.fieldIdx]) return
+        mapping[x.col] = fields[x.fieldIdx].key
+        usedCols[x.col] = 1; usedFields[x.fieldIdx] = 1
+      })
+      for (var i = 0; i < headers.length; i++) {
+        if (!(i in mapping)) mapping[i] = null
+      }
+      return mapping
+    }
+
+    function applyColumnMapping(dataRows, mapping) {
+      var colForKey = function(key) {
+        var keys = Object.keys(mapping)
+        for (var i = 0; i < keys.length; i++) {
+          if (mapping[keys[i]] === key) return parseInt(keys[i], 10)
+        }
+        return -1
+      }
+      var out = []
+      for (var r = 0; r < dataRows.length; r++) {
+        var row = dataRows[r]
+        var phoneCol = colForKey('phone')
+        var phone = phoneCol >= 0 ? normalizeCsvCell(row[phoneCol]) : ''
+        if (!phone) continue
+        var nameCol = colForKey('name'), titleCol = colForKey('task_title')
+        var prioCol = colForKey('priority'), schedCol = colForKey('scheduled_at')
+        var name = nameCol >= 0 ? normalizeCsvCell(row[nameCol]) : ''
+        var task_title = titleCol >= 0 ? normalizeCsvCell(row[titleCol]) : ''
+        var priority = prioCol >= 0 ? normalizeCsvCell(row[prioCol]) : ''
+        var sched = resolveImportSchedule(schedCol >= 0 ? row[schedCol] : '')
+        out.push(Object.assign({ name: name, phone: phone, task_title: task_title, priority: priority }, sched))
+      }
+      return out
+    }
+
+    // ── Mapping UI ───────────────────────────────────────────────────────────
+    function renderMappingTable() {
+      var tbody = document.getElementById('mappingTableBody')
+      if (!tbody || !rawHeaders.length) return
+      var scores = rawHeaders.map(function(h) {
+        return FOLLOWUP_IMPORT_FIELDS.map(function(f) { return scoreHeaderMatch(normalizeImportHeader(h), f) })
+      })
+      var dropdownOpts = '<option value="">— تخطي —</option>' +
+        FOLLOWUP_IMPORT_FIELDS.map(function(f) {
+          return '<option value="' + f.key + '">' + escapeHtml(f.labelAr) + (f.required ? ' *' : '') + '</option>'
+        }).join('')
+
+      var headerCells = rawHeaders.map(function(h, ci) {
+        var val = columnMapping[ci]
+        var fieldIdx = FOLLOWUP_IMPORT_FIELDS.findIndex(function(f) { return f.key === val })
+        var score = fieldIdx >= 0 ? scores[ci][fieldIdx] : 0
+        var badge = ''
+        if (score >= 70) badge = '<span class="mr-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">✓</span>'
+        else if (score >= 50) badge = '<span class="mr-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800">~</span>'
+        return '<td class="px-3 py-2 border-b border-l border-gray-200 bg-gray-50 text-gray-700 font-medium whitespace-nowrap">' + badge + escapeHtml(h || '(فارغ)') + '</td>'
+      }).join('')
+
+      var dropCells = rawHeaders.map(function(h, ci) {
+        var sel = '<select data-col="' + ci + '" onchange="onMappingDropdownChange(this)" class="border border-gray-300 rounded px-2 py-1 text-sm bg-white focus:ring-1 focus:ring-orange-300 outline-none w-full">' + dropdownOpts + '</select>'
+        return '<td class="px-2 py-2 border-b border-l border-gray-200">' + sel + '</td>'
+      }).join('')
+
+      var sampleRowsHtml = rawSheetRows.slice(0, 3).map(function(row) {
+        var cells = rawHeaders.map(function(h, ci) {
+          return '<td class="px-3 py-1.5 border-b border-l border-gray-100 text-gray-600 whitespace-nowrap max-w-[140px] overflow-hidden text-ellipsis">' + escapeHtml(String(row[ci] == null ? '' : row[ci])) + '</td>'
+        }).join('')
+        return '<tr>' + '<td class="px-3 py-1.5 border-b border-l border-gray-100 text-gray-400 text-xs bg-gray-50 sticky right-0"></td>' + cells + '</tr>'
+      }).join('')
+
+      tbody.innerHTML =
+        '<tr>' +
+          '<td class="px-3 py-2 border-b border-l border-gray-200 bg-gray-100 text-xs font-bold text-gray-500 whitespace-nowrap sticky right-0">الرأس الأصلي</td>' +
+          headerCells +
+        '</tr>' +
+        '<tr>' +
+          '<td class="px-3 py-2 border-b border-l border-gray-200 bg-orange-50 text-xs font-bold text-orange-700 whitespace-nowrap sticky right-0">ربط الحقل</td>' +
+          dropCells +
+        '</tr>' +
+        sampleRowsHtml
+
+      // Set dropdown values from columnMapping
+      tbody.querySelectorAll('select[data-col]').forEach(function(sel) {
+        var ci = parseInt(sel.getAttribute('data-col'), 10)
+        sel.value = columnMapping[ci] || ''
+      })
+      updateConfirmButton()
+    }
+
+    function onMappingDropdownChange(sel) {
+      var ci = parseInt(sel.getAttribute('data-col'), 10)
+      var val = sel.value || null
+      // If this field is already assigned to another column, clear that column
+      if (val) {
+        Object.keys(columnMapping).forEach(function(k) {
+          if (columnMapping[k] === val && parseInt(k, 10) !== ci) {
+            columnMapping[k] = null
+          }
+        })
+      }
+      columnMapping[ci] = val
+      // Sync all dropdowns (another may have been cleared)
+      var tbody = document.getElementById('mappingTableBody')
+      if (tbody) {
+        tbody.querySelectorAll('select[data-col]').forEach(function(s) {
+          var c = parseInt(s.getAttribute('data-col'), 10)
+          s.value = columnMapping[c] || ''
+        })
+      }
+      updateConfirmButton()
+    }
+
+    function updateConfirmButton() {
+      var phoneCount = Object.values(columnMapping).filter(function(v) { return v === 'phone' }).length
+      var btn = document.getElementById('confirmMappingBtn')
+      var errEl = document.getElementById('mappingError')
+      if (btn) btn.disabled = phoneCount !== 1
+      if (errEl) {
+        if (phoneCount === 0) {
+          errEl.textContent = 'يرجى ربط عمود الهاتف قبل المتابعة'
+          errEl.classList.remove('hidden')
+        } else if (phoneCount > 1) {
+          errEl.textContent = 'تم ربط أكثر من عمود بحقل الهاتف. يُرجى الاحتفاظ بعمود واحد فقط.'
+          errEl.classList.remove('hidden')
+        } else {
+          errEl.classList.add('hidden')
+        }
+      }
+    }
+
+    function confirmMappingAndPreview() {
+      var phoneCount = Object.values(columnMapping).filter(function(v) { return v === 'phone' }).length
+      if (phoneCount !== 1) { updateConfirmButton(); return }
+      var out = applyColumnMapping(rawSheetRows, columnMapping)
+      if (!out.length) {
+        var errEl = document.getElementById('mappingError')
+        if (errEl) { errEl.textContent = 'لم يتم العثور على صفوف صالحة (عمود الهاتف فارغ في جميع الصفوف)'; errEl.classList.remove('hidden') }
+        return
+      }
+      parsedRows = out.map(function(row) {
+        return { name: row.name, phone: row.phone, task_title: row.task_title, priority: row.priority, scheduled_at: row.scheduled_at }
+      })
+      previewRows = out
+      precheckState = null
+      document.getElementById('mappingSection').classList.add('hidden')
+      renderPreview(out)
+      document.getElementById('previewSection').classList.remove('hidden')
+      document.getElementById('downloadPreviewBtn').classList.remove('hidden')
+      document.getElementById('sourceLabel').focus()
+      runPrecheck(out)
+    }
+
+    window.editMapping = function() {
+      document.getElementById('previewSection').classList.add('hidden')
+      document.getElementById('mappingSection').classList.remove('hidden')
+      document.getElementById('mappingSection').scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
 
     function normalizePhoneForPrecheck(raw) {
       let s = String(raw || '').trim()
@@ -47115,52 +47439,19 @@ app.get('/admin/follow-ups/import', async (c) => {
         }
         if (!rows || rows.length < 2) { alert('الملف فارغ أو غير صالح'); return }
 
-        const header = rows[0].map(normalizeHeader)
-        const findIdx = (keys) => header.findIndex(h => keys.indexOf(h) !== -1)
-        const iName = findIdx(['name', 'full_name', 'الاسم'])
-        const iPhone = findIdx(['phone', 'الهاتف', 'الجوال'])
-        const iTitle = findIdx(['task_title', 'title', 'عنوان المهمة', 'عنوان'])
-        const iPriority = findIdx(['priority', 'الأولوية'])
-        const iSchedule = findIdx(['scheduled_at', 'schedule', 'موعد المهمة', 'الموعد'])
+        // Store raw data and move to mapping step
+        rawHeaders = rows[0].map(function(h) { return String(h == null ? '' : h) })
+        rawSheetRows = rows.slice(1)
+        columnMapping = suggestColumnMapping(rawHeaders, rawSheetRows.slice(0, 20))
 
-        if (iPhone < 0) {
-          alert('يجب أن يحتوي الملف على عمود "الهاتف"')
-          return
-        }
-
-        const out = []
-        for (let r = 1; r < rows.length; r++) {
-          const cols = rows[r]
-          const phone = normalizeCsvCell(cols[iPhone])
-          if (!phone) continue
-          const name = iName >= 0 ? normalizeCsvCell(cols[iName]) : ''
-          const task_title = iTitle >= 0 ? normalizeCsvCell(cols[iTitle]) : ''
-          const priority = iPriority >= 0 ? normalizeCsvCell(cols[iPriority]) : ''
-          const schedule = resolveImportSchedule(iSchedule >= 0 ? cols[iSchedule] : '')
-          out.push({ name, phone, task_title, priority, ...schedule })
-        }
-        if (out.length === 0) { alert('لم يتم العثور على صفوف صالحة'); return }
-
-        // API payload only needs the resolved (nullified) schedule — strip preview-only fields.
-        parsedRows = out.map(function(row) {
-          return {
-            name: row.name,
-            phone: row.phone,
-            task_title: row.task_title,
-            priority: row.priority,
-            scheduled_at: row.scheduled_at,
-          }
-        })
-        previewRows = out
-        precheckState = null
         document.getElementById('fileName').textContent = file.name
         document.getElementById('fileSize').textContent = (file.size > 1024*1024 ? (file.size/1048576).toFixed(2)+' MB' : (file.size/1024).toFixed(2)+' KB')
         document.getElementById('fileInfo').classList.remove('hidden')
-        renderPreview(out)
-        document.getElementById('previewSection').classList.remove('hidden')
-        document.getElementById('downloadPreviewBtn').classList.remove('hidden')
-        document.getElementById('sourceLabel').focus()
-        runPrecheck(out)
+        document.getElementById('previewSection').classList.add('hidden')
+        document.getElementById('mappingError').classList.add('hidden')
+        renderMappingTable()
+        document.getElementById('mappingSection').classList.remove('hidden')
+        document.getElementById('mappingSection').scrollIntoView({ behavior: 'smooth', block: 'start' })
       } catch (e) {
         console.error(e)
         alert('حدث خطأ أثناء قراءة الملف')
@@ -47371,9 +47662,13 @@ app.get('/admin/follow-ups/import', async (c) => {
       previewRows = []
       precheckState = null
       taskTitleOverride = ''
+      rawSheetRows = []
+      rawHeaders = []
+      columnMapping = {}
       const inp = document.getElementById('importFile'); if (inp) inp.value = ''
       const ttInp = document.getElementById('taskTitleOverride'); if (ttInp) ttInp.value = ''
       document.getElementById('fileInfo').classList.add('hidden')
+      document.getElementById('mappingSection').classList.add('hidden')
       document.getElementById('previewSection').classList.add('hidden')
       document.getElementById('downloadPreviewBtn').classList.add('hidden')
     }
@@ -47596,9 +47891,13 @@ app.get('/admin/follow-ups/import', async (c) => {
       previewRows = []
       precheckState = null
       taskTitleOverride = ''
+      rawSheetRows = []
+      rawHeaders = []
+      columnMapping = {}
       const inp = document.getElementById('importFile'); if (inp) inp.value = ''
       const ttInp = document.getElementById('taskTitleOverride'); if (ttInp) ttInp.value = ''
       document.getElementById('resultSection').classList.add('hidden')
+      document.getElementById('mappingSection').classList.add('hidden')
       document.getElementById('downloadPreviewBtn').classList.add('hidden')
       document.getElementById('sourceLabel').value = ''
       resetAssignPanel()
