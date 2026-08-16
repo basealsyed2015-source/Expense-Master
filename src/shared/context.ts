@@ -1,4 +1,4 @@
-import type { UserInfo } from '../perf-helpers'
+import type { UserInfo } from '../perf-helpers.ts'
 
 export type Bindings = {
   DB: D1Database;

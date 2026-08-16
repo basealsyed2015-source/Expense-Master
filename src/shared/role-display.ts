@@ -1,4 +1,4 @@
-import { normalizeRoleId } from '../notification-access'
+import { normalizeRoleId } from '../notification-access.ts'
 
 export function getRoleDisplayName(roleId: unknown, roleName: string | null | undefined): string {
   const normalizedRoleId = normalizeRoleId(roleId)

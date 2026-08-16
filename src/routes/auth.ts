@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import { normalizeRoleId } from '../notification-access'
-import { sendPasswordResetCodeEmail } from '../resend-email'
-import { getRoleDisplayName } from '../shared/role-display'
-import type { AppEnv } from '../shared/context'
+import { normalizeRoleId } from '../notification-access.ts'
+import { sendPasswordResetCodeEmail } from '../resend-email.ts'
+import { getRoleDisplayName } from '../shared/role-display.ts'
+import type { AppEnv } from '../shared/context.ts'
 
 export const authRoutes = new Hono<AppEnv>()
 
