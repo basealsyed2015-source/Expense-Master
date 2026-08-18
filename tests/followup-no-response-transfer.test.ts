@@ -80,6 +80,17 @@ describe('no-response auto-transfer — source invariants', () => {
     )
   })
 
+  it('asks for confirmation before restoring a no-response task to the main list', () => {
+    const pageStart = INDEX_SRC.indexOf("app.get('/admin/my-no-response-tasks'")
+    assert.ok(pageStart >= 0, 'expected my-no-response-tasks page')
+    const pageBody = INDEX_SRC.slice(pageStart, pageStart + 30000)
+    const revokeIdx = pageBody.indexOf("querySelectorAll('[data-revoke]')")
+    assert.ok(revokeIdx >= 0, 'expected restore-to-main-list handler')
+    const handler = pageBody.slice(revokeIdx, revokeIdx + 800)
+    assert.match(handler, /confirm\(/)
+    assert.match(handler, /revoke-no-response/)
+  })
+
   it('routes transfer-in notifications to the no-response tasks page', () => {
     const fnStart = NOTIF_SRC.indexOf('export async function insertFollowupNoResponseTransferNotification')
     assert.ok(fnStart >= 0, 'expected insertFollowupNoResponseTransferNotification')

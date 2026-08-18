@@ -35,7 +35,7 @@ export const usersManagementPage = () => `
   </style>
 </head>
 <body class="bg-gradient-to-br from-gray-50 to-gray-100">
-  
+
   <div class="min-h-screen">
     <!-- Header -->
     <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg">
@@ -76,7 +76,7 @@ export const usersManagementPage = () => `
             </div>
           </div>
         </div>
-        
+
         <div class="bg-white rounded-xl p-6 shadow-lg">
           <div class="flex items-center justify-between">
             <div>
@@ -88,7 +88,7 @@ export const usersManagementPage = () => `
             </div>
           </div>
         </div>
-        
+
         <div class="bg-white rounded-xl p-6 shadow-lg">
           <div class="flex items-center justify-between">
             <div>
@@ -100,7 +100,7 @@ export const usersManagementPage = () => `
             </div>
           </div>
         </div>
-        
+
         <div class="bg-white rounded-xl p-6 shadow-lg">
           <div class="flex items-center justify-between">
             <div>
@@ -117,20 +117,20 @@ export const usersManagementPage = () => `
       <!-- Filters -->
       <div class="bg-white rounded-xl p-6 shadow-lg mb-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <input type="text" id="searchInput" placeholder="🔍 البحث بالاسم أو البريد..." 
+          <input type="text" id="searchInput" placeholder="🔍 البحث بالاسم أو البريد..."
                  class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                  onkeyup="filterUsers()">
-          
+
           <select id="roleFilter" class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" onchange="filterUsers()">
             <option value="">جميع الأدوار</option>
           </select>
-          
+
           <select id="statusFilter" class="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500" onchange="filterUsers()">
             <option value="">جميع الحالات</option>
             <option value="1">نشط</option>
             <option value="0">غير نشط</option>
           </select>
-          
+
           <button onclick="resetFilters()" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-xl font-bold transition-all">
             <i class="fas fa-redo ml-2"></i>
             إعادة تعيين
@@ -179,7 +179,7 @@ export const usersManagementPage = () => `
           إضافة مستخدم جديد
         </h2>
       </div>
-      
+
       <form id="addUserForm" class="p-6 space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -187,21 +187,21 @@ export const usersManagementPage = () => `
             <input type="text" name="full_name" required
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
           </div>
-          
+
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني *</label>
             <input type="email" name="email" required autocomplete="email"
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
           </div>
         </div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">رقم الجوال</label>
             <input type="tel" name="phone" required
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
           </div>
-          
+
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">الدور</label>
             <select name="role_id" id="addUserRole" required
@@ -210,24 +210,24 @@ export const usersManagementPage = () => `
             </select>
           </div>
         </div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
             <input type="password" name="password" required minlength="6"
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
           </div>
-          
+
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">الحالة</label>
-            <select name="is_active" 
+            <select name="is_active"
                     class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500">
               <option value="1">نشط</option>
               <option value="0">غير نشط</option>
             </select>
           </div>
         </div>
-        
+
         <div class="flex gap-3 pt-4">
           <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all">
             <i class="fas fa-save ml-2"></i>
@@ -251,17 +251,17 @@ export const usersManagementPage = () => `
           تعديل المستخدم
         </h2>
       </div>
-      
+
       <form id="editUserForm" class="p-6 space-y-4">
         <input type="hidden" name="id" id="editUserId">
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
             <input type="text" name="full_name" id="editUserName" required
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
           </div>
-          
+
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
             <input type="email" name="email" id="editUserEmail" required
@@ -273,14 +273,14 @@ export const usersManagementPage = () => `
                    class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-600 cursor-not-allowed">
           </div>
         </div>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">رقم الجوال</label>
             <input type="tel" name="phone" id="editUserPhone" required
                    class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-yellow-500">
           </div>
-          
+
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">الدور</label>
             <select name="role_id" id="editUserRole" required
@@ -289,7 +289,7 @@ export const usersManagementPage = () => `
             </select>
           </div>
         </div>
-        
+
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-2">الحالة</label>
           <select name="is_active" id="editUserStatus"
@@ -367,20 +367,20 @@ export const usersManagementPage = () => `
         // تحميل المستخدمين
         const usersResponse = await axios.get('/api/users');
         allUsers = usersResponse.data.data || [];
-        
+
         // تحميل الأدوار
         const rolesResponse = await axios.get('/api/roles');
         allRoles = rolesResponse.data.data || [];
-        
+
         // ملء قوائم الأدوار
         populateRoleSelects();
-        
+
         // عرض المستخدمين
         displayUsers(allUsers);
-        
+
         // تحديث الإحصاءات
         updateStats();
-        
+
       } catch (error) {
         console.error('Error loading data:', error);
         alert('❌ حدث خطأ في تحميل البيانات');
@@ -392,20 +392,20 @@ export const usersManagementPage = () => `
       const roleFilter = document.getElementById('roleFilter');
       const addUserRole = document.getElementById('addUserRole');
       const editUserRole = document.getElementById('editUserRole');
-      
+
       allRoles.forEach(role => {
         // فلتر الأدوار
         const filterOption = document.createElement('option');
         filterOption.value = role.id;
         filterOption.textContent = getRoleOptionLabel(role);
         roleFilter.appendChild(filterOption);
-        
+
         // قائمة إضافة
         const addOption = document.createElement('option');
         addOption.value = role.id;
         addOption.textContent = getRoleOptionLabel(role);
         addUserRole.appendChild(addOption);
-        
+
         // قائمة تعديل
         const editOption = document.createElement('option');
         editOption.value = role.id;
@@ -417,7 +417,7 @@ export const usersManagementPage = () => `
     // عرض المستخدمين
     function displayUsers(users) {
       const tbody = document.getElementById('usersTableBody');
-      
+
       if (users.length === 0) {
         tbody.innerHTML = \`
           <tr>
@@ -429,17 +429,17 @@ export const usersManagementPage = () => `
         \`;
         return;
       }
-      
+
       tbody.innerHTML = users.map((user, index) => {
         const role = allRoles.find(r => r.id === user.role_id);
         const roleName = normalizeRoleLabel(user.role_id, role ? role.role_name : null);
-        const statusBadge = user.is_active ? 
+        const statusBadge = user.is_active ?
           '<span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-check-circle ml-1"></i>نشط</span>' :
           '<span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-bold"><i class="fas fa-times-circle ml-1"></i>غير نشط</span>';
-        
+
         const date = new Date(user.created_at);
         const formattedDate = date.toLocaleDateString('ar-EG');
-        
+
         return \`
           <tr class="border-b hover:bg-blue-50 transition-colors">
             <td class="px-6 py-4 font-medium">\${user.tenant_user_number != null ? user.tenant_user_number : '—'}</td>
@@ -464,17 +464,17 @@ export const usersManagementPage = () => `
             <td class="px-6 py-4 text-sm text-gray-500">\${formattedDate}</td>
             <td class="px-6 py-4">
               <div class="flex items-center justify-center gap-2">
-                <button onclick="viewUserPermissions(\${user.id})" 
+                <button onclick="viewUserPermissions(\${user.id})"
                         class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-sm"
                         title="عرض الصلاحيات">
                   <i class="fas fa-key"></i>
                 </button>
-                <button onclick="editUser(\${user.id})" 
+                <button onclick="editUser(\${user.id})"
                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm"
                         title="تعديل">
                   <i class="fas fa-edit"></i>
                 </button>
-                <button onclick="deleteUser(\${user.id}, '\${user.full_name}')" 
+                <button onclick="deleteUser(\${user.id}, '\${user.full_name}')"
                         class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm"
                         title="حذف">
                   <i class="fas fa-trash"></i>
@@ -498,7 +498,7 @@ export const usersManagementPage = () => `
         const role = allRoles.find(r => r.id === u.role_id);
         return role && role.id === 14; // موظف
       }).length;
-      
+
       document.getElementById('totalUsers').textContent = total;
       document.getElementById('activeUsers').textContent = active;
       document.getElementById('adminUsers').textContent = admins;
@@ -510,27 +510,27 @@ export const usersManagementPage = () => `
       const search = document.getElementById('searchInput').value.toLowerCase();
       const roleFilter = document.getElementById('roleFilter').value;
       const statusFilter = document.getElementById('statusFilter').value;
-      
+
       let filtered = allUsers;
-      
+
       // بحث بالاسم أو البريد
       if (search) {
-        filtered = filtered.filter(u => 
-          u.full_name.toLowerCase().includes(search) || 
+        filtered = filtered.filter(u =>
+          u.full_name.toLowerCase().includes(search) ||
           u.email.toLowerCase().includes(search)
         );
       }
-      
+
       // فلتر حسب الدور
       if (roleFilter) {
         filtered = filtered.filter(u => u.role_id == roleFilter);
       }
-      
+
       // فلتر حسب الحالة
       if (statusFilter !== '') {
         filtered = filtered.filter(u => u.is_active == statusFilter);
       }
-      
+
       displayUsers(filtered);
     }
 
@@ -564,13 +564,13 @@ export const usersManagementPage = () => `
     // إضافة مستخدم
     document.getElementById('addUserForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData);
-      
+
       try {
         const response = await axios.post('/api/users', data);
-        
+
         if (response.data.success) {
           alert('✅ تم إضافة المستخدم بنجاح');
           closeAddUserModal();
@@ -612,15 +612,15 @@ export const usersManagementPage = () => `
     // حفظ التعديلات
     document.getElementById('editUserForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      
+
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData);
       const userId = data.id;
       delete data.id;
-      
+
       try {
         const response = await axios.put(\`/api/users/\${userId}\`, data);
-        
+
         if (response.data.success) {
           alert('✅ تم تحديث المستخدم بنجاح');
           closeEditUserModal();
@@ -637,10 +637,10 @@ export const usersManagementPage = () => `
       if (!confirm(\`هل أنت متأكد من حذف المستخدم "\${name}"؟\`)) {
         return;
       }
-      
+
       try {
         const response = await axios.delete(\`/api/users/\${id}\`);
-        
+
         if (response.data.success) {
           alert('✅ تم حذف المستخدم بنجاح');
           loadData();

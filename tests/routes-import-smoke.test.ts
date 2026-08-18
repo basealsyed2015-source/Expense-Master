@@ -14,6 +14,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { authRoutes } from '../src/routes/auth.ts'
 import { ratesRoutes } from '../src/routes/rates.ts'
+import { banksRoutes } from '../src/routes/banks.ts'
 
 function extractRoutePaths(router: unknown): string[] {
   // Hono exposes `.routes` on the app instance — array of { method, path, handler }
@@ -68,6 +69,24 @@ describe('routes/rates.ts', () => {
       'POST /api/rates/import-csv',
       'POST /api/rates/upload-excel',
       'PUT /api/rates/:id',
+    ])
+  })
+})
+
+describe('routes/banks.ts', () => {
+  it('exports banksRoutes as a Hono instance', () => {
+    assert.equal(typeof (banksRoutes as { fetch?: unknown }).fetch, 'function')
+  })
+
+  it('registers all banks endpoints (6 handlers)', () => {
+    const paths = extractRoutePaths(banksRoutes)
+    assert.deepEqual(paths, [
+      'DELETE /api/banks/:id',
+      'DELETE /api/banks/global/all',
+      'GET /api/banks',
+      'POST /api/banks',
+      'POST /api/banks/:id',
+      'PUT /api/banks/:id',
     ])
   })
 })

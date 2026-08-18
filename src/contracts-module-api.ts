@@ -16,7 +16,7 @@ type GetUserInfo = (c: Context) => Promise<UserInfo>
 
 const STATUS_AWAITING_BANK_AGENT_APPROVAL = 'بانتظار موافقة ممثل البنك'
 const STATUS_AWAITING_ADMIN_APPROVAL = 'بانتظار موافقة الإدارة'
-const FINAL_APPROVAL_STATUSES = new Set(['نشط', 'بانتظار التمويل', 'مكتمل'])
+const FINAL_APPROVAL_STATUSES = new Set(['بانتظار التمويل', 'مكتمل'])
 
 /**
  * Display name for the bank agent waiting on / assigned to a contract.
@@ -913,7 +913,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
         // Same user in both columns → skip bank approval step
         initialStatus = role6IsBothColumns ? STATUS_AWAITING_ADMIN_APPROVAL : STATUS_AWAITING_BANK_AGENT_APPROVAL
       } else {
-        initialStatus = String(body.status ?? 'نشط')
+        initialStatus = String(body.status ?? 'مكتمل')
       }
       let r
       try {

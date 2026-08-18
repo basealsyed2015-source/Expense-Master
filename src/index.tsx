@@ -92,6 +92,8 @@ import {
   bankDuplicateMessage,
   mapBankDbError,
 } from './bank-tenant-uniqueness'
+import { deleteBankAndDependents, deleteGlobalBanksAndDependents } from './shared/bank-deletes.ts'
+import { banksRoutes } from './routes/banks.ts'
 import {
   buildCustomerEnrollFromTaskHref,
   findOpenFollowupTaskByPhone,
@@ -2366,36 +2368,6 @@ function buildPublicContactPageHtml(
     </body>
     </html>
   `
-}
-
-/** Schema has no ON DELETE CASCADE from banks; clear dependents so DELETE FROM banks succeeds. */
-async function deleteBankAndDependents(db: D1Database, bankId: string | number) {
-  await db.batch([
-    db.prepare('DELETE FROM bank_financing_rates WHERE bank_id = ?').bind(bankId),
-    db.prepare('UPDATE customers SET best_bank_id = NULL WHERE best_bank_id = ?').bind(bankId),
-    db.prepare('UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id = ?').bind(bankId),
-    db.prepare('DELETE FROM calculations WHERE bank_id = ?').bind(bankId),
-    db.prepare('DELETE FROM banks WHERE id = ?').bind(bankId),
-  ])
-}
-
-/** Same as deleteBankAndDependents for all banks with tenant_id IS NULL (super-admin bulk delete). */
-async function deleteGlobalBanksAndDependents(db: D1Database) {
-  return db.batch([
-    db.prepare(
-      'DELETE FROM bank_financing_rates WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
-    ),
-    db.prepare(
-      'UPDATE customers SET best_bank_id = NULL WHERE best_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
-    ),
-    db.prepare(
-      'UPDATE financing_requests SET selected_bank_id = NULL WHERE selected_bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
-    ),
-    db.prepare(
-      'DELETE FROM calculations WHERE bank_id IN (SELECT id FROM banks WHERE tenant_id IS NULL)'
-    ),
-    db.prepare('DELETE FROM banks WHERE tenant_id IS NULL'),
-  ])
 }
 
 /** When users with roles supervisor (3), employee (4), or bank_agent (5) are created, mirror them into hr_employees for /admin/hr flows. */
@@ -6267,301 +6239,8 @@ app.delete('/api/tenants/:tenantRef', async (c) => {
 // AUTHENTICATION & AUTHORIZATION APIs — see src/routes/auth.ts
 app.route('/', authRoutes)
 
-// BANKS APIs
-
-// Get all banks (tenant-specific banks only by default)
-app.get('/api/banks', async (c) => {
-  try {
-    // Get tenant_id and role_id from query parameter or Authorization header
-    let tenantIdRaw = c.req.query('tenant_id');
-    let tenantId = tenantIdRaw ? parseInt(tenantIdRaw, 10) : null;
-    let roleId: number | null = null;
-    
-    // Extract tenant_id and role_id from Authorization header if not in query
-    const authHeader = c.req.header('Authorization')
-    const cookieToken = c.req.header('Cookie')?.split('authToken=')[1]?.split(';')[0]
-    const token = authHeader?.replace('Bearer ', '') || cookieToken
-    
-    if (token) {
-      try {
-        const decoded = atob(token)
-        const parts = decoded.split(':')
-        const tokenTenantId = parts[1] !== 'null' ? parseInt(parts[1]) : null
-        const tokenRoleId = parts[2] ? parseInt(parts[2]) : null
-        
-        // Only use token tenant_id if not provided in query
-        if ((!tenantId || Number.isNaN(tenantId)) && tokenTenantId && !Number.isNaN(tokenTenantId)) {
-          tenantId = tokenTenantId
-        }
-        
-        // Always extract role_id from token if available
-        if (tokenRoleId && !Number.isNaN(tokenRoleId)) {
-          roleId = tokenRoleId
-        }
-      } catch (e) {
-        // Token parsing failed, continue without tenant_id
-      }
-    }
-    
-    // Default to false - only include global banks if explicitly requested
-    const includeGlobal = c.req.query('include_global') === '1';
-    
-    let query = `SELECT * FROM banks`;
-    let results;
-    
-    // Super admin (role_id = 1) sees all banks
-    if (roleId === 1) {
-      query += ` ORDER BY bank_name`;
-      results = (await c.env.DB.prepare(query).all()).results;
-    } 
-    // Tenant users only see their own banks (exclude global banks)
-    else if (tenantId !== null && !Number.isNaN(tenantId)) {
-      if (includeGlobal) {
-        query += ` WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY bank_name`;
-      } else {
-        // Only show banks that belong to this specific tenant (exclude global banks)
-        query += ` WHERE tenant_id = ? ORDER BY bank_name`;
-      }
-      results = (await c.env.DB.prepare(query).bind(tenantId).all()).results;
-    } 
-    // If no tenant_id and not super admin, return empty (shouldn't happen for authenticated users)
-    else {
-      query += ` WHERE 1=0 ORDER BY bank_name`; // Return empty result
-      results = (await c.env.DB.prepare(query).all()).results;
-    }
-    
-    return c.json({ success: true, data: results })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// ============================
-// صفحة Timeline - الجدول الزمني لحالات الطلب
-// ============================
-
-// Add bank
-app.post('/api/banks', async (c) => {
-  try {
-    const data = await c.req.json()
-    const { bank_name, bank_code, logo_url, is_active, tenant_id } = data
-
-    if (!bank_name || !String(bank_name).trim()) {
-      return c.json({ success: false, error: 'اسم البنك مطلوب.' }, 400)
-    }
-    
-    // Get tenant_id from Authorization header if not provided
-    let finalTenantId: number | null = tenant_id ?? null
-    if (finalTenantId == null) {
-      const authHeader = c.req.header('Authorization')
-      const token = authHeader?.replace('Bearer ', '')
-      if (token) {
-        const decoded = atob(token)
-        const parts = decoded.split(':')
-        finalTenantId = parts[1] !== 'null' ? parseInt(parts[1], 10) : null
-      }
-    }
-
-    const duplicate = await findBankDuplicate(c.env.DB, {
-      tenantId: finalTenantId,
-      bankName: bank_name,
-      bankCode: bank_code,
-    })
-    if (duplicate) {
-      return c.json({ success: false, error: bankDuplicateMessage(duplicate) }, 409)
-    }
-    
-    const result = await c.env.DB.prepare(`
-      INSERT INTO banks (bank_name, bank_code, logo_url, is_active, tenant_id) 
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(
-      String(bank_name).trim(),
-      bank_code != null && String(bank_code).trim() !== '' ? String(bank_code).trim() : null,
-      logo_url || null,
-      is_active ?? 1,
-      finalTenantId
-    ).run()
-    
-    return c.json({ success: true, id: result.meta.last_row_id })
-  } catch (error: unknown) {
-    const mapped = mapBankDbError(error)
-    if (mapped) {
-      return c.json({ success: false, error: mapped }, 409)
-    }
-    console.error('Add bank error:', error)
-    return c.json({ success: false, error: 'فشل إضافة البنك. حاول مرة أخرى لاحقاً.' }, 500)
-  }
-})
-
-// Update bank (PUT method for API)
-app.put('/api/banks/:id', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'), 10)
-    if (Number.isNaN(id)) {
-      return c.json({ success: false, error: 'معرّف البنك غير صالح.' }, 400)
-    }
-    
-    const data = await c.req.json()
-    const { bank_name, bank_code, logo_url, is_active } = data
-
-    if (!bank_name || !String(bank_name).trim()) {
-      return c.json({ success: false, error: 'اسم البنك مطلوب.' }, 400)
-    }
-    
-    // Verify bank belongs to user's tenant
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id: number | null = null
-    if (token) {
-      const decoded = atob(token)
-      const parts = decoded.split(':')
-      tenant_id = parts[1] !== 'null' ? parseInt(parts[1], 10) : null
-    }
-
-    const existing = await c.env.DB.prepare(
-      'SELECT id, tenant_id FROM banks WHERE id = ?'
-    ).bind(id).first<{ id: number; tenant_id: number | null }>()
-    if (!existing) {
-      return c.json({ success: false, error: 'البنك غير موجود.' }, 404)
-    }
-    if (tenant_id != null && existing.tenant_id !== tenant_id) {
-      return c.json({ success: false, error: 'غير مصرح بتعديل هذا البنك.' }, 403)
-    }
-
-    const scopeTenantId = tenant_id ?? existing.tenant_id
-    const duplicate = await findBankDuplicate(c.env.DB, {
-      tenantId: scopeTenantId,
-      bankName: bank_name,
-      bankCode: bank_code,
-      excludeId: id,
-    })
-    if (duplicate) {
-      return c.json({ success: false, error: bankDuplicateMessage(duplicate) }, 409)
-    }
-    
-    // Add tenant_id check to WHERE clause for security
-    let query = `UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?`
-    const trimmedName = String(bank_name).trim()
-    const trimmedCode = bank_code != null && String(bank_code).trim() !== '' ? String(bank_code).trim() : null
-    if (tenant_id != null) {
-      query += ' AND tenant_id = ?'
-      await c.env.DB.prepare(query).bind(trimmedName, trimmedCode, logo_url || null, is_active ?? 1, id, tenant_id).run()
-    } else {
-      await c.env.DB.prepare(query).bind(trimmedName, trimmedCode, logo_url || null, is_active ?? 1, id).run()
-    }
-    
-    return c.json({ success: true })
-  } catch (error: unknown) {
-    const mapped = mapBankDbError(error)
-    if (mapped) {
-      return c.json({ success: false, error: mapped }, 409)
-    }
-    console.error('Update bank error:', error)
-    return c.json({ success: false, error: 'فشل تحديث البنك. حاول مرة أخرى لاحقاً.' }, 500)
-  }
-})
-
-// Update bank (POST method for form submission - legacy)
-app.post('/api/banks/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    const formData = await c.req.formData()
-    const bank_name = formData.get('bank_name') as string
-    const bank_code = formData.get('bank_code') as string
-    const logo_url = formData.get('logo_url') as string || null
-    const is_active = parseInt(formData.get('is_active') as string || '1')
-    
-    await c.env.DB.prepare(`
-      UPDATE banks SET bank_name = ?, bank_code = ?, logo_url = ?, is_active = ? WHERE id = ?
-    `).bind(bank_name, bank_code, logo_url, is_active, id).run()
-    return c.redirect('/admin/banks')
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Delete bank
-app.delete('/api/banks/:id', async (c) => {
-  try {
-    const id = c.req.param('id')
-    
-    // Get tenant_id and role_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let tenant_id = null
-    let role_id = null
-    if (token) {
-      try {
-        const decoded = atob(token)
-        const parts = decoded.split(':')
-        tenant_id = parts[1] !== 'null' ? parseInt(parts[1]) : null
-        role_id = parts[2] ? parseInt(parts[2]) : null
-      } catch (e) {
-        // Token parsing failed
-      }
-    }
-    
-    // Check if bank exists and get its tenant_id
-    const bank = await c.env.DB.prepare('SELECT id, tenant_id FROM banks WHERE id = ?').bind(id).first()
-    
-    if (!bank) {
-      return c.json({ success: false, error: 'البنك غير موجود' }, 404)
-    }
-    
-    // If bank is global (tenant_id IS NULL), only super admin can delete it
-    if (bank.tenant_id === null) {
-      if (role_id !== 1) {
-        return c.json({ success: false, error: 'لا يمكنك حذف البنوك العامة. فقط مدير النظام يمكنه حذفها' }, 403)
-      }
-    } else {
-      // If bank belongs to a tenant, only that tenant can delete it
-      if (tenant_id !== bank.tenant_id) {
-        return c.json({ success: false, error: 'البنك غير موجود أو لا يمكنك حذفه' }, 404)
-      }
-    }
-    
-    await deleteBankAndDependents(c.env.DB, id)
-    
-    return c.json({ success: true, message: 'تم حذف البنك بنجاح' })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
-
-// Delete all global banks (super admin only)
-app.delete('/api/banks/global/all', async (c) => {
-  try {
-    // Get role_id from Authorization header
-    const authHeader = c.req.header('Authorization')
-    const token = authHeader?.replace('Bearer ', '')
-    let role_id = null
-    if (token) {
-      try {
-        const decoded = atob(token)
-        const parts = decoded.split(':')
-        role_id = parts[2] ? parseInt(parts[2]) : null
-      } catch (e) {
-        // Token parsing failed
-      }
-    }
-    
-    // Only super admin can delete all global banks
-    if (role_id !== 1) {
-      return c.json({ success: false, error: 'غير مصرح لك بحذف البنوك العامة' }, 403)
-    }
-    
-    const batchResults = await deleteGlobalBanksAndDependents(c.env.DB)
-    const deletedBanks = batchResults[batchResults.length - 1]?.meta?.changes ?? 0
-    
-    return c.json({ 
-      success: true, 
-      message: `تم حذف ${deletedBanks} بنك عام`,
-      deleted_count: deletedBanks
-    })
-  } catch (error: any) {
-    return c.json({ success: false, error: error.message }, 500)
-  }
-})
+// BANKS APIs — see src/routes/banks.ts
+app.route('/', banksRoutes)
 
 // FINANCING TYPES APIs
 
@@ -32066,6 +31745,7 @@ app.get('/admin/users', async (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        ${_rfFlatpickrHead}
         <style>
           .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #6366f1 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
@@ -32124,42 +31804,36 @@ app.get('/admin/users', async (c) => {
             
             <!-- شريط البحث والفلترة -->
             <div class="border-t pt-4">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="relative">
+              <div class="flex gap-3">
+                <div class="relative flex-1">
                   <i class="fas fa-search absolute right-3 top-3.5 text-gray-400"></i>
-                  <input 
-                    type="text" 
-                    id="searchInput" 
-                    placeholder="بحث في جميع الحقول..." 
+                  <input
+                    type="text"
+                    id="searchInput"
+                    placeholder="بحث في جميع الحقول..."
                     class="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     onkeyup="filterTable()"
                   >
                 </div>
-                
-                <div>
-                  <select 
-                    id="filterField" 
-                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    onchange="filterTable()"
-                  >
-                    <option value="all">البحث في: الكل</option>
-                    <option value="username">اسم المستخدم فقط</option>
-                    <option value="fullname">الاسم الكامل فقط</option>
-                    <option value="email">البريد فقط</option>
-                  </select>
-                </div>
-                
-                <button 
-                  onclick="resetFilters()" 
-                  class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-bold transition-all"
+                <select
+                  id="filterField"
+                  class="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  onchange="filterTable()"
                 >
-                  <i class="fas fa-redo ml-2"></i>
-                  إعادة تعيين
+                  <option value="all">البحث في: الكل</option>
+                  <option value="username">اسم المستخدم فقط</option>
+                  <option value="fullname">الاسم الكامل فقط</option>
+                  <option value="email">البريد فقط</option>
+                </select>
+                <button onclick="resetFilters()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap">
+                  <i class="fas fa-redo ml-1"></i> إعادة تعيين
                 </button>
               </div>
             </div>
           </div>
-          
+
+          ${_rfFilterBar('#4F46E5', 'month')}
+
           <div class="bg-white rounded-xl shadow-lg">
             <div class="edge-scroll-wrap">
               <div class="edge-scroll-zone left">
@@ -32187,6 +31861,7 @@ app.get('/admin/users', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الإلكتروني</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الثانوي</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الدور</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">إجمالي وقت النشاط</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الشركة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">حد العملاء</th>
@@ -32194,7 +31869,7 @@ app.get('/admin/users', async (c) => {
               </thead>
               <tbody class="divide-y divide-gray-200" id="tableBody">
                 <tr>
-                  <td colspan="10" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="11" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
                     <div>جاري تحميل البيانات...</div>
                   </td>
@@ -32208,7 +31883,37 @@ app.get('/admin/users', async (c) => {
         
         <script>
           let allUsers = []; // تخزين جميع المستخدمين
-          
+          let activityMap = {}; // user_id -> total_active_seconds
+          const authToken = localStorage.getItem('authToken');
+          ${_rfBaseJs}
+
+          function fmtSeconds(sec) {
+            sec = Math.max(0, Math.floor(sec || 0));
+            const h = Math.floor(sec / 3600);
+            const m = Math.floor((sec % 3600) / 60);
+            if (h > 0) return h + 'س ' + m + 'د';
+            return m + 'د';
+          }
+
+          async function loadReport() {
+            const params = new URLSearchParams();
+            if (_startDate) params.set('start_date', _startDate);
+            if (_endDate)   params.set('end_date',   _endDate);
+            try {
+              const res = await fetch('/api/reports/staff-active-time?' + params, {
+                headers: authToken ? { 'Authorization': 'Bearer ' + authToken } : {}
+              });
+              const data = await res.json();
+              activityMap = {};
+              if (data.success && data.rows) {
+                data.rows.forEach(r => { activityMap[r.user_id] = r.total_active_seconds; });
+              }
+            } catch (e) {
+              activityMap = {};
+            }
+            filterTable();
+          }
+
           function parseRoleIdClient(v) {
             if (v == null || v === '') return null;
             const n = parseInt(String(v), 10);
@@ -32273,7 +31978,7 @@ app.get('/admin/users', async (c) => {
               console.error('❌ خطأ في تحميل المستخدمين:', error);
               document.getElementById('tableBody').innerHTML = \`
                 <tr>
-                  <td colspan="10" class="px-6 py-8 text-center text-red-500">
+                  <td colspan="11" class="px-6 py-8 text-center text-red-500">
                     <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
                     <div>فشل تحميل البيانات: \${error.message}</div>
                   </td>
@@ -32289,7 +31994,7 @@ app.get('/admin/users', async (c) => {
             if (!users || users.length === 0) {
               tbody.innerHTML = \`
                 <tr>
-                  <td colspan="10" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="11" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-users text-3xl mb-2"></i>
                     <div>لا توجد بيانات مستخدمين</div>
                   </td>
@@ -32349,6 +32054,11 @@ app.get('/admin/users', async (c) => {
                     <span class="px-3 py-1 rounded-full text-xs font-bold \${roleClass}">
                       \${roleDisplayLabel(user)}
                     </span>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-right">
+                    \${activityMap[user.id] != null
+                      ? \`<span class="font-bold text-indigo-700"><i class="fas fa-stopwatch ml-1"></i>\${fmtSeconds(activityMap[user.id])}</span>\`
+                      : '<span class="text-gray-400">—</span>'}
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.company_name || '-'}</td>
                   <td class="px-6 py-4">
@@ -32578,9 +32288,17 @@ app.get('/admin/users', async (c) => {
           ${actionsDropdownScript}
 
           // تحميل البيانات عند تحميل الصفحة
-          document.addEventListener('DOMContentLoaded', () => {
+          window.addEventListener('load', () => {
             loadCurrentUser();
+            refreshReportFilterYearLabels();
+            const periodSelect = document.getElementById('periodSelect');
+            if (periodSelect) periodSelect.value = 'month';
+            const d = getPeriodDates('month');
+            _startDate = d.s; _endDate = d.e;
+            setBadge(d.label, d.range);
+            initDatePicker();
             loadUsers();
+            loadReport();
           });
         </script>
       </body>
@@ -41848,8 +41566,8 @@ app.get('/admin/my-tasks', async (c) => {
             return (
               '<tr class="' + mainRowClass + '"' + mainRowStyle + '>' +
                 '<td class="px-3 py-3 align-middle">' +
-                  '<button type="button" data-expand-task="' + tid + '" class="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors" aria-expanded="false">' +
-                    '<i class="fas fa-chevron-left text-xs" id="rowChevron-' + tid + '"></i>' +
+                  '<button type="button" data-expand-task="' + tid + '" class="p-1.5 rounded-md bg-gray-100 text-gray-500 hover:text-indigo-600 hover:bg-indigo-100 transition-colors border border-gray-200 hover:border-indigo-300" aria-expanded="false">' +
+                    '<i class="fas fa-chevron-left text-sm" id="rowChevron-' + tid + '"></i>' +
                   '</button>' +
                 '</td>' +
                 '<td class="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">' + escapeHtml(task.customer_name || '-') + passBadge + '</td>' +
@@ -42368,6 +42086,11 @@ app.get('/admin/my-no-response-tasks', async (c) => {
             <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
             <input type="text" id="nrSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
+          <div id="nrEmployeeFilterWrap" class="hidden">
+            <select id="nrEmployeeFilter" class="w-full sm:w-auto border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white text-gray-700">
+              <option value="">كل الموظفين</option>
+            </select>
+          </div>
         </div>
         <div id="nrListStatus" class="text-sm text-gray-600 mb-3"></div>
         <div id="nrCards" class="space-y-3"></div>
@@ -42596,6 +42319,7 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           root.querySelectorAll('[data-revoke]').forEach(function (btn) {
             btn.addEventListener('click', async function () {
               var tid = btn.getAttribute('data-revoke');
+              if (!confirm('هل تريد استرجاع هذا الطلب إلى القائمة الرئيسية؟\\nسيظهر في مهامك العادية ولن يُحوَّل تلقائياً بعد 48 ساعة.')) return;
               try {
                 btn.disabled = true;
                 var res = await axios.patch('/api/my-followup-tasks/' + tid + '/revoke-no-response');
@@ -42609,9 +42333,9 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           });
         }
 
-        function applySearch() {
+        function applyFilters() {
           var q = (document.getElementById('nrSearchInput').value || '').trim().toLowerCase();
-          if (!q) { renderCards(allNrTasks); return; }
+          var empFilter = (document.getElementById('nrEmployeeFilter')?.value || '').trim();
           function localPhoneDigits(raw) {
             var d = String(raw || '').replace(/[^\\d]/g, '');
             if (!d) return '';
@@ -42620,8 +42344,10 @@ app.get('/admin/my-no-response-tasks', async (c) => {
             else if (d.charAt(0) === '0') d = d.replace(/^0+/, '');
             return d;
           }
-          var qDigits = localPhoneDigits(q);
+          var qDigits = q ? localPhoneDigits(q) : '';
           var filtered = allNrTasks.filter(function(t) {
+            if (empFilter && (t.assigned_user_name || '') !== empFilter) return false;
+            if (!q) return true;
             if (String(t.task_title || '').toLowerCase().includes(q)) return true;
             if (String(t.customer_name || '').toLowerCase().includes(q)) return true;
             if (String(t.customer_phone || '').toLowerCase().includes(q)) return true;
@@ -42634,6 +42360,24 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           renderCards(filtered);
         }
 
+        function populateEmployeeFilter(tasks) {
+          var wrap = document.getElementById('nrEmployeeFilterWrap');
+          var sel = document.getElementById('nrEmployeeFilter');
+          if (!wrap || !sel) return;
+          var names = [];
+          tasks.forEach(function(t) {
+            var n = t.assigned_user_name || '';
+            if (n && names.indexOf(n) === -1) names.push(n);
+          });
+          names.sort();
+          if (names.length <= 1) { wrap.classList.add('hidden'); return; }
+          var prev = sel.value;
+          sel.innerHTML = '<option value="">كل الموظفين</option>' +
+            names.map(function(n) { return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; }).join('');
+          if (prev && names.indexOf(prev) !== -1) sel.value = prev;
+          wrap.classList.remove('hidden');
+        }
+
         async function loadTasks() {
           setStatus('جاري التحميل...', 'neutral');
           document.getElementById('nrCards').innerHTML = '';
@@ -42641,13 +42385,15 @@ app.get('/admin/my-no-response-tasks', async (c) => {
             const res = await axios.get('/api/my-followup-tasks?no_response=1');
             allNrTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
             setStatus('');
-            applySearch();
+            populateEmployeeFilter(allNrTasks);
+            applyFilters();
           } catch (e) {
             setStatus('تعذر تحميل البيانات', 'error');
           }
         }
 
-        document.getElementById('nrSearchInput').addEventListener('input', applySearch);
+        document.getElementById('nrSearchInput').addEventListener('input', applyFilters);
+        document.getElementById('nrEmployeeFilter').addEventListener('change', applyFilters);
 
         // Prefill search from ?q= (panel search deep-link by task phone).
         (function () {
@@ -45939,8 +45685,9 @@ app.get('/admin/follow-ups/import', async (c) => {
           </button>
         </div>
         <div id="mappingError" class="hidden mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
-        <p class="text-xs text-gray-500 mb-3">تحقق من ربط الأعمدة الصحيحة. عمود الهاتف مطلوب. يمكنك تغيير أي ربط من القائمة المنسدلة.</p>
-        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+        <p class="text-xs text-gray-500 mb-1">تحقق من ربط الأعمدة الصحيحة. عمود الهاتف مطلوب. يمكنك تغيير أي ربط من القائمة المنسدلة.</p>
+        <p id="mappingRowNote" class="text-xs text-gray-600 mb-3 font-medium"></p>
+        <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[28rem] overflow-y-auto">
           <table id="mappingTable" class="text-sm w-full border-collapse">
             <tbody id="mappingTableBody"></tbody>
           </table>
@@ -46340,12 +46087,28 @@ app.get('/admin/follow-ups/import', async (c) => {
         return '<td class="px-2 py-2 border-b border-l border-gray-200">' + sel + '</td>'
       }).join('')
 
-      var sampleRowsHtml = rawSheetRows.slice(0, 3).map(function(row) {
+      var MAPPING_SAMPLE_MAX = 15
+      var sampleCount = Math.min(rawSheetRows.length, MAPPING_SAMPLE_MAX)
+      var sampleRowsHtml = rawSheetRows.slice(0, sampleCount).map(function(row, rowIdx) {
         var cells = rawHeaders.map(function(h, ci) {
           return '<td class="px-3 py-1.5 border-b border-l border-gray-100 text-gray-600 whitespace-nowrap max-w-[140px] overflow-hidden text-ellipsis">' + escapeHtml(String(row[ci] == null ? '' : row[ci])) + '</td>'
         }).join('')
-        return '<tr>' + '<td class="px-3 py-1.5 border-b border-l border-gray-100 text-gray-400 text-xs bg-gray-50 sticky right-0"></td>' + cells + '</tr>'
+        return '<tr>' +
+          '<td class="px-3 py-1.5 border-b border-l border-gray-100 text-gray-400 text-xs bg-gray-50 sticky right-0">' + (rowIdx + 1) + '</td>' +
+          cells +
+        '</tr>'
       }).join('')
+
+      var noteEl = document.getElementById('mappingRowNote')
+      if (noteEl) {
+        if (rawSheetRows.length > sampleCount) {
+          noteEl.textContent = 'الملف يحتوي على ' + rawSheetRows.length + ' صف بيانات — يُعرض أول ' + sampleCount + ' صف كعينة. ستُستورد جميع الصفوف بعد التأكيد.'
+        } else if (rawSheetRows.length > 0) {
+          noteEl.textContent = 'الملف يحتوي على ' + rawSheetRows.length + ' صف بيانات — ستُستورد جميعها بعد التأكيد.'
+        } else {
+          noteEl.textContent = ''
+        }
+      }
 
       tbody.innerHTML =
         '<tr>' +
@@ -46356,6 +46119,14 @@ app.get('/admin/follow-ups/import', async (c) => {
           '<td class="px-3 py-2 border-b border-l border-gray-200 bg-orange-50 text-xs font-bold text-orange-700 whitespace-nowrap sticky right-0">ربط الحقل</td>' +
           dropCells +
         '</tr>' +
+        (sampleCount ? (
+          '<tr>' +
+            '<td class="px-3 py-1.5 border-b border-l border-gray-200 bg-gray-100 text-xs font-bold text-gray-500 whitespace-nowrap sticky right-0">#</td>' +
+            rawHeaders.map(function() {
+              return '<td class="px-3 py-1 border-b border-l border-gray-200 bg-gray-100 text-xs text-gray-500">عينة</td>'
+            }).join('') +
+          '</tr>'
+        ) : '') +
         sampleRowsHtml
 
       // Set dropdown values from columnMapping
