@@ -31747,6 +31747,8 @@ app.get('/admin/users', async (c) => {
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         ${_rfFlatpickrHead}
         <style>
+          #usersFilterCollapsible > .flex.items-center.justify-end { display: none !important; }
+          #usersFilterCollapsible #reportFilterCard { margin-bottom: 0; }
           .overflow-x-auto { overflow-x: auto !important; overflow-y: visible !important; max-width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: #6366f1 #f7fafc; }
           .overflow-x-auto::-webkit-scrollbar { height: 12px; width: 12px; }
           .overflow-x-auto::-webkit-scrollbar-track { background: #e5e7eb; border-radius: 10px; margin: 0 10px; }
@@ -31832,7 +31834,17 @@ app.get('/admin/users', async (c) => {
             </div>
           </div>
 
-          ${_rfFilterBar('#4F46E5', 'month')}
+          <div class="bg-white rounded-xl shadow-md px-5 py-3 mb-2 no-print flex items-center">
+            <button type="button" onclick="toggleUsersFilter()" dir="rtl" class="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-indigo-600 transition-colors">
+              <span>الفترة الزمنية</span>
+              <i class="fas fa-calendar-alt text-indigo-500"></i>
+              <i id="usersFilterIcon" class="fas fa-chevron-down text-xs transition-transform" style="transform: rotate(-90deg);"></i>
+            </button>
+            <span id="periodBadgeInline" class="mr-3 text-xs font-semibold px-3 py-1 rounded-full text-white" style="background:#4F46E5;display:none;"></span>
+          </div>
+          <div id="usersFilterCollapsible" style="display:none;">
+            ${_rfFilterBar('#4F46E5', 'month')}
+          </div>
 
           <div class="bg-white rounded-xl shadow-lg">
             <div class="edge-scroll-wrap">
@@ -31894,6 +31906,23 @@ app.get('/admin/users', async (c) => {
             if (h > 0) return h + 'س ' + m + 'د';
             return m + 'د';
           }
+
+          function toggleUsersFilter() {
+            const el = document.getElementById('usersFilterCollapsible');
+            const icon = document.getElementById('usersFilterIcon');
+            if (!el) return;
+            const hidden = el.style.display === 'none';
+            el.style.display = hidden ? '' : 'none';
+            if (icon) icon.style.transform = hidden ? '' : 'rotate(-90deg)';
+          }
+
+          // mirror the period badge to the always-visible header row
+          const _origSetBadge = setBadge;
+          setBadge = function(label, range) {
+            _origSetBadge(label, range);
+            const inline = document.getElementById('periodBadgeInline');
+            if (inline) { inline.textContent = label || ''; inline.style.display = label ? '' : 'none'; }
+          };
 
           async function loadReport() {
             const params = new URLSearchParams();
