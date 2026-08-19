@@ -41,6 +41,7 @@ import {
 } from './company-locations-page'
 import { buildSaudiCitySelectOptionsHtml, isValidSaudiCityName } from './saudi-arabia-cities'
 import { actionsDropdownCSS, actionsDropdownScript } from './actions-dropdown'
+import { edgeScrollClientScript } from './shared/edge-scroll'
 import { reportsPage } from './reports-page'
 import { customersReportPage, requestsReportPage, financialReportPage } from './advanced-reports'
 import { paymentsPage } from './payments-page'
@@ -6598,7 +6599,8 @@ app.get('/api/users', async (c) => {
              (SELECT role_name FROM roles WHERE id = u.role_id) AS role_name,
              (SELECT description FROM roles WHERE id = u.role_id) AS role_description,
              t.company_name AS tenant_name,
-             (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count
+             (SELECT COUNT(DISTINCT permission_id) FROM role_permissions WHERE role_id = u.role_id) AS permissions_count,
+             (SELECT name FROM tenant_locations WHERE id = u.assigned_location_id) AS branch_name
       FROM users u
       LEFT JOIN tenants t ON u.tenant_id = t.id`
     
@@ -22800,155 +22802,7 @@ app.get('/admin/customers', async (c) => {
             window.location.href = nextUrl
           }
 
-          window.edgeScrollStep = function(scrollElId, visualDirection) {
-            const el = document.getElementById(scrollElId)
-            if (!el) return
-            const step = 360
-            const left = visualDirection === 'left' ? -step : step
-            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' })
-            else el.scrollLeft = el.scrollLeft + left
-            setTimeout(function() {
-              updateEdgeScrollControls(scrollElId, 'customersEdgeLeft', 'customersEdgeRight')
-            }, 280)
-          }
-
-          function setNormalizedScrollLeft(el, normalizedLeft) {
-            const max = el.scrollWidth - el.clientWidth
-            const clamped = Math.max(0, Math.min(max, normalizedLeft))
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
-            const type = getRtlScrollType()
-            if (type === 'negative') el.scrollLeft = -clamped
-            else if (type === 'reverse') el.scrollLeft = max - clamped
-            else el.scrollLeft = clamped
-          }
-
-          function animateNormalizedScrollLeft(el, target, durationMs) {
-            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
-
-            const max = el.scrollWidth - el.clientWidth
-            const to = Math.max(0, Math.min(max, target))
-            const from = getNormalizedScrollLeft(el)
-            const delta = to - from
-            if (Math.abs(delta) < 1) return
-
-            const start = performance.now()
-            const duration = Math.max(120, Number(durationMs) || 260)
-            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
-            el.dataset.edgeScrollAnimToken = animToken
-
-            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
-            const tick = (now) => {
-              if (el.dataset.edgeScrollAnimToken !== animToken) return
-              const t = Math.min(1, (now - start) / duration)
-              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
-              if (t < 1) requestAnimationFrame(tick)
-            }
-            requestAnimationFrame(tick)
-          }
-
-          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
-            const el = document.getElementById(scrollElId)
-            const arrow = document.getElementById(arrowBtnId)
-            if (!el || !arrow) return
-            const wrap = el.closest('.edge-scroll-wrap')
-            if (!wrap) return
-            const wrapRect = wrap.getBoundingClientRect()
-            const vhCenter = window.innerHeight / 2
-            const padding = 16
-            const minY = wrapRect.top + padding
-            const maxY = wrapRect.bottom - padding
-            const desired = vhCenter
-            const clamped = Math.max(minY, Math.min(maxY, desired))
-            const relativeTop = clamped - wrapRect.top
-            arrow.style.top = String(relativeTop) + 'px'
-          }
-
-          let __rtlScrollType = null
-          function getRtlScrollType() {
-            if (__rtlScrollType) return __rtlScrollType
-            const div = document.createElement('div')
-            div.style.width = '4px'
-            div.style.height = '1px'
-            div.style.overflow = 'scroll'
-            div.style.direction = 'rtl'
-            div.style.position = 'absolute'
-            div.style.top = '-9999px'
-            const inner = document.createElement('div')
-            inner.style.width = '8px'
-            inner.style.height = '1px'
-            div.appendChild(inner)
-            document.body.appendChild(div)
-            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
-            else {
-              div.scrollLeft = 1
-              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
-            }
-            document.body.removeChild(div)
-            return __rtlScrollType
-          }
-
-          function getNormalizedScrollLeft(el) {
-            const max = el.scrollWidth - el.clientWidth
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            if (dir !== 'rtl') return el.scrollLeft
-            const type = getRtlScrollType()
-            if (type === 'negative') return -el.scrollLeft
-            if (type === 'reverse') return max - el.scrollLeft
-            return el.scrollLeft
-          }
-
-          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId)
-            const leftWrap = document.getElementById(leftBtnId)
-            const rightWrap = document.getElementById(rightBtnId)
-            if (!el || !leftWrap || !rightWrap) return
-
-            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5
-            if (!canScroll) {
-              leftWrap.classList.add('edge-hidden')
-              rightWrap.classList.add('edge-hidden')
-              return
-            }
-
-            const maxScrollLeft = el.scrollWidth - el.clientWidth
-            const sl0 = el.scrollLeft
-            el.scrollLeft = sl0 - 1
-            const showLeft = el.scrollLeft !== sl0
-            el.scrollLeft = sl0
-            el.scrollLeft = sl0 + 1
-            const showRight = el.scrollLeft !== sl0
-            el.scrollLeft = sl0
-            leftWrap.classList.toggle('edge-hidden', !showLeft)
-            rightWrap.classList.toggle('edge-hidden', !showRight)
-
-            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
-            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
-          }
-
-          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId)
-            if (!el) return
-            if (el.dataset.edgeScrollBound === '1') return
-            el.dataset.edgeScrollBound = '1'
-            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
-            el.addEventListener('scroll', tick, { passive: true })
-            window.addEventListener('resize', tick)
-            window.addEventListener('scroll', tick, { passive: true })
-            window.addEventListener('load', tick, { passive: true })
-            setTimeout(tick, 0)
-            setTimeout(tick, 150)
-            setTimeout(tick, 500)
-            if (typeof ResizeObserver !== 'undefined') {
-              try {
-                const ro = new ResizeObserver(tick)
-                ro.observe(el)
-                const tbl = el.querySelector('table')
-                if (tbl) ro.observe(tbl)
-              } catch (e) {}
-            }
-          }
+          ${edgeScrollClientScript('customersEdgeLeft', 'customersEdgeRight')}
 
           function renderCustomersPaginationUI(total) {
             const pageSizeSelect = document.getElementById('customersPageSize')
@@ -26241,155 +26095,7 @@ app.get('/admin/requests', async (c) => {
           function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
           function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
 
-          window.edgeScrollStep = function(scrollElId, visualDirection) {
-            const el = document.getElementById(scrollElId)
-            if (!el) return
-            const step = 360
-            const left = visualDirection === 'left' ? -step : step
-            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' })
-            else el.scrollLeft = el.scrollLeft + left
-            setTimeout(function() {
-              updateEdgeScrollControls(scrollElId, 'requestsEdgeLeft', 'requestsEdgeRight')
-            }, 280)
-          }
-
-          function setNormalizedScrollLeft(el, normalizedLeft) {
-            const max = el.scrollWidth - el.clientWidth
-            const clamped = Math.max(0, Math.min(max, normalizedLeft))
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            if (dir !== 'rtl') { el.scrollLeft = clamped; return }
-            const type = getRtlScrollType()
-            if (type === 'negative') el.scrollLeft = -clamped
-            else if (type === 'reverse') el.scrollLeft = max - clamped
-            else el.scrollLeft = clamped
-          }
-
-          function animateNormalizedScrollLeft(el, target, durationMs) {
-            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-            if (prefersReduced) { setNormalizedScrollLeft(el, target); return }
-
-            const max = el.scrollWidth - el.clientWidth
-            const to = Math.max(0, Math.min(max, target))
-            const from = getNormalizedScrollLeft(el)
-            const delta = to - from
-            if (Math.abs(delta) < 1) return
-
-            const start = performance.now()
-            const duration = Math.max(120, Number(durationMs) || 260)
-            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1)
-            el.dataset.edgeScrollAnimToken = animToken
-
-            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
-            const tick = (now) => {
-              if (el.dataset.edgeScrollAnimToken !== animToken) return
-              const t = Math.min(1, (now - start) / duration)
-              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t))
-              if (t < 1) requestAnimationFrame(tick)
-            }
-            requestAnimationFrame(tick)
-          }
-
-          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
-            const el = document.getElementById(scrollElId)
-            const arrow = document.getElementById(arrowBtnId)
-            if (!el || !arrow) return
-            const wrap = el.closest('.edge-scroll-wrap')
-            if (!wrap) return
-            const wrapRect = wrap.getBoundingClientRect()
-            const vhCenter = window.innerHeight / 2
-            const padding = 16
-            const minY = wrapRect.top + padding
-            const maxY = wrapRect.bottom - padding
-            const desired = vhCenter
-            const clamped = Math.max(minY, Math.min(maxY, desired))
-            const relativeTop = clamped - wrapRect.top
-            arrow.style.top = String(relativeTop) + 'px'
-          }
-
-          let __rtlScrollType = null
-          function getRtlScrollType() {
-            if (__rtlScrollType) return __rtlScrollType
-            const div = document.createElement('div')
-            div.style.width = '4px'
-            div.style.height = '1px'
-            div.style.overflow = 'scroll'
-            div.style.direction = 'rtl'
-            div.style.position = 'absolute'
-            div.style.top = '-9999px'
-            const inner = document.createElement('div')
-            inner.style.width = '8px'
-            inner.style.height = '1px'
-            div.appendChild(inner)
-            document.body.appendChild(div)
-            if (div.scrollLeft > 0) __rtlScrollType = 'reverse'
-            else {
-              div.scrollLeft = 1
-              __rtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default'
-            }
-            document.body.removeChild(div)
-            return __rtlScrollType
-          }
-
-          function getNormalizedScrollLeft(el) {
-            const max = el.scrollWidth - el.clientWidth
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase()
-            if (dir !== 'rtl') return el.scrollLeft
-            const type = getRtlScrollType()
-            if (type === 'negative') return -el.scrollLeft
-            if (type === 'reverse') return max - el.scrollLeft
-            return el.scrollLeft
-          }
-
-          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId)
-            const leftWrap = document.getElementById(leftBtnId)
-            const rightWrap = document.getElementById(rightBtnId)
-            if (!el || !leftWrap || !rightWrap) return
-
-            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5
-            if (!canScroll) {
-              leftWrap.classList.add('edge-hidden')
-              rightWrap.classList.add('edge-hidden')
-              return
-            }
-
-            const maxScrollLeft = el.scrollWidth - el.clientWidth
-            const sl0 = el.scrollLeft
-            el.scrollLeft = sl0 - 1
-            const showLeft = el.scrollLeft !== sl0
-            el.scrollLeft = sl0
-            el.scrollLeft = sl0 + 1
-            const showRight = el.scrollLeft !== sl0
-            el.scrollLeft = sl0
-            leftWrap.classList.toggle('edge-hidden', !showLeft)
-            rightWrap.classList.toggle('edge-hidden', !showRight)
-
-            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId)
-            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId)
-          }
-
-          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId)
-            if (!el) return
-            if (el.dataset.edgeScrollBound === '1') return
-            el.dataset.edgeScrollBound = '1'
-            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId)
-            el.addEventListener('scroll', tick, { passive: true })
-            window.addEventListener('resize', tick)
-            window.addEventListener('scroll', tick, { passive: true })
-            window.addEventListener('load', tick, { passive: true })
-            setTimeout(tick, 0)
-            setTimeout(tick, 150)
-            setTimeout(tick, 500)
-            if (typeof ResizeObserver !== 'undefined') {
-              try {
-                const ro = new ResizeObserver(tick)
-                ro.observe(el)
-                const tbl = el.querySelector('table')
-                if (tbl) ro.observe(tbl)
-              } catch (e) {}
-            }
-          }
+          ${edgeScrollClientScript('requestsEdgeLeft', 'requestsEdgeRight')}
 
           function renderRequestsPaginationUI(total) {
             const pageSizeSelect = document.getElementById('requestsPageSize')
@@ -31733,6 +31439,8 @@ app.get('/admin/packages/:id', async (c) => {
 
 // ==================== صفحة المستخدمين (Users) ====================
 
+// Users list page — the main /admin/users table with search, period filter, and activity time column.
+// NOTE: The user creation form lives separately at /admin/users-new (see users-management-page.ts).
 app.get('/admin/users', async (c) => {
   try {
     return c.html(`
@@ -31870,10 +31578,11 @@ app.get('/admin/users', async (c) => {
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">#</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">اسم المستخدم</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الاسم الكامل</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">إجمالي وقت النشاط</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الإلكتروني</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">البريد الثانوي</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الدور</th>
-                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">إجمالي وقت النشاط</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الفرع</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الشركة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">الحالة</th>
                   <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">حد العملاء</th>
@@ -31881,7 +31590,7 @@ app.get('/admin/users', async (c) => {
               </thead>
               <tbody class="divide-y divide-gray-200" id="tableBody">
                 <tr>
-                  <td colspan="11" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="12" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
                     <div>جاري تحميل البيانات...</div>
                   </td>
@@ -32007,7 +31716,7 @@ app.get('/admin/users', async (c) => {
               console.error('❌ خطأ في تحميل المستخدمين:', error);
               document.getElementById('tableBody').innerHTML = \`
                 <tr>
-                  <td colspan="11" class="px-6 py-8 text-center text-red-500">
+                  <td colspan="12" class="px-6 py-8 text-center text-red-500">
                     <i class="fas fa-exclamation-triangle text-3xl mb-2"></i>
                     <div>فشل تحميل البيانات: \${error.message}</div>
                   </td>
@@ -32023,7 +31732,7 @@ app.get('/admin/users', async (c) => {
             if (!users || users.length === 0) {
               tbody.innerHTML = \`
                 <tr>
-                  <td colspan="11" class="px-6 py-8 text-center text-gray-500">
+                  <td colspan="12" class="px-6 py-8 text-center text-gray-500">
                     <i class="fas fa-users text-3xl mb-2"></i>
                     <div>لا توجد بيانات مستخدمين</div>
                   </td>
@@ -32077,6 +31786,11 @@ app.get('/admin/users', async (c) => {
                     </div>
                   </td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.full_name || '-'}</td>
+                  <td class="px-6 py-4 text-sm text-right">
+                    \${activityMap[user.id] != null
+                      ? \`<span class="font-bold text-indigo-700"><i class="fas fa-stopwatch ml-1"></i>\${fmtSeconds(activityMap[user.id])}</span>\`
+                      : '<span class="text-gray-400">—</span>'}
+                  </td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.email || '-'}</td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.secondary_email || '-'}</td>
                   <td class="px-6 py-4">
@@ -32084,11 +31798,7 @@ app.get('/admin/users', async (c) => {
                       \${roleDisplayLabel(user)}
                     </span>
                   </td>
-                  <td class="px-6 py-4 text-sm text-right">
-                    \${activityMap[user.id] != null
-                      ? \`<span class="font-bold text-indigo-700"><i class="fas fa-stopwatch ml-1"></i>\${fmtSeconds(activityMap[user.id])}</span>\`
-                      : '<span class="text-gray-400">—</span>'}
-                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-600">\${user.branch_name || '—'}</td>
                   <td class="px-6 py-4 text-sm text-gray-600">\${user.company_name || '-'}</td>
                   <td class="px-6 py-4">
                     <span class="px-3 py-1 rounded-full text-xs font-bold \${statusClass}">
@@ -32172,147 +31882,7 @@ app.get('/admin/users', async (c) => {
             downloadUtf16Csv(csv, 'المستخدمين_' + new Date().toISOString().split('T')[0] + '.csv');
           }
           
-          window.edgeScrollStep = function(scrollElId, visualDirection) {
-            const el = document.getElementById(scrollElId);
-            if (!el) return;
-            const step = 360;
-            const left = visualDirection === 'left' ? -step : step;
-            if (typeof el.scrollBy === 'function') el.scrollBy({ left: left, behavior: 'smooth' });
-            else el.scrollLeft = el.scrollLeft + left;
-            setTimeout(function() {
-              updateEdgeScrollControls(scrollElId, 'usersEdgeLeft', 'usersEdgeRight');
-            }, 280);
-          };
-
-          function setNormalizedScrollLeft(el, normalizedLeft) {
-            const max = el.scrollWidth - el.clientWidth;
-            const clamped = Math.max(0, Math.min(max, normalizedLeft));
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            if (dir !== 'rtl') { el.scrollLeft = clamped; return; }
-            const type = getRtlScrollType();
-            if (type === 'negative') el.scrollLeft = -clamped;
-            else if (type === 'reverse') el.scrollLeft = max - clamped;
-            else el.scrollLeft = clamped;
-          }
-
-          function animateNormalizedScrollLeft(el, target, durationMs) {
-            const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (prefersReduced) { setNormalizedScrollLeft(el, target); return; }
-            const max = el.scrollWidth - el.clientWidth;
-            const to = Math.max(0, Math.min(max, target));
-            const from = getNormalizedScrollLeft(el);
-            const delta = to - from;
-            if (Math.abs(delta) < 1) return;
-            const start = performance.now();
-            const duration = Math.max(120, Number(durationMs) || 260);
-            const animToken = String(Number(el.dataset.edgeScrollAnimToken || '0') + 1);
-            el.dataset.edgeScrollAnimToken = animToken;
-            const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-            const tick = (now) => {
-              if (el.dataset.edgeScrollAnimToken !== animToken) return;
-              const t = Math.min(1, (now - start) / duration);
-              setNormalizedScrollLeft(el, from + delta * easeOutCubic(t));
-              if (t < 1) requestAnimationFrame(tick);
-            };
-            requestAnimationFrame(tick);
-          }
-
-          function positionEdgeArrowAtViewportCenter(scrollElId, arrowBtnId) {
-            const el = document.getElementById(scrollElId);
-            const arrow = document.getElementById(arrowBtnId);
-            if (!el || !arrow) return;
-            const wrap = el.closest('.edge-scroll-wrap');
-            if (!wrap) return;
-            const wrapRect = wrap.getBoundingClientRect();
-            const vhCenter = window.innerHeight / 2;
-            const padding = 16;
-            const minY = wrapRect.top + padding;
-            const maxY = wrapRect.bottom - padding;
-            const clamped = Math.max(minY, Math.min(maxY, vhCenter));
-            arrow.style.top = String(clamped - wrapRect.top) + 'px';
-          }
-
-          let __usersRtlScrollType = null;
-          function getRtlScrollType() {
-            if (__usersRtlScrollType) return __usersRtlScrollType;
-            const div = document.createElement('div');
-            div.style.width = '4px';
-            div.style.height = '1px';
-            div.style.overflow = 'scroll';
-            div.style.direction = 'rtl';
-            div.style.position = 'absolute';
-            div.style.top = '-9999px';
-            const inner = document.createElement('div');
-            inner.style.width = '8px';
-            inner.style.height = '1px';
-            div.appendChild(inner);
-            document.body.appendChild(div);
-            if (div.scrollLeft > 0) __usersRtlScrollType = 'reverse';
-            else {
-              div.scrollLeft = 1;
-              __usersRtlScrollType = div.scrollLeft <= 0 ? 'negative' : 'default';
-            }
-            document.body.removeChild(div);
-            return __usersRtlScrollType;
-          }
-
-          function getNormalizedScrollLeft(el) {
-            const max = el.scrollWidth - el.clientWidth;
-            const dir = (getComputedStyle(el).direction || 'ltr').toLowerCase();
-            if (dir !== 'rtl') return el.scrollLeft;
-            const type = getRtlScrollType();
-            if (type === 'negative') return -el.scrollLeft;
-            if (type === 'reverse') return max - el.scrollLeft;
-            return el.scrollLeft;
-          }
-
-          function updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId);
-            const leftWrap = document.getElementById(leftBtnId);
-            const rightWrap = document.getElementById(rightBtnId);
-            if (!el || !leftWrap || !rightWrap) return;
-            const canScroll = (el.scrollWidth - el.clientWidth) > 0.5;
-            if (!canScroll) {
-              leftWrap.classList.add('edge-hidden');
-              rightWrap.classList.add('edge-hidden');
-              return;
-            }
-            const maxScrollLeft = el.scrollWidth - el.clientWidth;
-            const sl0 = el.scrollLeft;
-            el.scrollLeft = sl0 - 1;
-            const showLeft = el.scrollLeft !== sl0;
-            el.scrollLeft = sl0;
-            el.scrollLeft = sl0 + 1;
-            const showRight = el.scrollLeft !== sl0;
-            el.scrollLeft = sl0;
-            leftWrap.classList.toggle('edge-hidden', !showLeft);
-            rightWrap.classList.toggle('edge-hidden', !showRight);
-            if (showLeft) positionEdgeArrowAtViewportCenter(scrollElId, leftBtnId);
-            if (showRight) positionEdgeArrowAtViewportCenter(scrollElId, rightBtnId);
-          }
-
-          function setupEdgeScrollOnce(scrollElId, leftBtnId, rightBtnId) {
-            const el = document.getElementById(scrollElId);
-            if (!el) return;
-            if (el.dataset.edgeScrollBound === '1') return;
-            el.dataset.edgeScrollBound = '1';
-            const tick = () => updateEdgeScrollControls(scrollElId, leftBtnId, rightBtnId);
-            el.addEventListener('scroll', tick, { passive: true });
-            window.addEventListener('resize', tick);
-            window.addEventListener('scroll', tick, { passive: true });
-            window.addEventListener('load', tick, { passive: true });
-            setTimeout(tick, 0);
-            setTimeout(tick, 150);
-            setTimeout(tick, 500);
-            if (typeof ResizeObserver !== 'undefined') {
-              try {
-                const ro = new ResizeObserver(tick);
-                ro.observe(el);
-                const tbl = el.querySelector('table');
-                if (tbl) ro.observe(tbl);
-              } catch (e) {}
-            }
-          }
+          ${edgeScrollClientScript('usersEdgeLeft', 'usersEdgeRight')}
 
           ${actionsDropdownScript}
 
@@ -32987,6 +32557,8 @@ app.get('/admin/users/:id/delete', async (c) => {
 })
 
 // ==================== صفحة إضافة مستخدم جديد - بدون تعارض ====================
+// User creation form — renders usersManagementPage from src/users-management-page.ts.
+// NOT the same as /admin/users (the list). The "إضافة جديد" button on the list links here.
 app.get('/admin/users-new', async (c) => {
   try {
     const userInfo = await getUserInfo(c)
@@ -37158,6 +36730,49 @@ app.get('/api/test/bindings', async (c) => {
   }
   
   return c.json(result)
+})
+
+// Public contact link visit beacon — called by external landing pages that are not served by this backend.
+// Client-side dedup (localStorage) is expected from the caller; this simply increments the daily counter.
+app.post('/api/public/:slug/contact-visits', async (c) => {
+  try {
+    const slug = normalizeTenantSlug(c.req.param('slug'))
+    if (!slug || isReservedRootSlug(slug)) {
+      return c.json({ success: false, error: 'Invalid slug' }, 400)
+    }
+
+    const payload = await c.req.json().catch(() => ({}))
+    const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+
+    const tenant = await c.env.DB.prepare(`
+      SELECT id FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1
+    `).bind(slug).first<{ id: number }>()
+
+    if (!tenant?.id) {
+      return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    }
+
+    let affiliateLinkId: number | null = null
+    if (affiliatePathRaw) {
+      if (!isValidAffiliatePathSegment(affiliatePathRaw)) {
+        return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
+      }
+      const affRow = await c.env.DB.prepare(`
+        SELECT id FROM tenant_contact_affiliate_links
+        WHERE tenant_id = ? AND path_segment = ?
+        LIMIT 1
+      `).bind(tenant.id, affiliatePathRaw).first<{ id: number }>()
+      if (!affRow) {
+        return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
+      }
+      affiliateLinkId = affRow.id
+    }
+
+    await recordContactLinkVisit(c.env.DB, tenant.id, affiliateLinkId)
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
 })
 
 // Public contact form initiation (first typing into a field)
@@ -43396,6 +43011,7 @@ app.get('/admin/contact-affiliates', async (c) => {
         #listBody > ul > li:hover { transform:translateY(-2px); box-shadow:0 18px 30px -24px rgba(15,23,42,.55); }
         #listBody > ul > li + li { border-top-width:1px; }
         #listBody [data-aff-toggle] { border:1px solid #fde68a; background:#fffbeb; padding:7px 10px; border-radius:9px; }
+        #listBody [data-aff-assign] { border:1px solid #99f6e4; background:#f0fdfa; padding:7px 10px; border-radius:9px; }
         #listBody [data-aff-copy-url] { border:1px solid #bae6fd; background:#f0f9ff; padding:7px 10px; border-radius:9px; }
         #listBody [data-del] { border:1px solid #fecaca; background:#fff1f2; padding:7px 10px; border-radius:9px; }
       </style>
@@ -43618,7 +43234,7 @@ app.get('/admin/contact-affiliates', async (c) => {
             '<div class="flex flex-col lg:flex-row">' +
 
             // ── Controls column ──────────────────────────────────
-            '<div class="w-full lg:w-[420px] shrink-0 space-y-3 pb-4 lg:pb-0 lg:pr-4">' +
+            '<div class="w-full lg:w-[420px] shrink-0 space-y-3 pb-4 lg:pb-0 lg:pr-4" data-design-col="' + id + '">' +
 
             // Content section
             '<div class="rounded-xl border border-gray-200 bg-white overflow-hidden">' +
@@ -43730,9 +43346,9 @@ app.get('/admin/contact-affiliates', async (c) => {
             '</div>' +
 
             // ── Preview column ──────────────────────────────────
-            '<div class="flex-1 min-w-0 flex flex-col items-center justify-start p-5 bg-gray-50 border-t lg:border-t-0 lg:border-r border-gray-100">' +
-            '<p class="text-xs text-gray-400 uppercase tracking-widest mb-4 font-bold">معاينة مباشرة</p>' +
-            '<div class="relative mx-auto" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">' +
+            '<div class="flex-1 min-w-0 flex flex-col items-center justify-start p-5 bg-gray-50 border-t lg:border-t-0 lg:border-r border-gray-100" data-preview-col="' + id + '">' +
+            '<p class="text-xs text-gray-400 uppercase tracking-widest mb-4 font-bold" data-preview-label="' + id + '">معاينة مباشرة</p>' +
+            '<div class="relative mx-auto" data-phone-frame="' + id + '" style="width:280px; height:520px; background:#111827; border-radius:36px; padding:12px; box-shadow:0 25px 60px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.08);">' +
             '<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:80px;height:20px;background:#111827;border-radius:0 0 14px 14px;z-index:10;"></div>' +
             '<div id="previewScreen_' + id + '" style="width:100%;height:100%;border-radius:26px;overflow:hidden;position:relative;background:#0f766e;"></div>' +
             '</div>' +
@@ -45194,6 +44810,8 @@ app.get('/admin/contact-affiliates', async (c) => {
                     '<div class="flex items-center gap-3 shrink-0">' +
                     '<button type="button" class="text-sky-700 text-sm hover:underline font-medium" data-aff-copy-url="' + escapeHtml(full || '') + '">' +
                     '<i class="fas fa-link ml-1"></i>نسخ الرابط</button>' +
+                    '<button type="button" class="text-teal-700 text-sm hover:underline font-medium" data-aff-assign="' + id + '">' +
+                    '<i class="fas fa-users-cog ml-1"></i>توزيع المهام</button>' +
                     '<button type="button" class="text-amber-700 text-sm hover:underline font-medium" data-aff-toggle="' + id + '">' +
                     '<i class="fas fa-palette ml-1"></i>تخصيص الصفحة</button>' +
                     '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' + id + '">حذف</button>' +
@@ -45235,13 +44853,73 @@ app.get('/admin/contact-affiliates', async (c) => {
               });
             });
 
+            function applyAssignLayout(panel, id) {
+              var designCol = panel.querySelector('[data-design-col="' + id + '"]');
+              if (designCol) designCol.style.display = 'none';
+              var phoneFrame = panel.querySelector('[data-phone-frame="' + id + '"]');
+              if (phoneFrame) phoneFrame.style.display = 'none';
+              var previewLabel = panel.querySelector('[data-preview-label="' + id + '"]');
+              if (previewLabel) previewLabel.style.display = 'none';
+              var previewCol = panel.querySelector('[data-preview-col="' + id + '"]');
+              if (previewCol) previewCol.style.cssText = 'width:100%;display:flex;flex-direction:column;align-items:flex-start;padding:1rem;background:#fff;border-radius:0 0 12px 12px;';
+              var assignWrap = document.getElementById('assignPanel_' + id);
+              if (assignWrap) assignWrap.style.maxWidth = '';
+            }
+
+            function restorePanelLayout(panel, id) {
+              var designCol = panel.querySelector('[data-design-col="' + id + '"]');
+              if (designCol) designCol.style.display = '';
+              var phoneFrame = panel.querySelector('[data-phone-frame="' + id + '"]');
+              if (phoneFrame) phoneFrame.style.display = '';
+              var previewLabel = panel.querySelector('[data-preview-label="' + id + '"]');
+              if (previewLabel) previewLabel.style.display = '';
+              var previewCol = panel.querySelector('[data-preview-col="' + id + '"]');
+              if (previewCol) previewCol.style.cssText = '';
+              var assignWrap = document.getElementById('assignPanel_' + id);
+              if (assignWrap) assignWrap.style.maxWidth = '420px';
+            }
+
             body.querySelectorAll('[data-aff-toggle]').forEach(function (btn) {
               btn.addEventListener('click', function () {
                 var id = btn.getAttribute('data-aff-toggle');
                 var panel = document.querySelector('[data-aff-panel="' + id + '"]');
                 if (!panel) return;
+                // If currently in assign-only mode, switch to design mode without closing
+                if (!panel.classList.contains('hidden') && panel.dataset.panelMode === 'assign') {
+                  panel.dataset.panelMode = 'design';
+                  restorePanelLayout(panel, id);
+                  updatePreview(id);
+                  return;
+                }
                 panel.classList.toggle('hidden');
-                if (!panel.classList.contains('hidden')) updatePreview(id);
+                if (!panel.classList.contains('hidden')) {
+                  panel.dataset.panelMode = 'design';
+                  restorePanelLayout(panel, id);
+                  updatePreview(id);
+                } else {
+                  panel.dataset.panelMode = '';
+                }
+              });
+            });
+
+            body.querySelectorAll('[data-aff-assign]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-aff-assign');
+                var panel = document.querySelector('[data-aff-panel="' + id + '"]');
+                if (!panel) return;
+                var isOpen = !panel.classList.contains('hidden');
+                var isAssignMode = panel.dataset.panelMode === 'assign';
+                // Toggle off if already in assign mode
+                if (isOpen && isAssignMode) {
+                  panel.classList.add('hidden');
+                  panel.dataset.panelMode = '';
+                  restorePanelLayout(panel, id);
+                  return;
+                }
+                // Open in assign-only mode
+                panel.classList.remove('hidden');
+                panel.dataset.panelMode = 'assign';
+                applyAssignLayout(panel, id);
               });
             });
 

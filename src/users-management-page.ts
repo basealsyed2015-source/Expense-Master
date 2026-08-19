@@ -1,4 +1,6 @@
-// صفحة إدارة المستخدمين
+// User CREATION form only — served at GET /admin/users-new (routed in index.tsx).
+// NOT the users list/table. The main /admin/users page (table, search, filters,
+// activity-time column, etc.) is defined INLINE inside index.tsx (~line 31440+).
 export const usersManagementPage = () => `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">

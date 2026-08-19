@@ -77,9 +77,10 @@ function buildFilterBar(hex: string, year: number, selectedPeriod: string = 'yea
             style="padding-right:2rem;border-color:#e2e8f0;min-width:210px;appearance:none;-webkit-appearance:none"
             class="pl-4 py-2.5 border-2 rounded-lg text-gray-800 font-semibold bg-white cursor-pointer
                    focus:outline-none transition-colors hover:border-gray-400 text-sm">
-            <option value="year"${sel('year')}>السنة الحالية ${year}</option>
-            <option value="month"${sel('month')}>الشهر الحالي</option>
+            <option value="today"${sel('today')}>اليوم</option>
             <option value="week"${sel('week')}>الأسبوع الحالي</option>
+            <option value="month"${sel('month')}>الشهر الحالي</option>
+            <option value="year"${sel('year')}>السنة الحالية ${year}</option>
             <option value="q1"${sel('q1')}>الربع الأول ${year} · يناير – مارس</option>
             <option value="q2"${sel('q2')}>الربع الثاني ${year} · أبريل – يونيو</option>
             <option value="q3"${sel('q3')}>الربع الثالث ${year} · يوليو – سبتمبر</option>
@@ -129,6 +130,10 @@ const DATE_FILTER_SCRIPT = `
     const m   = now.getMonth();
     const lastDay = (yr, mo) => new Date(yr, mo + 1, 0).getDate();
     switch (period) {
+      case 'today':
+        return { s: fmt(now), e: fmt(now),
+                 label: 'اليوم',
+                 range: fmt(now) };
       case 'year':
         return { s: y+'-01-01', e: y+'-12-31',
                  label: 'السنة الحالية '+y,
@@ -957,13 +962,14 @@ export function linkStatsFilterBarHtml(hex = '#0f766e'): string {
           <select id="periodSelect" onchange="onPeriodChange()"
             style="padding-right:2rem;border-color:#e2e8f0;min-width:220px;appearance:none;-webkit-appearance:none"
             class="pl-4 py-2.5 border-2 rounded-xl text-slate-800 font-semibold bg-slate-50 cursor-pointer focus:outline-none text-sm">
+            <option value="today">اليوم</option>
+            <option value="week">الأسبوع الحالي</option>
+            <option value="month">الشهر الحالي</option>
+            <option value="year">السنة الحالية ${year}</option>
             <option value="last7">آخر 7 أيام</option>
             <option value="last30" selected>آخر 30 يوم</option>
             <option value="last90">آخر 90 يوم</option>
             <option value="all">كل الفترات</option>
-            <option value="year">السنة الحالية ${year}</option>
-            <option value="month">الشهر الحالي</option>
-            <option value="week">الأسبوع الحالي</option>
             <option value="q1">الربع الأول ${year} · يناير – مارس</option>
             <option value="q2">الربع الثاني ${year} · أبريل – يونيو</option>
             <option value="q3">الربع الثالث ${year} · يوليو – سبتمبر</option>
@@ -1008,6 +1014,7 @@ export const LINK_STATS_DATE_FILTER_JS = `
       return { s: fmt(from), e: fmt(to), label, range };
     };
     switch (period) {
+      case 'today': return { s: fmt(now), e: fmt(now), label: 'اليوم', range: fmt(now) };
       case 'last7': return rolling(7, 'آخر 7 أيام');
       case 'last30': return rolling(30, 'آخر 30 يوم');
       case 'last90': return rolling(90, 'آخر 90 يوم');
@@ -1139,6 +1146,7 @@ export const REPORT_FILTER_BASE_JS = `
     const now = new Date(), y = now.getFullYear(), m = now.getMonth();
     const lastDay = (yr, mo) => new Date(yr, mo + 1, 0).getDate();
     switch (period) {
+      case 'today': return { s: fmt(now), e: fmt(now), label: 'اليوم', range: fmt(now) };
       case 'year': return { s: y+'-01-01', e: y+'-12-31', label: 'السنة الحالية '+y, range: '1 يناير '+y+' – 31 ديسمبر '+y };
       case 'month': { const ld = lastDay(y, m), mn = now.toLocaleString('ar-SA',{month:'long'}); return { s: y+'-'+pad(m+1)+'-01', e: y+'-'+pad(m+1)+'-'+pad(ld), label: mn+' '+y, range: '1 '+mn+' – '+ld+' '+mn+' '+y }; }
       case 'week': { const day = now.getDay(), mon = new Date(now); mon.setDate(now.getDate()-((day+6)%7)); const sun = new Date(mon); sun.setDate(mon.getDate()+6); return { s: fmt(mon), e: fmt(sun), label: 'الأسبوع الحالي', range: fmt(mon)+' – '+fmt(sun) }; }
