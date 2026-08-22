@@ -161,6 +161,7 @@ import {
 } from './perf-helpers'
 import type { Bindings, Variables } from './shared/context.ts'
 import { getRoleDisplayName } from './shared/role-display.ts'
+import { clientIp, isIpAllowed, isValidIpOrCidr } from './shared/login-ip.ts'
 import {
   cacheUserInfo,
   getUserInfo,
@@ -2813,6 +2814,32 @@ app.use('*', async (c, next) => {
 })
 
 // Role 5 (bank agent) previously had a separate API whitelist here.
+// Per-request IP restriction re-check for tenants with login_ip_restriction_enabled = 1.
+// Prevents a stolen session cookie from being used from a different IP mid-session.
+// Role 1 and pre-auth endpoints are always skipped.
+app.use('/api/*', async (c, next) => {
+  const path = new URL(c.req.url).pathname
+  const skipPaths = ['/api/auth/login', '/api/auth/verify-otp', '/api/auth/logout',
+    '/api/auth/forgot-password', '/api/auth/verify-reset-code', '/api/auth/reset-password']
+  if (skipPaths.includes(path)) return next()
+
+  const info = await getUserInfo(c)
+  if (!info.userId || !info.tenantId || normalizeRoleId(info.roleId) === 1) return next()
+
+  const tenant = await c.env.DB?.prepare(
+    'SELECT login_ip_restriction_enabled FROM tenants WHERE id = ? LIMIT 1'
+  ).bind(info.tenantId).first<{ login_ip_restriction_enabled: number }>()
+  if (!tenant?.login_ip_restriction_enabled) return next()
+
+  const ip = clientIp(c)
+  if (!ip) return c.json({ success: false, error: 'لا يمكن تحديد عنوان IP' }, 403)
+
+  const allowed = await isIpAllowed(ip, info.tenantId, info.userId, c.env.DB)
+  if (!allowed) return c.json({ success: false, error: 'انتهت صلاحية الجلسة من هذا الموقع' }, 401)
+
+  return next()
+})
+
 // It now uses the same access as role 4 (employee) — handler-level checks enforce scoping.
 app.use('/api/*', async (c, next) => {
   await next()
@@ -5584,6 +5611,24 @@ app.patch('/api/my-tenant', async (c) => {
     }
     Object.assign(updates, designParsed.updates)
 
+    if ('login_ip_restriction_enabled' in body) {
+      const enabling = body.login_ip_restriction_enabled === true
+        || body.login_ip_restriction_enabled === 1
+        || body.login_ip_restriction_enabled === '1'
+      if (enabling) {
+        const ipCount = await c.env.DB.prepare(
+          'SELECT COUNT(*) as n FROM tenant_login_allowed_ips WHERE tenant_id = ?'
+        ).bind(info.tenantId).first<{ n: number }>()
+        if (!ipCount || ipCount.n === 0) {
+          return c.json({
+            success: false,
+            error: 'أضف عنوان IP واحداً على الأقل قبل تفعيل قيود تسجيل الدخول'
+          }, 400)
+        }
+      }
+      updates.login_ip_restriction_enabled = enabling ? '1' : '0'
+    }
+
     const keys = Object.keys(updates)
     if (keys.length === 0) {
       return c.json({ success: false, error: 'لا توجد حقول للتحديث' }, 400)
@@ -6196,6 +6241,155 @@ app.post('/api/my-tenant/locations/:id/logo-upload', async (c) => {
       .run()
 
     return c.json({ success: true, url: publicUrl, filename: key })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: list tenant-level IP allowlist + caller's current IP
+app.get('/api/my-tenant/login-ips', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (normalizeRoleId(info.roleId) !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403)
+    if (!info.tenantId) return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    const rows = await c.env.DB.prepare(
+      'SELECT id, ip, label, created_at FROM tenant_login_allowed_ips WHERE tenant_id = ? ORDER BY created_at ASC'
+    ).bind(info.tenantId).all<{ id: number; ip: string; label: string | null; created_at: string }>()
+    return c.json({ success: true, your_ip: clientIp(c), ips: rows.results ?? [] })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: add an IP or CIDR to tenant allowlist
+app.post('/api/my-tenant/login-ips', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (normalizeRoleId(info.roleId) !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403)
+    if (!info.tenantId) return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    const body = await c.req.json().catch(() => ({}))
+    const ip = String(body.ip ?? '').trim()
+    const label = body.label ? String(body.label).trim().slice(0, 100) : null
+    if (!ip || !isValidIpOrCidr(ip)) {
+      return c.json({ success: false, error: 'عنوان IP أو نطاق CIDR غير صالح' }, 400)
+    }
+    const inserted = await c.env.DB.prepare(
+      'INSERT INTO tenant_login_allowed_ips (tenant_id, ip, label) VALUES (?, ?, ?) RETURNING id'
+    ).bind(info.tenantId, ip, label).first<{ id: number }>()
+    if (!inserted?.id) return c.json({ success: false, error: 'العنوان موجود مسبقاً أو حدث خطأ' }, 409)
+    return c.json({ success: true, id: inserted.id })
+  } catch (error: any) {
+    if (String(error.message).includes('UNIQUE')) {
+      return c.json({ success: false, error: 'عنوان IP موجود مسبقاً' }, 409)
+    }
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Company admin: remove an IP from tenant allowlist
+app.delete('/api/my-tenant/login-ips/:id', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId) return c.json({ success: false, error: 'غير مصرح' }, 401)
+    if (normalizeRoleId(info.roleId) !== 2) return c.json({ success: false, error: 'غير مصرح' }, 403)
+    if (!info.tenantId) return c.json({ success: false, error: 'لا توجد شركة مرتبطة بهذا الحساب' }, 400)
+    const id = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(id) || id <= 0) return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    const row = await c.env.DB.prepare(
+      'SELECT id FROM tenant_login_allowed_ips WHERE id = ? AND tenant_id = ?'
+    ).bind(id, info.tenantId).first()
+    if (!row) return c.json({ success: false, error: 'العنوان غير موجود' }, 404)
+    await c.env.DB.prepare('DELETE FROM tenant_login_allowed_ips WHERE id = ?').bind(id).run()
+    return c.json({ success: true })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Superadmin: get IP restriction settings + geo log for a tenant
+app.get('/api/admin/tenants/:id/login-restriction', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId || normalizeRoleId(info.roleId) !== 1) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    const tenantId = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(tenantId) || tenantId <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+    const tenant = await c.env.DB.prepare(
+      'SELECT login_ip_restriction_enabled, home_city FROM tenants WHERE id = ? LIMIT 1'
+    ).bind(tenantId).first<{ login_ip_restriction_enabled: number; home_city: string | null }>()
+    if (!tenant) return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    const ips = await c.env.DB.prepare(
+      'SELECT id, ip, label, created_at FROM tenant_login_allowed_ips WHERE tenant_id = ? ORDER BY created_at ASC'
+    ).bind(tenantId).all()
+    const geoLog = await c.env.DB.prepare(`
+      SELECT g.id, g.user_id, u.username, g.ip, g.country, g.city, g.otp_verified, g.logged_at
+      FROM tenant_login_geo_log g
+      LEFT JOIN users u ON u.id = g.user_id
+      WHERE g.tenant_id = ?
+      ORDER BY g.logged_at DESC LIMIT 100
+    `).bind(tenantId).all()
+    return c.json({
+      success: true,
+      login_ip_restriction_enabled: tenant.login_ip_restriction_enabled,
+      home_city: tenant.home_city,
+      tenant_ips: ips.results ?? [],
+      geo_log: geoLog.results ?? [],
+    })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Superadmin: enable/disable IP restriction and/or set home_city for a tenant
+app.patch('/api/admin/tenants/:id/login-restriction', async (c) => {
+  try {
+    const info = await getUserInfo(c)
+    if (!info.userId || normalizeRoleId(info.roleId) !== 1) {
+      return c.json({ success: false, error: 'غير مصرح' }, 403)
+    }
+    const tenantId = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+    if (!Number.isFinite(tenantId) || tenantId <= 0) {
+      return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
+    }
+    const tenant = await c.env.DB.prepare('SELECT id FROM tenants WHERE id = ? LIMIT 1')
+      .bind(tenantId).first()
+    if (!tenant) return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+    const body = await c.req.json().catch(() => ({}))
+    const updates: Record<string, string | number | null> = {}
+    if ('login_ip_restriction_enabled' in body) {
+      const enabling = body.login_ip_restriction_enabled === true
+        || body.login_ip_restriction_enabled === 1
+        || body.login_ip_restriction_enabled === '1'
+      if (enabling) {
+        const ipCount = await c.env.DB.prepare(
+          'SELECT COUNT(*) as n FROM tenant_login_allowed_ips WHERE tenant_id = ?'
+        ).bind(tenantId).first<{ n: number }>()
+        if (!ipCount || ipCount.n === 0) {
+          return c.json({
+            success: false,
+            error: 'أضف عنوان IP واحداً على الأقل قبل تفعيل قيود تسجيل الدخول'
+          }, 400)
+        }
+      }
+      updates.login_ip_restriction_enabled = enabling ? 1 : 0
+    }
+    if ('home_city' in body) {
+      const city = body.home_city == null ? null : String(body.home_city).trim() || null
+      updates.home_city = city
+    }
+    if (Object.keys(updates).length === 0) {
+      return c.json({ success: false, error: 'لا توجد حقول للتحديث' }, 400)
+    }
+    const keys = Object.keys(updates)
+    const setSql = keys.map((k) => `${k} = ?`).join(', ')
+    await c.env.DB.prepare(`UPDATE tenants SET ${setSql} WHERE id = ?`)
+      .bind(...keys.map((k) => updates[k]), tenantId).run()
+    return c.json({ success: true })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -21097,6 +21291,9 @@ app.get('/admin/customers', async (c) => {
         .all()
       role2Employees = empRes.results as any[]
     }
+    const role2EmployeesJson = JSON.stringify(
+      role2Employees.map((e: any) => ({ id: e.id, name: String(e.full_name || e.username || '') }))
+    ).replace(/</g, '\\u003c')
 
     let filterEmployees: Array<{ id: number; full_name: string | null; username: string }> = []
     let filterBankAgents: Array<{ id: number; full_name: string | null; username: string }> = []
@@ -21539,7 +21736,6 @@ app.get('/admin/customers', async (c) => {
                       ${role2InlineAssign
                         ? `<select class="role2-assign-select text-xs border border-gray-300 rounded px-2 py-1" style="max-width:160px;" data-customer-id="${customer.id}" data-current-employee-id="${customer.assigned_employee_id != null ? customer.assigned_employee_id : ''}" data-current-employee-name="${escapeHtmlAttr(String(customer.assigned_employee_name || ''))}" onchange="inlineAssignCustomer(${customer.id}, this)">
                              <option value="">— غير مخصص —</option>
-                             ${role2Employees.map((emp: any) => `<option value="${emp.id}" ${customer.assigned_employee_id != null && Number(customer.assigned_employee_id) === Number(emp.id) ? 'selected' : ''}>${escapeHtml(String(emp.full_name || emp.username || ''))}</option>`).join('')}
                            </select>`
                         : customer.assigned_employee_name
                           ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${customer.assigned_employee_name}</span></span>`
@@ -21798,6 +21994,20 @@ app.get('/admin/customers', async (c) => {
           const TENANT_BANK_AGENT_FILTER_LABELS = ${filterBankAgentLabelsJson};
           const TENANT_SOURCE_LABELS = ${filterSourceLabelsJson};
           const TENANT_SALARY_BANKS = ${filterSalaryBanksJson};
+          const ASSIGN_EMPLOYEES = ${role2EmployeesJson};
+          (function() {
+            if (!ASSIGN_EMPLOYEES.length) return;
+            document.querySelectorAll('.role2-assign-select').forEach(function(sel) {
+              var currentId = String(sel.dataset.currentEmployeeId || '');
+              ASSIGN_EMPLOYEES.forEach(function(emp) {
+                var opt = document.createElement('option');
+                opt.value = emp.id;
+                opt.textContent = emp.name;
+                if (String(emp.id) === currentId) opt.selected = true;
+                sel.appendChild(opt);
+              });
+            });
+          })();
           const pageParams = new URLSearchParams(window.location.search);
           const presetRatingFilter = pageParams.get('ratingFilter');
           const presetRequestsFilter = pageParams.get('requestsFilter');
@@ -25527,6 +25737,9 @@ app.get('/admin/requests', async (c) => {
       ).bind(userInfo.tenantId).all()
       role2EmployeesReq = empRes.results as any[]
     }
+    const role2EmployeesReqJson = JSON.stringify(
+      role2EmployeesReq.map((e: any) => ({ id: e.id, name: String(e.full_name || e.username || '') }))
+    ).replace(/</g, '\\u003c')
 
     let requestsFilterEmployees: Array<{ id: number; full_name: string | null; username: string }> = []
     let requestsFilterBankAgents: Array<{ id: number; full_name: string | null; username: string }> = []
@@ -25938,7 +26151,6 @@ app.get('/admin/requests', async (c) => {
                       ${role2InlineAssignReq
                         ? `<select class="role2-assign-select text-xs border border-gray-300 rounded px-2 py-1" style="max-width:160px;" data-customer-id="${req.customer_id}" data-current-employee-id="${req.assigned_employee_id != null ? req.assigned_employee_id : ''}" data-current-employee-name="${escapeHtmlAttr(String(req.assigned_employee_name || ''))}" onchange="inlineAssignCustomer(${req.customer_id}, this)">
                              <option value="">— غير مخصص —</option>
-                             ${role2EmployeesReq.map((emp: any) => `<option value="${emp.id}" ${req.assigned_employee_id != null && Number(req.assigned_employee_id) === Number(emp.id) ? 'selected' : ''}>${escapeHtml(String(emp.full_name || emp.username || ''))}</option>`).join('')}
                            </select>`
                         : employeeName
                           ? `<span class="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200"><span class="truncate-cell sm">${employeeName}</span></span>`
@@ -26092,6 +26304,20 @@ app.get('/admin/requests', async (c) => {
           }
           const TENANT_EMPLOYEE_FILTER_NAMES = ${requestsFilterEmployeeNamesJson};
           const TENANT_BANK_AGENT_FILTER_LABELS = ${requestsFilterBankAgentLabelsJson};
+          const ASSIGN_EMPLOYEES = ${role2EmployeesReqJson};
+          (function() {
+            if (!ASSIGN_EMPLOYEES.length) return;
+            document.querySelectorAll('.role2-assign-select').forEach(function(sel) {
+              var currentId = String(sel.dataset.currentEmployeeId || '');
+              ASSIGN_EMPLOYEES.forEach(function(emp) {
+                var opt = document.createElement('option');
+                opt.value = emp.id;
+                opt.textContent = emp.name;
+                if (String(emp.id) === currentId) opt.selected = true;
+                sel.appendChild(opt);
+              });
+            });
+          })();
           function getPageSizeOptions(total) { return [15, 30, 50, 100].filter((n) => n === 15 || total >= n) }
           function clampPage(page, totalPages) { if (totalPages <= 1) return 1; if (page < 1) return 1; if (page > totalPages) return totalPages; return page }
 
@@ -36775,6 +37001,147 @@ app.post('/api/public/:slug/contact-visits', async (c) => {
   }
 })
 
+// WhatsApp button pick — returns the wa.me URL of the next assigned employee.
+// Uses the same assignment config as the affiliate link but a separate queue cursor.
+app.post('/api/public/:slug/whatsapp-pick', async (c) => {
+  try {
+    const slug = normalizeTenantSlug(c.req.param('slug'))
+    if (!slug || isReservedRootSlug(slug)) return c.json({ success: false, error: 'Invalid slug' }, 400)
+
+    const payload = await c.req.json().catch(() => ({}))
+    const affiliatePathRaw = normalizeAffiliatePathSegment(payload?.affiliate_path)
+
+    const tenant = await c.env.DB.prepare(
+      `SELECT id FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1`
+    ).bind(slug).first<{ id: number }>()
+    if (!tenant?.id) return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
+
+    if (!affiliatePathRaw || !isValidAffiliatePathSegment(affiliatePathRaw)) {
+      return c.json({ success: false, error: 'مسار الإحالة مطلوب' }, 400)
+    }
+
+    const affRow = await c.env.DB.prepare(`
+      SELECT id, assignment_mode, assignment_branch_id,
+             wa_last_picked_roster_id, wa_last_auto_assigned_user_id
+      FROM tenant_contact_affiliate_links
+      WHERE tenant_id = ? AND path_segment = ? LIMIT 1
+    `).bind(tenant.id, affiliatePathRaw).first<{
+      id: number
+      assignment_mode: string | null
+      assignment_branch_id: number | null
+      wa_last_picked_roster_id: number | null
+      wa_last_auto_assigned_user_id: number | null
+    }>()
+    if (!affRow) return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
+
+    const assignmentMode = affRow.assignment_mode ?? 'auto'
+    let pickedUserId: number | null = null
+
+    if (assignmentMode === 'custom' || assignmentMode === 'custom_excl') {
+      // Custom roster — pick next from affiliate_link_employee_assignments
+      const { results: rosterRows } = await c.env.DB.prepare(`
+        SELECT a.id, a.user_id, a.assignment_limit,
+          (SELECT COUNT(*) FROM company_contact_followup_tasks t
+           WHERE t.assigned_user_id = a.user_id AND t.tenant_id = ?
+             AND t.status NOT IN ('completed','cancelled')
+          ) AS open_task_count
+        FROM affiliate_link_employee_assignments a
+        INNER JOIN users u ON u.id = a.user_id
+        WHERE a.affiliate_link_id = ? AND u.is_active = 1
+        ORDER BY a.id ASC
+      `).bind(tenant.id, affRow.id).all<{ id: number; user_id: number; assignment_limit: number | null; open_task_count: number }>()
+
+      const byUser = new Map<number, { id: number; user_id: number; assignment_limit: number | null; open_task_count: number }>()
+      for (const row of (rosterRows || []) as { id: number; user_id: number; assignment_limit: number | null; open_task_count: number }[]) {
+        if (!byUser.has(row.user_id)) byUser.set(row.user_id, row)
+      }
+
+      let eligible = Array.from(byUser.values())
+      if (assignmentMode === 'custom_excl') {
+        // exclusion mode: use ALL staff except the roster
+        const excludedIds = new Set(eligible.map((r) => r.user_id))
+        let staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
+        staff = staff.filter((u) => !excludedIds.has(u.id))
+        const lastId = affRow.wa_last_auto_assigned_user_id
+        if (staff.length) {
+          const staffIds = staff.map((u) => u.id)
+          const idx = lastId == null ? -1 : staffIds.indexOf(lastId)
+          pickedUserId = staffIds[(idx + 1) % staffIds.length]
+          await c.env.DB.prepare(
+            `UPDATE tenant_contact_affiliate_links SET wa_last_auto_assigned_user_id = ? WHERE id = ?`
+          ).bind(pickedUserId, affRow.id).run()
+        }
+      } else {
+        eligible = eligible.filter((r) => r.assignment_limit == null || Number(r.open_task_count || 0) < r.assignment_limit)
+        if (eligible.length) {
+          const lastRosterId = affRow.wa_last_picked_roster_id
+          let picked = eligible[0]
+          if (lastRosterId != null) {
+            const afterIdx = eligible.findIndex((r) => r.id > lastRosterId)
+            if (afterIdx >= 0) picked = eligible[afterIdx]
+          }
+          pickedUserId = picked.user_id
+          await c.env.DB.prepare(
+            `UPDATE tenant_contact_affiliate_links SET wa_last_picked_roster_id = ? WHERE id = ?`
+          ).bind(picked.id, affRow.id).run()
+        }
+      }
+    } else {
+      // Auto / branch / branch_excl modes — round-robin among roles 4/5/6
+      const useBranchMode = assignmentMode === 'branch' || assignmentMode === 'branch_excl'
+      const useBranchExcl = assignmentMode === 'branch_excl'
+
+      let staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
+
+      if (useBranchMode && affRow.assignment_branch_id != null && staff.length) {
+        const placeholders = staff.map(() => '?').join(',')
+        const { results: branchStaff } = await c.env.DB.prepare(
+          `SELECT id FROM users WHERE id IN (${placeholders}) AND assigned_location_id = ?`
+        ).bind(...staff.map((u) => u.id), affRow.assignment_branch_id).all<{ id: number }>()
+        const allowed = new Set(((branchStaff || []) as { id: number }[]).map((r) => r.id))
+        staff = staff.filter((u) => allowed.has(u.id))
+      }
+
+      if (useBranchExcl && staff.length) {
+        const { results: excludedRows } = await c.env.DB.prepare(
+          `SELECT user_id FROM affiliate_link_employee_assignments WHERE affiliate_link_id = ?`
+        ).bind(affRow.id).all<{ user_id: number }>()
+        const excludedIds = new Set(((excludedRows || []) as { user_id: number }[]).map((r) => r.user_id))
+        staff = staff.filter((u) => !excludedIds.has(u.id))
+      }
+
+      if (staff.length) {
+        const staffIds = staff.map((u) => u.id)
+        const lastId = affRow.wa_last_auto_assigned_user_id
+        const idx = lastId == null ? -1 : staffIds.indexOf(lastId)
+        pickedUserId = staffIds[(idx + 1) % staffIds.length]
+        await c.env.DB.prepare(
+          `UPDATE tenant_contact_affiliate_links SET wa_last_auto_assigned_user_id = ? WHERE id = ?`
+        ).bind(pickedUserId, affRow.id).run()
+      }
+    }
+
+    if (!pickedUserId) return c.json({ success: false, error: 'لا يوجد موظف متاح' }, 503)
+
+    const userRow = await c.env.DB.prepare(
+      `SELECT phone FROM users WHERE id = ? AND is_active = 1 LIMIT 1`
+    ).bind(pickedUserId).first<{ phone: string | null }>()
+
+    const rawPhone = userRow?.phone ?? ''
+    const digits = rawPhone.replace(/\D/g, '')
+    let waNumber: string | null = null
+    if (digits.startsWith('966') && digits.length >= 12) waNumber = digits
+    else if (digits.startsWith('0') && digits.length === 10) waNumber = '966' + digits.slice(1)
+    else if (digits.length === 9) waNumber = '966' + digits
+
+    if (!waNumber) return c.json({ success: false, error: 'رقم الموظف غير صالح للواتساب' }, 503)
+
+    return c.json({ success: true, wa_url: 'https://wa.me/' + waNumber })
+  } catch (error: any) {
+    return c.json({ success: false, error: error?.message || 'Server error' }, 500)
+  }
+})
+
 // Public contact form initiation (first typing into a field)
 app.post('/api/public/:slug/contact-form-initiations', async (c) => {
   try {
@@ -37218,7 +37585,7 @@ app.get('/api/tenant-contact-affiliates', async (c) => {
              contact_bg_color, contact_form_color, contact_text_color, contact_custom_fields,
              contact_bg_image_url, contact_logo_url, contact_trust_badges, contact_form_badges,
              contact_hero_title, contact_hero_subtitle, contact_accent_color,
-             assignment_mode, unassigned_limit_count
+             assignment_mode, unassigned_limit_count, external_url
       FROM tenant_contact_affiliate_links
       WHERE tenant_id = ?
       ORDER BY created_at DESC, id DESC
@@ -44786,17 +45153,21 @@ app.get('/admin/contact-affiliates', async (c) => {
               rows
                 .map(function (r) {
                   var id = Number(r.id);
-                  var full = slug
-                    ? locSlugForUrl
-                      ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(locSlugForUrl) + '/' + encodeURIComponent(r.path_segment)
-                      : origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment)
-                    : '';
+                  var isExternal = !!r.external_url;
+                  var displayUrl = isExternal
+                    ? r.external_url
+                    : (slug
+                        ? locSlugForUrl
+                          ? origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(locSlugForUrl) + '/' + encodeURIComponent(r.path_segment)
+                          : origin + '/' + encodeURIComponent(slug) + '/' + encodeURIComponent(r.path_segment)
+                        : '');
                   return (
                     '<li class="py-3" data-aff-row="' + id + '">' +
                     '<div class="flex flex-wrap items-center justify-between gap-2">' +
                     '<div class="min-w-0">' +
                     '<div class="flex items-center gap-2">' +
                     '<span class="font-medium text-gray-900">' + escapeHtml(r.label) + '</span>' +
+                    (isExternal ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold"><i class="fas fa-external-link-alt text-xs"></i> صفحة خارجية</span>' : '') +
                     (r.assignment_mode === 'custom' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 rounded text-xs font-bold">مخصص</span>' :
                       r.assignment_mode === 'custom_excl' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-bold">مخصص (استثناء)</span>' :
                       r.assignment_mode === 'branch' ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-100 text-sky-700 rounded text-xs font-bold">حسب الفرع</span>' :
@@ -44804,17 +45175,19 @@ app.get('/admin/contact-affiliates', async (c) => {
                     (r.assignment_mode === 'custom' && r.unassigned_limit_count > 0 ? '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold"><i class="fas fa-exclamation-triangle text-xs"></i>' + r.unassigned_limit_count + ' غير مُعيَّنين</span>' : '') +
                     '</div>' +
                     '<div class="text-xs text-gray-500 mt-1 break-all" dir="ltr">' +
-                    escapeHtml(full || '/' + slug + '/' + r.path_segment) +
+                    escapeHtml(displayUrl || '/' + slug + '/' + r.path_segment) +
                     '</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-3 shrink-0">' +
-                    '<button type="button" class="text-sky-700 text-sm hover:underline font-medium" data-aff-copy-url="' + escapeHtml(full || '') + '">' +
+                    '<button type="button" class="text-sky-700 text-sm hover:underline font-medium" data-aff-copy-url="' + escapeHtml(displayUrl || '') + '">' +
                     '<i class="fas fa-link ml-1"></i>نسخ الرابط</button>' +
                     '<button type="button" class="text-teal-700 text-sm hover:underline font-medium" data-aff-assign="' + id + '">' +
                     '<i class="fas fa-users-cog ml-1"></i>توزيع المهام</button>' +
-                    '<button type="button" class="text-amber-700 text-sm hover:underline font-medium" data-aff-toggle="' + id + '">' +
-                    '<i class="fas fa-palette ml-1"></i>تخصيص الصفحة</button>' +
-                    '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' + id + '">حذف</button>' +
+                    (!isExternal
+                      ? '<button type="button" class="text-amber-700 text-sm hover:underline font-medium" data-aff-toggle="' + id + '">' +
+                        '<i class="fas fa-palette ml-1"></i>تخصيص الصفحة</button>'
+                      : '') +
+                    (!isExternal ? '<button type="button" class="text-red-600 text-sm hover:underline" data-del="' + id + '">حذف</button>' : '') +
                     '</div>' +
                     '</div>' +
                     '<div class="hidden mt-3 rounded-2xl border border-amber-100 bg-amber-50/40 p-4" data-aff-panel="' + id + '">' +

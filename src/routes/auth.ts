@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { normalizeRoleId } from '../notification-access.ts'
-import { sendPasswordResetCodeEmail } from '../resend-email.ts'
+import { sendPasswordResetCodeEmail, sendLoginOtpEmail, sendDeviceOtpEmail } from '../resend-email.ts'
 import { getRoleDisplayName } from '../shared/role-display.ts'
+import { clientIp, clientCity, parseCookie, isIpAllowed } from '../shared/login-ip.ts'
 import type { AppEnv } from '../shared/context.ts'
 
 export const authRoutes = new Hono<AppEnv>()
@@ -29,8 +30,6 @@ authRoutes.post('/api/auth/login', async (c) => {
     console.log(`🔐 [LOGIN] Login attempt: ${username}`)
     console.log(`🔍 [LOGIN] DB binding check: ${!!c.env.DB}`)
 
-    // Get user with tenant information
-    // Double-check DB is available before using it
     if (!c.env?.DB) {
       console.error('❌ DB binding check failed in login query')
       return c.json({
@@ -45,7 +44,8 @@ authRoutes.post('/api/auth/login', async (c) => {
              u.tenant_id, u.assigned_bank_id,
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
-             t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug
+             t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug,
+             t.login_ip_restriction_enabled, t.home_city, t.contact_email
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
@@ -59,22 +59,96 @@ authRoutes.post('/api/auth/login', async (c) => {
     }
 
     console.log(`✅ [LOGIN] User found: ${user.full_name} (Role ID: ${user.role_id})`)
-    console.log(`✅ [LOGIN] User ID: ${user.id}, Tenant ID: ${user.tenant_id}`)
 
-    // Update last login - check DB again before update
-    if (!c.env?.DB) {
-      console.error('❌ [LOGIN] DB binding lost after user query')
-      // Continue anyway - user is authenticated, just can't update last_login
-    } else {
-      console.log('✅ [LOGIN] Updating last_login timestamp...')
-      const loginTimestamp = new Date().toISOString()
-      await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
-        .bind(loginTimestamp, user.id).run()
-      console.log('✅ [LOGIN] last_login updated successfully')
+    // --- Security checks (role 1 bypasses all) ---
+    const normalizedRole = normalizeRoleId(user.role_id)
+    const tenantId = user.tenant_id as number | null
+    const userId = user.id as number
+    const ipRestricted = user.login_ip_restriction_enabled === 1
+    const homeCity = user.home_city as string | null
+    const contactEmail = user.contact_email as string | null
+
+    if (normalizedRole !== 1 && tenantId && ipRestricted) {
+      const ip = clientIp(c)
+      if (!ip) {
+        return c.json({ success: false, error: 'لا يمكن تحديد عنوان IP' }, 403)
+      }
+
+      const apiKey = c.env.RESEND_API_KEY?.trim()
+      const from = (c.env.EMAIL_FROM?.trim() || 'Tamweel <onboarding@resend.dev>').trim()
+
+      // Geo log helper — written when city differs from home_city
+      const maybeLogGeo = async (otpVerified: 0 | 1) => {
+        if (!homeCity) return
+        const city = clientCity(c)
+        if (!city || city.toLowerCase() === homeCity.toLowerCase()) return
+        await c.env.DB.prepare(`
+          INSERT INTO tenant_login_geo_log (user_id, tenant_id, ip, country, city, otp_verified)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(userId, tenantId, ip, (c.req.raw as any).cf?.country ?? null, city, otpVerified).run()
+      }
+
+      // --- DEVICE CHECK (first) ---
+      const deviceToken = parseCookie(c.req.header('Cookie') ?? null, 'deviceToken')
+      let deviceKnown = false
+      if (deviceToken) {
+        const row = await c.env.DB.prepare(
+          'SELECT 1 FROM user_login_devices WHERE user_id = ? AND token = ?'
+        ).bind(userId, deviceToken).first()
+        deviceKnown = !!row
+      }
+
+      if (!deviceKnown) {
+        if (contactEmail && apiKey) {
+          const code = Math.floor(100000 + Math.random() * 900000).toString()
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(`
+            INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
+            VALUES (?, ?, ?, 'device', ?)
+          `).bind(userId, code, ip, expiresAt).run()
+          await maybeLogGeo(0)
+          const sent = await sendDeviceOtpEmail({
+            apiKey, from, to: contactEmail, code, username: String(user.username),
+          })
+          if (!sent.ok) console.error('Device OTP email error:', sent.error)
+          return c.json({ success: false, status: 'device_otp_required' })
+        }
+        // No contact_email — treat device as trusted, fall through to IP check
+      }
+
+      // --- IP CHECK (only when device is known or contact_email missing) ---
+      const allowed = await isIpAllowed(ip, tenantId, userId, c.env.DB)
+      if (!allowed) {
+        const userEmail = String(user.email ?? '').trim()
+        if (userEmail && apiKey) {
+          const code = Math.floor(100000 + Math.random() * 900000).toString()
+          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+          await c.env.DB.prepare(`
+            INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
+            VALUES (?, ?, ?, 'ip', ?)
+          `).bind(userId, code, ip, expiresAt).run()
+          await maybeLogGeo(0)
+          const sent = await sendLoginOtpEmail({ apiKey, from, to: userEmail, code })
+          if (!sent.ok) console.error('IP OTP email error:', sent.error)
+          return c.json({ success: false, status: 'ip_otp_required' })
+        }
+        // No user email — fail closed
+        return c.json({ success: false, error: 'غير مسموح بتسجيل الدخول من هذا الموقع' }, 403)
+      }
+
+      // Both checks passed — log geo if out-of-city
+      await maybeLogGeo(1)
     }
 
-    // Create token with tenant_id (user_id:tenant_id:role_id:timestamp)
-    console.log('🔐 [LOGIN] Creating authentication token...')
+    // --- Complete login ---
+    if (!c.env?.DB) {
+      console.error('❌ [LOGIN] DB binding lost after security checks')
+    } else {
+      const loginTimestamp = new Date().toISOString()
+      await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
+        .bind(loginTimestamp, userId).run()
+    }
+
     let tenantForAuthToken: number | null =
       user.tenant_id != null ? Number(user.tenant_id as number) : null
     const loginNormalizedRoleId = normalizeRoleId(user.role_id)
@@ -101,26 +175,14 @@ authRoutes.post('/api/auth/login', async (c) => {
       }
     }
 
-    const tokenData = `${user.id}:${tenantForAuthToken ?? 'null'}:${user.role_id}:${Date.now()}`
-    console.log('🔐 [LOGIN] Token data:', tokenData)
+    const tokenData = `${userId}:${tenantForAuthToken ?? 'null'}:${user.role_id}:${Date.now()}`
     const token = btoa(tokenData)
-    console.log('🔐 [LOGIN] Token created:', token.substring(0, 30) + '...')
+    const cookieMaxAge = 7 * 24 * 60 * 60
 
-    // Set cookie for 7 days - use Response headers directly for Cloudflare Pages compatibility
-    const cookieMaxAge = 7 * 24 * 60 * 60; // 7 days in seconds
-    const cookieValue = `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
-
-    // Determine redirect URL
-    const redirect = '/admin/panel'
-
-    console.log(`🎯 Redirect to: ${redirect}`)
-    console.log(`🍪 Cookie set: authToken=${token.substring(0, 20)}...`)
-
-    // Create response with cookie header set directly (avoids getSetCookie compatibility issue)
     const response = c.json({
       success: true,
-      token: token,
-      redirect: redirect,
+      token,
+      redirect: '/admin/panel',
       user: {
         id: user.id,
         username: user.username,
@@ -128,87 +190,194 @@ authRoutes.post('/api/auth/login', async (c) => {
         email: user.email,
         phone: user.phone,
         role_id: user.role_id,
-        role_name: getRoleDisplayName(user.role_id, user.role_name),  // Role name from roles table
+        role_name: getRoleDisplayName(user.role_id, user.role_name),
         role_description: user.role_description,
         company_name: user.subscription_company_name || user.tenant_name,
         subscription_id: user.subscription_id,
         tenant_id: user.tenant_id,
         tenant_name: user.tenant_name,
         tenant_slug: user.tenant_slug,
-        assigned_bank_id: (user as { assigned_bank_id?: number | null }).assigned_bank_id ?? null
-      }
+        assigned_bank_id: (user as { assigned_bank_id?: number | null }).assigned_bank_id ?? null,
+      },
     })
-
-    // Set cookie header directly on the response to avoid getSetCookie compatibility issue
-    console.log('🍪 [LOGIN] Setting cookie header...')
-    response.headers.set('Set-Cookie', cookieValue)
-    console.log('✅ [LOGIN] Login successful, returning response')
+    response.headers.set(
+      'Set-Cookie',
+      `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
+    )
     return response
   } catch (error: any) {
-    // Aggressive debug dump - return full error in response
     const errorDump = {
-      // Basic error info
       message: error?.message || 'Unknown error',
       name: error?.name || 'Error',
       stack: error?.stack || 'No stack trace',
-
-      // Full error object (try to serialize)
       error: error ? {
         message: error.message,
         name: error.name,
         stack: error.stack,
         cause: error.cause,
         toString: error.toString(),
-        // Try to get all enumerable properties
         ...Object.getOwnPropertyNames(error).reduce((acc, key) => {
-          try {
-            acc[key] = String(error[key])
-          } catch {
-            acc[key] = '[Cannot serialize]'
-          }
+          try { acc[key] = String(error[key]) } catch { acc[key] = '[Cannot serialize]' }
           return acc
-        }, {} as any)
+        }, {} as any),
       } : null,
-
-      // Environment info
       DB_available: !!c.env?.DB,
       env_keys: Object.keys(c.env || {}),
       env_DB_type: typeof c.env?.DB,
-
-      // Request info
       request_url: c.req.url,
       request_method: c.req.method,
       request_headers: Object.fromEntries(c.req.raw.headers.entries()),
-
-      // Try to stringify the whole error
       error_stringified: (() => {
-        try {
-          return JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
-        } catch (e) {
-          return `Failed to stringify: ${e}`
-        }
-      })()
+        try { return JSON.stringify(error, Object.getOwnPropertyNames(error), 2) }
+        catch (e) { return `Failed to stringify: ${e}` }
+      })(),
+    }
+    console.error('❌ [LOGIN] FULL ERROR DUMP:', errorDump)
+    return c.json({ success: false, error: 'حدث خطأ في تسجيل الدخول', dd: errorDump }, 500)
+  }
+})
+
+// Complete login after OTP verification (device OTP or IP OTP).
+authRoutes.post('/api/auth/verify-otp', async (c) => {
+  try {
+    if (!c.env?.DB) return c.json({ success: false, error: 'Database not available' }, 500)
+    const { username, code, otp_type } = await c.req.json()
+    if (!username || !code || !otp_type) {
+      return c.json({ success: false, error: 'بيانات غير مكتملة' }, 400)
+    }
+    if (otp_type !== 'device' && otp_type !== 'ip') {
+      return c.json({ success: false, error: 'نوع رمز غير صالح' }, 400)
     }
 
-    console.error('❌ [LOGIN] FULL ERROR DUMP:', errorDump)
+    const user = await c.env.DB.prepare(`
+      SELECT u.id, u.username, u.full_name, u.email, u.phone,
+             u.role_id, u.subscription_id, u.tenant_id, u.assigned_bank_id,
+             r.role_name, r.description as role_description,
+             s.company_name as subscription_company_name,
+             t.company_name as tenant_name, t.slug as tenant_slug,
+             t.home_city
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN subscriptions s ON u.subscription_id = s.id
+      LEFT JOIN tenants t ON u.tenant_id = t.id
+      WHERE u.username = ? AND u.is_active = 1
+    `).bind(username).first()
 
-    // Return full error dump in response (temporary for debugging)
-    return c.json({
-      success: false,
-      error: 'حدث خطأ في تسجيل الدخول',
-      dd: errorDump // Debug dump
-    }, 500)
+    if (!user) return c.json({ success: false, error: 'المستخدم غير موجود' }, 404)
+
+    const userId = user.id as number
+
+    const otp = await c.env.DB.prepare(`
+      SELECT id, code, ip FROM tenant_login_otps
+      WHERE user_id = ? AND otp_type = ? AND is_used = 0 AND expires_at > datetime('now')
+      ORDER BY created_at DESC LIMIT 1
+    `).bind(userId, otp_type).first<{ id: number; code: string; ip: string }>()
+
+    if (!otp) {
+      return c.json({ success: false, error: 'رمز التحقق غير صالح أو منتهي الصلاحية' }, 400)
+    }
+    if (otp.code !== String(code).trim()) {
+      return c.json({ success: false, error: 'رمز التحقق غير صحيح' }, 400)
+    }
+
+    // Mark OTP used
+    await c.env.DB.prepare('UPDATE tenant_login_otps SET is_used = 1 WHERE id = ?')
+      .bind(otp.id).run()
+
+    const ip = otp.ip
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Whitelist this IP for 7 days (both device OTP and IP OTP do this)
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO user_login_allowed_ips (user_id, ip, expires_at, created_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    `).bind(userId, ip, expiresAt).run()
+
+    // Update geo log to mark as verified
+    const tenantId = user.tenant_id as number | null
+    if (tenantId) {
+      await c.env.DB.prepare(`
+        UPDATE tenant_login_geo_log
+        SET otp_verified = 1
+        WHERE user_id = ? AND ip = ? AND otp_verified = 0
+      `).bind(userId, ip).run()
+    }
+
+    // Extra step for device OTP: register the device
+    let newDeviceToken: string | null = null
+    if (otp_type === 'device') {
+      newDeviceToken = crypto.randomUUID()
+      await c.env.DB.prepare('INSERT INTO user_login_devices (user_id, token) VALUES (?, ?)')
+        .bind(userId, newDeviceToken).run()
+    }
+
+    // Complete login: update last_login, build token, set cookies
+    const loginTimestamp = new Date().toISOString()
+    await c.env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?')
+      .bind(loginTimestamp, userId).run()
+
+    const normalizedRole = normalizeRoleId(user.role_id)
+    let tenantForAuthToken: number | null = user.tenant_id != null ? Number(user.tenant_id) : null
+    const assignedBankId = (user as { assigned_bank_id?: number | null }).assigned_bank_id
+    const bankIdNum =
+      assignedBankId != null && !Number.isNaN(Number(assignedBankId)) ? Number(assignedBankId) : null
+    if (tenantForAuthToken == null && (normalizedRole === 5 || normalizedRole === 6) && bankIdNum != null) {
+      try {
+        const br = await c.env.DB.prepare('SELECT tenant_id FROM banks WHERE id = ? LIMIT 1')
+          .bind(bankIdNum).first<{ tenant_id: number | null }>()
+        if (br?.tenant_id != null) tenantForAuthToken = Number(br.tenant_id)
+      } catch (_) { /* keep null */ }
+    }
+
+    const tokenData = `${userId}:${tenantForAuthToken ?? 'null'}:${user.role_id}:${Date.now()}`
+    const token = btoa(tokenData)
+    const authMaxAge = 7 * 24 * 60 * 60
+    const deviceMaxAge = 365 * 24 * 60 * 60
+
+    const response = c.json({
+      success: true,
+      token,
+      redirect: '/admin/panel',
+      user: {
+        id: user.id,
+        username: user.username,
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        role_id: user.role_id,
+        role_name: getRoleDisplayName(user.role_id, user.role_name),
+        role_description: user.role_description,
+        company_name: user.subscription_company_name || user.tenant_name,
+        subscription_id: user.subscription_id,
+        tenant_id: user.tenant_id,
+        tenant_name: user.tenant_name,
+        tenant_slug: user.tenant_slug,
+        assigned_bank_id: assignedBankId ?? null,
+      },
+    })
+    response.headers.append(
+      'Set-Cookie',
+      `authToken=${token}; Path=/; Max-Age=${authMaxAge}; SameSite=Lax; Secure`
+    )
+    if (newDeviceToken) {
+      response.headers.append(
+        'Set-Cookie',
+        `deviceToken=${newDeviceToken}; Path=/; Max-Age=${deviceMaxAge}; SameSite=Lax; Secure; HttpOnly`
+      )
+    }
+    return response
+  } catch (error: any) {
+    console.error('verify-otp error:', error)
+    return c.json({ success: false, error: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
   }
 })
 
 // Logout API (clears auth cookie)
 authRoutes.post('/api/auth/logout', async (c) => {
-  // Expire cookie in multiple ways to handle Secure/non-Secure variants across environments
   const expiredSecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure'
   const expiredInsecure = 'authToken=; Path=/; Max-Age=0; SameSite=Lax'
 
   const res = c.json({ success: true })
-  // Use append so we can send multiple Set-Cookie headers
   res.headers.append('Set-Cookie', expiredSecure)
   res.headers.append('Set-Cookie', expiredInsecure)
   return res
@@ -231,7 +400,6 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
       )
     }
 
-    // Check if user exists
     const user = await c.env.DB.prepare(`
       SELECT id, email, username FROM users WHERE email = ? OR username = ?
     `).bind(email, email).first<{ id: number; email: string | null; username: string }>()
@@ -251,9 +419,8 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
       )
     }
 
-    // Generate 6-digit verification code
     const code = Math.floor(100000 + Math.random() * 900000).toString()
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
 
     const inserted = await c.env.DB.prepare(`
       INSERT INTO password_change_notifications (user_id, verification_code, expires_at, is_used)
@@ -280,10 +447,7 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
       )
     }
 
-    return c.json({
-      success: true,
-      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-    })
+    return c.json({ success: true, message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني' })
   } catch (error: any) {
     console.error('Forgot password error:', error)
     return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
@@ -295,7 +459,6 @@ authRoutes.post('/api/auth/verify-reset-code', async (c) => {
   try {
     const { email, code } = await c.req.json()
 
-    // Get user
     const user = await c.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(email, email).first()
@@ -304,7 +467,6 @@ authRoutes.post('/api/auth/verify-reset-code', async (c) => {
       return c.json({ success: false, message: 'المستخدم غير موجود' }, 404)
     }
 
-    // Check verification code
     const verification = await c.env.DB.prepare(`
       SELECT id, verification_code, expires_at, is_used
       FROM password_change_notifications
@@ -317,24 +479,17 @@ authRoutes.post('/api/auth/verify-reset-code', async (c) => {
       return c.json({ success: false, message: 'لم يتم العثور على رمز التحقق' }, 404)
     }
 
-    // Check if expired
     if (new Date(verification.expires_at as string) < new Date()) {
       return c.json({ success: false, message: 'انتهت صلاحية رمز التحقق. الرجاء طلب رمز جديد.' }, 400)
     }
 
-    // Check if code matches
     if (verification.verification_code !== code) {
       return c.json({ success: false, message: 'رمز التحقق غير صحيح' }, 400)
     }
 
-    // Generate reset token
     const token = Math.random().toString(36).substring(2) + Date.now().toString(36)
 
-    return c.json({
-      success: true,
-      message: 'تم التحقق بنجاح',
-      token: token
-    })
+    return c.json({ success: true, message: 'تم التحقق بنجاح', token })
   } catch (error: any) {
     console.error('Verify code error:', error)
     return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
@@ -350,7 +505,6 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
       return c.json({ success: false, message: 'كلمة السر يجب أن تكون 8 أحرف على الأقل' }, 400)
     }
 
-    // Get user
     const user = await c.env.DB.prepare(`
       SELECT id FROM users WHERE email = ? OR username = ?
     `).bind(email, email).first()
@@ -359,20 +513,15 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
       return c.json({ success: false, message: 'المستخدم غير موجود' }, 404)
     }
 
-    // Update password
     await c.env.DB.prepare(`
       UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).bind(newPassword, user.id).run()
 
-    // Mark verification code as used
     await c.env.DB.prepare(`
       UPDATE password_change_notifications SET is_used = 1 WHERE user_id = ? AND is_used = 0
     `).bind(user.id).run()
 
-    return c.json({
-      success: true,
-      message: 'تم تغيير كلمة السر بنجاح'
-    })
+    return c.json({ success: true, message: 'تم تغيير كلمة السر بنجاح' })
   } catch (error: any) {
     console.error('Reset password error:', error)
     return c.json({ success: false, message: 'حدث خطأ. الرجاء المحاولة مرة أخرى.' }, 500)
