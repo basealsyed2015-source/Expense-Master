@@ -23,7 +23,7 @@ const SRC_ROOT = join(process.cwd(), 'src')
 // registration across src/ (app.<verb> in index.tsx, contracts-module, chat,
 // hr, full-admin-panel, and *Routes.<verb> in src/routes/*). Update
 // deliberately when routes are intentionally added/removed.
-const EXPECTED_TOTAL = 431
+const EXPECTED_TOTAL = 433
 
 // Files we don't want to scan (backups, generated files).
 const SKIP_FILE_SUFFIXES = ['.backup.ts', '.tsx.backup']

@@ -153,16 +153,20 @@ export const tenantsPage = `<!DOCTYPE html>
                             </a>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div class="flex gap-2">
-                                <button onclick="viewTenant('\${tenant.public_uuid || tenant.id}')" 
+                            <div class="flex gap-2 flex-wrap">
+                                <button onclick="viewTenant('\${tenant.public_uuid || tenant.id}')"
                                         class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-eye"></i> عرض
                                 </button>
-                                <button onclick="editTenant('\${tenant.public_uuid || tenant.id}')" 
+                                <button onclick="editTenant('\${tenant.public_uuid || tenant.id}')"
                                         class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-edit"></i> تعديل
                                 </button>
-                                <button onclick="deleteTenant('\${tenant.public_uuid || tenant.id}')" 
+                                <a href="/admin/tenants/\${tenant.id}/login-restriction"
+                                        class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-xs transition-all inline-flex items-center gap-1">
+                                    <i class="fas fa-shield-alt"></i> أمان
+                                </a>
+                                <button onclick="deleteTenant('\${tenant.public_uuid || tenant.id}')"
                                         class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs transition-all">
                                     <i class="fas fa-trash"></i> حذف
                                 </button>

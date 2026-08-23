@@ -23,12 +23,20 @@ export const companySettingsPage = `<!DOCTYPE html>
         <i class="fas fa-building ml-3 shrink-0"></i>
         إعدادات الشركة
       </h1>
-      <a href="/admin/company-settings/locations"
-        class="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl bg-white px-4 py-3 text-sm font-bold text-teal-800 shadow-md ring-1 ring-white/60 hover:bg-teal-50 hover:text-teal-900 active:scale-[0.98] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-teal-700"
-        dir="rtl">
-        <i class="fas fa-map-marker-alt text-base text-teal-600 shrink-0" aria-hidden="true"></i>
-        <span>مواقع الشركة والفروع</span>
-      </a>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <a href="/admin/company-settings/locations"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-teal-800 shadow-md ring-1 ring-white/60 hover:bg-teal-50 hover:text-teal-900 active:scale-[0.98] transition-all"
+          dir="rtl">
+          <i class="fas fa-map-marker-alt text-base text-teal-600 shrink-0" aria-hidden="true"></i>
+          <span>مواقع الشركة والفروع</span>
+        </a>
+        <a href="/admin/company-settings/login-security"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-teal-800 shadow-md ring-1 ring-white/60 hover:bg-teal-50 hover:text-teal-900 active:scale-[0.98] transition-all"
+          dir="rtl">
+          <i class="fas fa-shield-alt text-base text-teal-600 shrink-0" aria-hidden="true"></i>
+          <span>أمان تسجيل الدخول</span>
+        </a>
+      </div>
     </div>
   </div>
 

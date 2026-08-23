@@ -142,6 +142,40 @@ export const loginPage = `<!DOCTYPE html>
             </div>
         </div>
 
+        <!-- OTP Card (hidden until needed) -->
+        <div id="otpCard" class="glass-effect rounded-2xl shadow-2xl p-8 animate-slide-in hidden">
+            <div class="text-center mb-6">
+                <div id="otpIconWrap" class="inline-block text-white rounded-full p-4 mb-4 bg-gradient-to-br from-indigo-500 to-purple-600">
+                    <i id="otpIcon" class="fas fa-shield-alt text-4xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-1">رمز التحقق</h2>
+                <p id="otpDesc" class="text-gray-600 text-sm leading-relaxed"></p>
+            </div>
+
+            <div id="otpAlertMsg" class="hidden mb-4 p-4 rounded-lg"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-bold mb-2">
+                        <i class="fas fa-key text-purple-600 ml-2"></i>
+                        رمز التحقق المكوّن من 6 أرقام
+                    </label>
+                    <input type="text" id="otpCode" maxlength="6" inputmode="numeric" pattern="[0-9]*"
+                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg input-focus transition text-center text-2xl tracking-widest font-mono"
+                           placeholder="● ● ● ● ● ●" autocomplete="one-time-code" />
+                </div>
+                <button type="button" id="otpSubmitBtn"
+                        class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3 rounded-lg font-bold hover:from-purple-700 hover:to-indigo-700 transition transform hover:scale-105">
+                    <i class="fas fa-check-circle ml-2"></i>
+                    تأكيد الرمز
+                </button>
+                <button type="button" id="otpBackBtn"
+                        class="w-full text-gray-500 hover:text-gray-700 py-2 text-sm font-medium">
+                    ← العودة لتسجيل الدخول
+                </button>
+            </div>
+        </div>
+
         <!-- Footer -->
         <div class="text-center mt-6 text-white">
             <p class="text-sm">© 2025 منصة حاسبة التمويل. جميع الحقوق محفوظة.</p>
@@ -183,6 +217,91 @@ export const loginPage = `<!DOCTYPE html>
             }
         }
 
+        var pendingUsername = '';
+        var pendingOtpType = '';
+
+        function showOtpScreen(otpType, username) {
+            pendingUsername = username;
+            pendingOtpType = otpType;
+            document.getElementById('loginForm').closest('.glass-effect').classList.add('hidden');
+            var card = document.getElementById('otpCard');
+            card.classList.remove('hidden');
+            var desc = document.getElementById('otpDesc');
+            var iconWrap = document.getElementById('otpIconWrap');
+            if (otpType === 'device_otp_required') {
+                desc.textContent = 'تم إرسال رمز التحقق إلى البريد الإلكتروني الرسمي للشركة. تواصل مع مسؤول الشركة للحصول على الرمز.';
+                iconWrap.className = 'inline-block text-white rounded-full p-4 mb-4 bg-gradient-to-br from-emerald-500 to-teal-600';
+            } else {
+                desc.textContent = 'تم إرسال رمز التحقق إلى بريدك الإلكتروني. أدخله للمتابعة من هذا الموقع.';
+                iconWrap.className = 'inline-block text-white rounded-full p-4 mb-4 bg-gradient-to-br from-indigo-500 to-purple-600';
+            }
+            document.getElementById('otpCode').value = '';
+            document.getElementById('otpCode').focus();
+        }
+
+        function showOtpAlert(message, type) {
+            var el = document.getElementById('otpAlertMsg');
+            el.className = \`mb-4 p-4 rounded-lg \${type === 'error' ? 'bg-red-100 border-2 border-red-500 text-red-800' : 'bg-green-100 border-2 border-green-500 text-green-800'}\`;
+            el.innerHTML = '<div class="flex items-center"><i class="fas fa-' + (type === 'error' ? 'exclamation-circle' : 'check-circle') + ' text-2xl ml-3"></i><span>' + message + '</span></div>';
+            el.classList.remove('hidden');
+        }
+
+        document.getElementById('otpBackBtn').addEventListener('click', function() {
+            pendingUsername = '';
+            pendingOtpType = '';
+            document.getElementById('otpCard').classList.add('hidden');
+            document.getElementById('loginForm').closest('.glass-effect').classList.remove('hidden');
+            document.getElementById('alertMessage').classList.add('hidden');
+        });
+
+        document.getElementById('otpSubmitBtn').addEventListener('click', async function() {
+            var code = document.getElementById('otpCode').value.trim();
+            if (!code || code.length !== 6) {
+                showOtpAlert('أدخل رمزاً مكوناً من 6 أرقام', 'error');
+                return;
+            }
+            var btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin ml-2"></i> جاري التحقق...';
+            try {
+                var otp_type = pendingOtpType === 'device_otp_required' ? 'device' : 'ip';
+                var response = await axios.post('/api/auth/verify-otp', {
+                    username: pendingUsername,
+                    code: code,
+                    otp_type: otp_type
+                }, { withCredentials: true });
+
+                if (response.data && response.data.success) {
+                    showOtpAlert('✓ تم التحقق بنجاح! جاري التحويل...', 'success');
+                    var token = response.data.token;
+                    if (token) {
+                        localStorage.setItem('authToken', token);
+                        localStorage.setItem('userData', JSON.stringify(response.data.user));
+                        var maxAge = 7 * 24 * 60 * 60;
+                        document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax';
+                        document.cookie = 'authToken=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+                        var isHttps = window.location.protocol === 'https:';
+                        document.cookie = 'authToken=' + token + '; Path=/; Max-Age=' + maxAge + '; SameSite=Lax' + (isHttps ? '; Secure' : '');
+                    }
+                    await new Promise(function(r) { setTimeout(r, 300); });
+                    window.location.href = response.data.redirect || '/admin/panel';
+                } else {
+                    showOtpAlert(response.data.error || 'رمز غير صحيح', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check-circle ml-2"></i> تأكيد الرمز';
+                }
+            } catch (error) {
+                var msg = (error.response && error.response.data && error.response.data.error) || 'حدث خطأ. حاول مرة أخرى.';
+                showOtpAlert(msg, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check-circle ml-2"></i> تأكيد الرمز';
+            }
+        });
+
+        document.getElementById('otpCode').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('otpSubmitBtn').click();
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -205,6 +324,13 @@ export const loginPage = `<!DOCTYPE html>
                     withCredentials: true
                 });
                 
+                if (!response.data.success && (response.data.status === 'device_otp_required' || response.data.status === 'ip_otp_required')) {
+                    loginBtn.disabled = false;
+                    loginBtn.innerHTML = '<i class="fas fa-sign-in-alt ml-2"></i> تسجيل الدخول';
+                    showOtpScreen(response.data.status, username);
+                    return;
+                }
+
                 if (response.data.success) {
                     showAlert('✓ تم تسجيل الدخول بنجاح! جاري التحويل...', 'success');
                     

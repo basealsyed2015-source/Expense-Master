@@ -29,6 +29,8 @@ import { tenantsPage } from './tenants-page'
 import { tenantCalculatorsPage } from './tenant-calculators-page'
 import { saasSettingsPage } from './saas-settings-page'
 import { companySettingsPage } from './company-settings-page'
+import { companyLoginSecurityPage } from './company-login-security-page'
+import { buildTenantLoginRestrictionPage } from './tenant-login-restriction-page'
 import {
   buildWaGreetingClientScript,
   fetchTenantWhatsappSettings,
@@ -3670,6 +3672,7 @@ const PERSISTENT_SIDEBAR_ALLOWED_LINKS: Record<string, readonly string[]> = {
     '/',
     '/admin/company-settings',
     '/admin/company-settings/locations',
+    '/admin/company-settings/login-security',
     '/admin/chat',
     '/admin/my-archived-tasks',
     '/admin/my-no-response-tasks',
@@ -6256,7 +6259,15 @@ app.get('/api/my-tenant/login-ips', async (c) => {
     const rows = await c.env.DB.prepare(
       'SELECT id, ip, label, created_at FROM tenant_login_allowed_ips WHERE tenant_id = ? ORDER BY created_at ASC'
     ).bind(info.tenantId).all<{ id: number; ip: string; label: string | null; created_at: string }>()
-    return c.json({ success: true, your_ip: clientIp(c), ips: rows.results ?? [] })
+    const tenantRow = await c.env.DB.prepare(
+      'SELECT login_ip_restriction_enabled FROM tenants WHERE id = ? LIMIT 1'
+    ).bind(info.tenantId).first<{ login_ip_restriction_enabled: number }>()
+    return c.json({
+      success: true,
+      your_ip: clientIp(c),
+      ips: rows.results ?? [],
+      restriction_enabled: !!(tenantRow?.login_ip_restriction_enabled),
+    })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
   }
@@ -15603,6 +15614,17 @@ app.get('/admin/tenants/:tenantRef/edit', async (c) => {
   }
 })
 
+// Tenant login restriction settings (superadmin)
+app.get('/admin/tenants/:id/login-restriction', async (c) => {
+  const tenantId = Number.parseInt(String(c.req.param('id') ?? ''), 10)
+  if (!Number.isFinite(tenantId) || tenantId <= 0) return c.redirect('/admin/tenants')
+  const row = await c.env.DB.prepare('SELECT company_name FROM tenants WHERE id = ? LIMIT 1')
+    .bind(tenantId)
+    .first<{ company_name: string }>()
+  if (!row) return c.redirect('/admin/tenants')
+  return c.html(buildTenantLoginRestrictionPage(tenantId, row.company_name))
+})
+
 // View tenant details page
 app.get('/admin/tenants/:tenantRef', async (c) => {
   try {
@@ -15828,6 +15850,7 @@ app.get('/admin/company-settings/locations/:id/edit', (c) => {
   return c.html(buildCompanyLocationEditPage(id))
 })
 app.get('/admin/company-settings/locations', (c) => c.html(companyLocationsListPage))
+app.get('/admin/company-settings/login-security', (c) => c.html(companyLoginSecurityPage))
 app.get('/admin/reports', (c) => c.html(reportsPage))
 app.get('/admin/reports/customers', (c) => c.html(customersReportPage))
 app.get('/admin/reports/requests', (c) => c.html(requestsReportPage))
