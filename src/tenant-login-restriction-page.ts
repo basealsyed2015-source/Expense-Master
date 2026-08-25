@@ -59,28 +59,52 @@ export function buildTenantLoginRestrictionPage(tenantId: number, tenantName: st
         <div id="cityMsg" class="mt-1.5 text-sm hidden"></div>
       </div>
 
-      <!-- enable/disable toggle -->
+      <!-- IP restriction toggle -->
       <div class="border-t border-gray-100 pt-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-sm font-bold text-gray-700" dir="rtl">
-              <i class="fas fa-toggle-on text-emerald-600 ml-1"></i>
-              تفعيل قيود تسجيل الدخول
+              <i class="fas fa-network-wired text-emerald-600 ml-1"></i>
+              قيد عنوان IP
             </p>
             <p class="text-xs text-gray-500 mt-0.5" dir="rtl">
-              يتطلب وجود عنوان IP واحد على الأقل في القائمة قبل التفعيل.
+              يمنع تسجيل الدخول من عناوين IP غير معروفة — يرسل رمز تحقق للمستخدم عند محاولة تسجيل الدخول من عنوان جديد.
             </p>
           </div>
           <div class="flex items-center gap-3">
-            <span id="restrictionBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">جاري التحميل...</span>
-            <button id="toggleRestrictionBtn"
+            <span id="ipRestrictionBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">جاري التحميل...</span>
+            <button id="toggleIpRestrictionBtn"
               class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
-              <i id="toggleIcon" class="fas fa-toggle-off"></i>
-              <span id="toggleLabel">—</span>
+              <i id="ipToggleIcon" class="fas fa-toggle-off"></i>
+              <span id="ipToggleLabel">—</span>
             </button>
           </div>
         </div>
-        <div id="toggleMsg" class="mt-2 text-sm hidden"></div>
+        <div id="ipToggleMsg" class="mt-2 text-sm hidden"></div>
+      </div>
+
+      <!-- Device restriction toggle -->
+      <div class="border-t border-gray-100 pt-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-bold text-gray-700" dir="rtl">
+              <i class="fas fa-mobile-alt text-emerald-600 ml-1"></i>
+              قيد الجهاز
+            </p>
+            <p class="text-xs text-gray-500 mt-0.5" dir="rtl">
+              يمنع تسجيل الدخول من أجهزة غير معروفة — يرسل رمز تحقق إلى بريد الشركة عند استخدام جهاز جديد.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="deviceRestrictionBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-600">جاري التحميل...</span>
+            <button id="toggleDeviceRestrictionBtn"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300">
+              <i id="deviceToggleIcon" class="fas fa-toggle-off"></i>
+              <span id="deviceToggleLabel">—</span>
+            </button>
+          </div>
+        </div>
+        <div id="deviceToggleMsg" class="mt-2 text-sm hidden"></div>
       </div>
     </div>
 
@@ -137,7 +161,8 @@ export function buildTenantLoginRestrictionPage(tenantId: number, tenantName: st
 
   <script>
     var TENANT_ID = ${tenantId};
-    var restrictionEnabled = false;
+    var ipRestrictionEnabled = false;
+    var deviceRestrictionEnabled = false;
 
     function esc(s) {
       return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -161,12 +186,11 @@ export function buildTenantLoginRestrictionPage(tenantId: number, tenantName: st
       el.classList.toggle('hidden', !msg);
     }
 
-    function updateToggleUI(enabled) {
-      restrictionEnabled = enabled;
-      var badge = document.getElementById('restrictionBadge');
-      var btn = document.getElementById('toggleRestrictionBtn');
-      var icon = document.getElementById('toggleIcon');
-      var label = document.getElementById('toggleLabel');
+    function updateToggleUI(badgeId, btnId, iconId, labelId, enabled) {
+      var badge = document.getElementById(badgeId);
+      var btn = document.getElementById(btnId);
+      var icon = document.getElementById(iconId);
+      var label = document.getElementById(labelId);
       if (enabled) {
         badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800';
         badge.textContent = 'مفعّل';
@@ -227,7 +251,10 @@ export function buildTenantLoginRestrictionPage(tenantId: number, tenantName: st
           return;
         }
         document.getElementById('homeCityInput').value = res.data.home_city || '';
-        updateToggleUI(!!res.data.login_ip_restriction_enabled);
+        ipRestrictionEnabled = !!res.data.login_ip_restriction_enabled;
+        deviceRestrictionEnabled = !!res.data.login_device_restriction_enabled;
+        updateToggleUI('ipRestrictionBadge', 'toggleIpRestrictionBtn', 'ipToggleIcon', 'ipToggleLabel', ipRestrictionEnabled);
+        updateToggleUI('deviceRestrictionBadge', 'toggleDeviceRestrictionBtn', 'deviceToggleIcon', 'deviceToggleLabel', deviceRestrictionEnabled);
         renderIpTable(res.data.tenant_ips || []);
         renderGeoTable(res.data.geo_log || []);
       } catch (e) {
@@ -250,25 +277,49 @@ export function buildTenantLoginRestrictionPage(tenantId: number, tenantName: st
       }
     });
 
-    document.getElementById('toggleRestrictionBtn').addEventListener('click', async function() {
-      setMsg('toggleMsg', '', false);
-      var newVal = restrictionEnabled ? 0 : 1;
+    document.getElementById('toggleIpRestrictionBtn').addEventListener('click', async function() {
+      setMsg('ipToggleMsg', '', false);
+      var newVal = ipRestrictionEnabled ? 0 : 1;
       var confirmMsg = newVal
-        ? 'هل أنت متأكد من تفعيل قيود تسجيل الدخول لهذه الشركة؟ تأكد من إضافة عناوين IP الصحيحة أولاً.'
-        : 'هل تريد إيقاف قيود تسجيل الدخول؟ سيتمكن جميع المستخدمين من الدخول من أي موقع.';
+        ? 'هل أنت متأكد من تفعيل قيد عنوان IP لهذه الشركة؟'
+        : 'هل تريد إيقاف قيد عنوان IP؟ سيتمكن المستخدمون من الدخول من أي عنوان IP.';
       if (!confirm(confirmMsg)) return;
       try {
         var res = await axios.patch('/api/admin/tenants/' + TENANT_ID + '/login-restriction', {
           login_ip_restriction_enabled: newVal
         });
         if (!res.data || !res.data.success) {
-          setMsg('toggleMsg', (res.data && res.data.error) || 'فشل التحديث', true);
+          setMsg('ipToggleMsg', (res.data && res.data.error) || 'فشل التحديث', true);
           return;
         }
-        updateToggleUI(!!newVal);
-        setMsg('toggleMsg', newVal ? 'تم تفعيل القيود' : 'تم إيقاف القيود', false);
+        ipRestrictionEnabled = !!newVal;
+        updateToggleUI('ipRestrictionBadge', 'toggleIpRestrictionBtn', 'ipToggleIcon', 'ipToggleLabel', ipRestrictionEnabled);
+        setMsg('ipToggleMsg', newVal ? 'تم تفعيل قيد IP' : 'تم إيقاف قيد IP', false);
       } catch (e) {
-        setMsg('toggleMsg', (e.response && e.response.data && e.response.data.error) || 'فشل التحديث', true);
+        setMsg('ipToggleMsg', (e.response && e.response.data && e.response.data.error) || 'فشل التحديث', true);
+      }
+    });
+
+    document.getElementById('toggleDeviceRestrictionBtn').addEventListener('click', async function() {
+      setMsg('deviceToggleMsg', '', false);
+      var newVal = deviceRestrictionEnabled ? 0 : 1;
+      var confirmMsg = newVal
+        ? 'هل أنت متأكد من تفعيل قيد الجهاز لهذه الشركة؟'
+        : 'هل تريد إيقاف قيد الجهاز؟ سيتمكن المستخدمون من الدخول من أي جهاز دون التحقق.';
+      if (!confirm(confirmMsg)) return;
+      try {
+        var res = await axios.patch('/api/admin/tenants/' + TENANT_ID + '/login-restriction', {
+          login_device_restriction_enabled: newVal
+        });
+        if (!res.data || !res.data.success) {
+          setMsg('deviceToggleMsg', (res.data && res.data.error) || 'فشل التحديث', true);
+          return;
+        }
+        deviceRestrictionEnabled = !!newVal;
+        updateToggleUI('deviceRestrictionBadge', 'toggleDeviceRestrictionBtn', 'deviceToggleIcon', 'deviceToggleLabel', deviceRestrictionEnabled);
+        setMsg('deviceToggleMsg', newVal ? 'تم تفعيل قيد الجهاز' : 'تم إيقاف قيد الجهاز', false);
+      } catch (e) {
+        setMsg('deviceToggleMsg', (e.response && e.response.data && e.response.data.error) || 'فشل التحديث', true);
       }
     });
 

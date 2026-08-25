@@ -169,6 +169,14 @@ export const loginPage = `<!DOCTYPE html>
                     <i class="fas fa-check-circle ml-2"></i>
                     تأكيد الرمز
                 </button>
+                <div class="text-center pt-1">
+                    <button type="button" id="otpResendBtn"
+                            class="text-purple-600 hover:text-purple-800 text-sm font-medium disabled:text-gray-400 disabled:cursor-not-allowed">
+                        <i class="fas fa-redo ml-1"></i>
+                        <span id="otpResendLabel">إعادة إرسال الرمز</span>
+                    </button>
+                    <span id="otpResendCooldown" class="hidden text-gray-400 text-sm">إعادة الإرسال بعد <span id="otpCountdown">60</span>s</span>
+                </div>
                 <button type="button" id="otpBackBtn"
                         class="w-full text-gray-500 hover:text-gray-700 py-2 text-sm font-medium">
                     ← العودة لتسجيل الدخول
@@ -218,11 +226,39 @@ export const loginPage = `<!DOCTYPE html>
         }
 
         var pendingUsername = '';
+        var pendingPassword = '';
         var pendingOtpType = '';
+        var resendTimer = null;
+
+        function startResendCooldown() {
+            var btn = document.getElementById('otpResendBtn');
+            var label = document.getElementById('otpResendLabel');
+            var cooldown = document.getElementById('otpResendCooldown');
+            var countEl = document.getElementById('otpCountdown');
+            btn.classList.add('hidden');
+            cooldown.classList.remove('hidden');
+            var secs = 60;
+            countEl.textContent = secs;
+            clearInterval(resendTimer);
+            resendTimer = setInterval(function() {
+                secs--;
+                countEl.textContent = secs;
+                if (secs <= 0) {
+                    clearInterval(resendTimer);
+                    cooldown.classList.add('hidden');
+                    btn.classList.remove('hidden');
+                }
+            }, 1000);
+        }
 
         function showOtpScreen(otpType, username) {
             pendingUsername = username;
             pendingOtpType = otpType;
+            var btn = document.getElementById('otpResendBtn');
+            var cooldown = document.getElementById('otpResendCooldown');
+            btn.classList.remove('hidden');
+            cooldown.classList.add('hidden');
+            clearInterval(resendTimer);
             document.getElementById('loginForm').closest('.glass-effect').classList.add('hidden');
             var card = document.getElementById('otpCard');
             card.classList.remove('hidden');
@@ -248,10 +284,29 @@ export const loginPage = `<!DOCTYPE html>
 
         document.getElementById('otpBackBtn').addEventListener('click', function() {
             pendingUsername = '';
+            pendingPassword = '';
             pendingOtpType = '';
+            clearInterval(resendTimer);
             document.getElementById('otpCard').classList.add('hidden');
             document.getElementById('loginForm').closest('.glass-effect').classList.remove('hidden');
             document.getElementById('alertMessage').classList.add('hidden');
+        });
+
+        document.getElementById('otpResendBtn').addEventListener('click', async function() {
+            if (!pendingUsername || !pendingPassword) return;
+            this.disabled = true;
+            try {
+                await axios.post('/api/auth/login', {
+                    username: pendingUsername,
+                    password: pendingPassword
+                }, { withCredentials: true });
+                showOtpAlert('تم إعادة إرسال الرمز.', 'success');
+                document.getElementById('otpCode').value = '';
+            } catch (e) {
+                showOtpAlert('تعذر إعادة الإرسال. حاول مرة أخرى.', 'error');
+            }
+            this.disabled = false;
+            startResendCooldown();
         });
 
         document.getElementById('otpSubmitBtn').addEventListener('click', async function() {
@@ -327,7 +382,9 @@ export const loginPage = `<!DOCTYPE html>
                 if (!response.data.success && (response.data.status === 'device_otp_required' || response.data.status === 'ip_otp_required')) {
                     loginBtn.disabled = false;
                     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt ml-2"></i> تسجيل الدخول';
+                    pendingPassword = password;
                     showOtpScreen(response.data.status, username);
+                    startResendCooldown();
                     return;
                 }
 

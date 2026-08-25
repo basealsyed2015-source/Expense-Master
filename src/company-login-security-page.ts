@@ -32,8 +32,9 @@ export const companyLoginSecurityPage = `<!DOCTYPE html>
 
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-    <!-- Status banner -->
-    <div id="statusBanner" class="hidden rounded-xl border px-4 py-3 text-sm font-medium flex items-center gap-2"></div>
+    <!-- Status banners -->
+    <div id="ipStatusBanner" class="hidden rounded-xl border px-4 py-3 text-sm font-medium flex items-center gap-2"></div>
+    <div id="deviceStatusBanner" class="hidden rounded-xl border px-4 py-3 text-sm font-medium flex items-center gap-2"></div>
 
     <!-- Current IP card -->
     <div class="bg-white rounded-xl shadow p-5">
@@ -100,9 +101,10 @@ export const companyLoginSecurityPage = `<!DOCTYPE html>
     <!-- Info note -->
     <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" dir="rtl">
       <i class="fas fa-info-circle ml-2"></i>
-      <strong>ملاحظة:</strong> تفعيل قيود تسجيل الدخول يتم من قِبل المسؤول الرئيسي للمنصة فقط.
-      العناوين التي تضيفها هنا ستُطبَّق فور تفعيل القيد.
-      عند تسجيل الدخول من عنوان غير مُدرج، سيصل رمز تحقق إلى البريد الإلكتروني المسجّل.
+      <strong>ملاحظة:</strong> تفعيل القيود يتم من قِبل المسؤول الرئيسي للمنصة فقط.
+      العناوين التي تضيفها هنا ستُطبَّق فور تفعيل قيد IP.
+      عند تسجيل الدخول من عنوان غير مُدرج، سيصل رمز تحقق إلى البريد الإلكتروني للمستخدم.
+      عند استخدام جهاز غير معروف (وقيد الجهاز مفعّل)، سيصل رمز تحقق إلى بريد الشركة.
     </div>
 
   </div>
@@ -167,16 +169,28 @@ export const companyLoginSecurityPage = `<!DOCTYPE html>
         var ipEl = document.getElementById('yourIp');
         if (ipEl) ipEl.textContent = currentIp || 'غير متاح';
 
-        var banner = document.getElementById('statusBanner');
-        if (banner) {
+        var ipBanner = document.getElementById('ipStatusBanner');
+        if (ipBanner) {
           if (res.data.restriction_enabled) {
-            banner.className = 'rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-green-800';
-            banner.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> قيود تسجيل الدخول مفعّلة لهذه الشركة.';
+            ipBanner.className = 'rounded-xl border border-green-300 bg-green-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-green-800';
+            ipBanner.innerHTML = '<i class="fas fa-check-circle text-green-600"></i> قيد عنوان IP مفعّل — الدخول من عناوين غير معروفة يتطلب رمز تحقق.';
           } else {
-            banner.className = 'rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-gray-600';
-            banner.innerHTML = '<i class="fas fa-info-circle text-gray-400"></i> قيود تسجيل الدخول غير مفعّلة حالياً.';
+            ipBanner.className = 'rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-gray-600';
+            ipBanner.innerHTML = '<i class="fas fa-info-circle text-gray-400"></i> قيد عنوان IP غير مفعّل حالياً.';
           }
-          banner.classList.remove('hidden');
+          ipBanner.classList.remove('hidden');
+        }
+
+        var deviceBanner = document.getElementById('deviceStatusBanner');
+        if (deviceBanner) {
+          if (res.data.device_restriction_enabled) {
+            deviceBanner.className = 'rounded-xl border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-blue-800';
+            deviceBanner.innerHTML = '<i class="fas fa-mobile-alt text-blue-600"></i> قيد الجهاز مفعّل — الدخول من أجهزة غير معروفة يرسل رمز تحقق لبريد الشركة.';
+          } else {
+            deviceBanner.className = 'rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium flex items-center gap-2 text-gray-600';
+            deviceBanner.innerHTML = '<i class="fas fa-info-circle text-gray-400"></i> قيد الجهاز غير مفعّل حالياً.';
+          }
+          deviceBanner.classList.remove('hidden');
         }
 
         renderTable(res.data.ips || []);

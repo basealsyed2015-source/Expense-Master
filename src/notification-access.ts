@@ -722,7 +722,7 @@ export async function insertWorkflowCrossPartyAlarms(
 /** Active FR + no blocking contract — role 4/6 contract create gate. */
 export async function customerEligibleForContractCreate(
   db: D1Database,
-  opts: { customerId: number; tenantId: number; userId: number; roleId: number }
+  opts: { customerId: number; tenantId: number; userId: number; roleId: number; documentType?: string }
 ): Promise<boolean> {
   return (await explainContractCreateDenial(db, opts)) == null
 }
@@ -730,9 +730,9 @@ export async function customerEligibleForContractCreate(
 /** Arabic reason when contract create is denied for roles 4/5/6; null if allowed. */
 export async function explainContractCreateDenial(
   db: D1Database,
-  opts: { customerId: number; tenantId: number; userId: number; roleId: number }
+  opts: { customerId: number; tenantId: number; userId: number; roleId: number; documentType?: string }
 ): Promise<string | null> {
-  const { customerId, tenantId, userId, roleId } = opts
+  const { customerId, tenantId, userId, roleId, documentType } = opts
 
   const customer = await db
     .prepare('SELECT id, tenant_id FROM customers WHERE id = ?')
@@ -742,18 +742,20 @@ export async function explainContractCreateDenial(
     return 'العميل غير موجود أو لا يتبع شركتك'
   }
 
+  const effectiveType = documentType || 'عقد'
   const blocking = await db
     .prepare(
       `SELECT 1 AS ok FROM contracts
        WHERE customer_id = ? AND tenant_id = ?
+         AND COALESCE(document_type, 'عقد') = ?
          AND COALESCE(is_archived, 0) = 0
          AND status NOT IN ('مكتمل', 'مؤرشف')
        LIMIT 1`
     )
-    .bind(customerId, tenantId)
+    .bind(customerId, tenantId, effectiveType)
     .first<{ ok: number }>()
   if (blocking) {
-    return 'يوجد عقد نشط لهذا العميل بالفعل. أكمل أو أرشف العقد السابق قبل إنشاء عقد جديد'
+    return `يوجد مستند من نوع "${effectiveType}" نشط لهذا العميل بالفعل. أكمل أو أرشف المستند السابق قبل إنشاء آخر`
   }
 
   const hasActiveFr = async (agentOnly: boolean): Promise<boolean> => {

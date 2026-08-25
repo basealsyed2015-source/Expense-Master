@@ -556,6 +556,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       return c.json({ data: results || [] })
     }
     if (table === 'contracts') {
+      const dtFilter = c.req.query('document_type')
+      const dtSql = dtFilter ? ` AND COALESCE(contracts.document_type, 'عقد') = ? ` : ''
+      const dtBinds: (string | number)[] = dtFilter ? [dtFilter] : []
       // Enrich with creator (employee) and assigned bank-agent display names for the list table.
       const enrichedSql = `SELECT contracts.*,
                 emp.full_name AS employee_name,
@@ -563,11 +566,11 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
          FROM contracts
          LEFT JOIN users emp ON emp.id = contracts.created_by
          ${CONTRACTS_BANK_AGENT_JOINS_SQL}
-         WHERE 1=1 ${tsql} ${rowScopeSql}
+         WHERE 1=1 ${tsql} ${rowScopeSql} ${dtSql}
          ORDER BY contracts.id DESC LIMIT ?`
       try {
         const { results } = await c.env.DB.prepare(enrichedSql)
-          .bind(...tbinds, ...rowScopeBinds, limit)
+          .bind(...tbinds, ...rowScopeBinds, ...dtBinds, limit)
           .all()
         return c.json({ data: results || [] })
       } catch (e: unknown) {
@@ -578,10 +581,10 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           `SELECT contracts.*, emp.full_name AS employee_name, NULL AS bank_agent_name
            FROM contracts
            LEFT JOIN users emp ON emp.id = contracts.created_by
-           WHERE 1=1 ${tsql} ${rowScopeSql}
+           WHERE 1=1 ${tsql} ${rowScopeSql} ${dtSql}
            ORDER BY contracts.id DESC LIMIT ?`
         )
-          .bind(...tbinds, ...rowScopeBinds, limit)
+          .bind(...tbinds, ...rowScopeBinds, ...dtBinds, limit)
           .all()
         return c.json({ data: results || [] })
       }
@@ -726,6 +729,18 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
       const logoNorm = normalizePartyOneLogo(body)
       if (!logoNorm.ok) return logoNorm.response
 
+      // Resolve document_type from the selected template (immutable after creation)
+      let documentType = 'عقد'
+      const templateIdForType = body.template_id != null ? Number(body.template_id) : null
+      if (templateIdForType) {
+        try {
+          const tplRow = await c.env.DB.prepare('SELECT template_type FROM contract_templates WHERE id = ?')
+            .bind(templateIdForType)
+            .first<{ template_type?: string | null }>()
+          if (tplRow?.template_type) documentType = tplRow.template_type
+        } catch (_) { /* ignore — default to عقد */ }
+      }
+
       const customerId = body.customer_id != null ? Number(body.customer_id) : null
       if (!customerId || !Number.isFinite(customerId) || customerId <= 0) {
         const detail =
@@ -754,6 +769,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             tenantId,
             userId: info.userId,
             roleId: 5,
+            documentType,
           })
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
@@ -833,6 +849,7 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             tenantId,
             userId: info.userId,
             roleId: info.roleId,
+            documentType,
           })
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
@@ -923,8 +940,9 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
           party_one_name, party_one_phone, party_one_logo,
           customer_id, party_two_name, party_two_id, party_two_id_expiry, party_two_phone, party_two_address, finance_type, finance_amount,
           commission_amount, commission_type, commission_rate, note_order_number, note_due_date, status,
-          property_description, property_location, bank_name, notes, is_archived, financing_request_id, location_id
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          property_description, property_location, bank_name, notes, is_archived, financing_request_id, location_id,
+          document_type
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
           .bind(
             tenantId,
@@ -957,7 +975,8 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
             body.notes ?? null,
             body.is_archived ? 1 : 0,
             body.financing_request_id != null ? Number(body.financing_request_id) : null,
-            body.location_id != null ? Number(body.location_id) : null
+            body.location_id != null ? Number(body.location_id) : null,
+            documentType
           )
           .run()
       } catch (e) {
@@ -1229,6 +1248,24 @@ export function registerContractsModuleApi(app: any, getUserInfo: GetUserInfo) {
     }
 
     if (table === 'contracts') {
+      // Block switching to a template of a different document type
+      if (body.template_id !== undefined && body.template_id != null) {
+        const newTemplateId = Number(body.template_id)
+        const existingTemplateId = (existing as any).template_id != null ? Number((existing as any).template_id) : null
+        if (!isNaN(newTemplateId) && newTemplateId !== existingTemplateId) {
+          try {
+            const newTpl = await c.env.DB.prepare('SELECT template_type FROM contract_templates WHERE id = ?')
+              .bind(newTemplateId)
+              .first<{ template_type?: string | null }>()
+            const newType = newTpl?.template_type || 'عقد'
+            const existingType = (existing as any).document_type || 'عقد'
+            if (newType !== existingType) {
+              return c.json({ error: 'document_type_mismatch', detail: 'لا يمكن تغيير نوع المستند بعد إنشائه' }, 400)
+            }
+          } catch (_) { /* ignore schema errors — allow update */ }
+        }
+      }
+
       if (body.party_one_logo !== undefined) {
         const logoNorm = normalizePartyOneLogo(body)
         if (!logoNorm.ok) return logoNorm.response

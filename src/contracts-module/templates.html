@@ -50,6 +50,23 @@
       border-top: 1px solid var(--border);
       display: flex; gap: 8px;
     }
+    .tpl-tabs {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .tpl-tab {
+      padding: 8px 18px;
+      border: none; background: none; cursor: pointer;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px; font-weight: 500;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: var(--transition);
+    }
+    .tpl-tab:hover { color: var(--primary); }
+    .tpl-tab.active { color: var(--primary); border-bottom-color: var(--secondary); font-weight: 700; }
     .builder-area {
       background: #fff;
       border-radius: var(--radius);
@@ -154,9 +171,16 @@
         <div class="page-header">
           <div class="page-header-title">
             <h2>قوالب العقود</h2>
-            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء مستندات جديدة</p>
           </div>
         </div>
+        <div class="tpl-tabs" id="tplTabs">
+          <button class="tpl-tab active" data-type="عقد" onclick="switchTab('عقد', this)">عقد</button>
+          <button class="tpl-tab" data-type="عقد سلفه" onclick="switchTab('عقد سلفه', this)">عقد سلفه</button>
+          <button class="tpl-tab" data-type="مخالصة إلغاء طلب" onclick="switchTab('مخالصة إلغاء طلب', this)">مخالصة إلغاء طلب</button>
+          <button class="tpl-tab" data-type="مخالصة انهاء طلب" onclick="switchTab('مخالصة انهاء طلب', this)">مخالصة انهاء طلب</button>
+        </div>
+
         <div class="templates-grid" id="templatesGrid">
           <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
         </div>
@@ -185,11 +209,10 @@
               <div class="form-group">
                 <label class="form-label">نوع القالب</label>
                 <select class="form-control notranslate" id="tpl_type" translate="no" lang="ar">
-                  <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
-                  <option value="عقد إيجار">عقد إيجار</option>
-                  <option value="عقد بيع">عقد بيع</option>
-                  <option value="عقد مقاولات">عقد مقاولات</option>
-                  <option value="أخرى">أخرى</option>
+                  <option value="عقد">عقد</option>
+                  <option value="عقد سلفه">عقد سلفه</option>
+                  <option value="مخالصة إلغاء طلب">مخالصة إلغاء طلب</option>
+                  <option value="مخالصة انهاء طلب">مخالصة انهاء طلب</option>
                 </select>
               </div>
               <div class="form-group">
@@ -309,6 +332,20 @@
   <script>
     let editingId = null;
     let tplBodyEditorReady = null;
+    let activeTabType = 'عقد';
+    let allTemplates = [];
+
+    function switchTab(type, el) {
+      activeTabType = type;
+      location.hash = encodeURIComponent(type);
+      document.querySelectorAll('.tpl-tab').forEach(t => t.classList.remove('active'));
+      if (el) el.classList.add('active');
+      renderTemplatesGrid();
+    }
+
+    function getActiveTabType() {
+      return activeTabType;
+    }
 
     /** True when body was saved from a rich editor (vs legacy plain text). */
     function isRichHtmlTemplate(body) {
@@ -580,16 +617,22 @@
     async function loadTemplates() {
       const grid = document.getElementById('templatesGrid');
       try {
-        const data = await API.get('templates', { limit: 50 });
-        const templates = data.data || [];
-        if (templates.length === 0) {
-          grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب بعد. أضف قالبك الأول!</p></div>`;
-          return;
-        }
-        grid.innerHTML = templates.map(t => buildTemplateCard(t)).join('');
+        const data = await API.get('templates', { limit: 200 });
+        allTemplates = data.data || [];
+        renderTemplatesGrid();
       } catch (e) {
         grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>`;
       }
+    }
+
+    function renderTemplatesGrid() {
+      const grid = document.getElementById('templatesGrid');
+      const filtered = allTemplates.filter(t => (t.template_type || 'عقد') === activeTabType);
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب من هذا النوع بعد. أضف قالبك الأول!</p></div>`;
+        return;
+      }
+      grid.innerHTML = filtered.map(t => buildTemplateCard(t)).join('');
     }
 
     function buildTemplateCard(t) {
@@ -691,6 +734,7 @@
       document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
       document.getElementById('tpl_court').value = 'الرياض';
       document.getElementById('tpl_render_mode').value = 'structured';
+      document.getElementById('tpl_type').value = getActiveTabType();
       setDocFontSizeSelect('12px');
       setTemplateStampPreview('');
       showTemplateEditor(false);
@@ -880,7 +924,17 @@
       }
     }
 
+    // Restore active tab from URL hash on load
     document.addEventListener('DOMContentLoaded', () => {
+      const hash = location.hash.replace('#', '');
+      const validTypes = ['عقد', 'عقد سلفه', 'مخالصة إلغاء طلب', 'مخالصة انهاء طلب'];
+      if (hash && validTypes.includes(decodeURIComponent(hash))) {
+        const decoded = decodeURIComponent(hash);
+        activeTabType = decoded;
+        document.querySelectorAll('.tpl-tab').forEach(t => {
+          t.classList.toggle('active', t.getAttribute('data-type') === decoded);
+        });
+      }
       loadTemplates();
       document.getElementById('tpl_stamp_file')?.addEventListener('change', onTemplateStampFileChange);
       document.getElementById('tpl_stamp_clear')?.addEventListener('click', () => setTemplateStampPreview(''));

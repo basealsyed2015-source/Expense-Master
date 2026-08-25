@@ -5618,18 +5618,14 @@ app.patch('/api/my-tenant', async (c) => {
       const enabling = body.login_ip_restriction_enabled === true
         || body.login_ip_restriction_enabled === 1
         || body.login_ip_restriction_enabled === '1'
-      if (enabling) {
-        const ipCount = await c.env.DB.prepare(
-          'SELECT COUNT(*) as n FROM tenant_login_allowed_ips WHERE tenant_id = ?'
-        ).bind(info.tenantId).first<{ n: number }>()
-        if (!ipCount || ipCount.n === 0) {
-          return c.json({
-            success: false,
-            error: 'أضف عنوان IP واحداً على الأقل قبل تفعيل قيود تسجيل الدخول'
-          }, 400)
-        }
-      }
       updates.login_ip_restriction_enabled = enabling ? '1' : '0'
+    }
+
+    if ('login_device_restriction_enabled' in body) {
+      const enabling = body.login_device_restriction_enabled === true
+        || body.login_device_restriction_enabled === 1
+        || body.login_device_restriction_enabled === '1'
+      updates.login_device_restriction_enabled = enabling ? '1' : '0'
     }
 
     const keys = Object.keys(updates)
@@ -6260,13 +6256,14 @@ app.get('/api/my-tenant/login-ips', async (c) => {
       'SELECT id, ip, label, created_at FROM tenant_login_allowed_ips WHERE tenant_id = ? ORDER BY created_at ASC'
     ).bind(info.tenantId).all<{ id: number; ip: string; label: string | null; created_at: string }>()
     const tenantRow = await c.env.DB.prepare(
-      'SELECT login_ip_restriction_enabled FROM tenants WHERE id = ? LIMIT 1'
-    ).bind(info.tenantId).first<{ login_ip_restriction_enabled: number }>()
+      'SELECT login_ip_restriction_enabled, login_device_restriction_enabled FROM tenants WHERE id = ? LIMIT 1'
+    ).bind(info.tenantId).first<{ login_ip_restriction_enabled: number; login_device_restriction_enabled: number }>()
     return c.json({
       success: true,
       your_ip: clientIp(c),
       ips: rows.results ?? [],
       restriction_enabled: !!(tenantRow?.login_ip_restriction_enabled),
+      device_restriction_enabled: !!(tenantRow?.login_device_restriction_enabled),
     })
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
@@ -6331,8 +6328,8 @@ app.get('/api/admin/tenants/:id/login-restriction', async (c) => {
       return c.json({ success: false, error: 'معرّف غير صالح' }, 400)
     }
     const tenant = await c.env.DB.prepare(
-      'SELECT login_ip_restriction_enabled, home_city FROM tenants WHERE id = ? LIMIT 1'
-    ).bind(tenantId).first<{ login_ip_restriction_enabled: number; home_city: string | null }>()
+      'SELECT login_ip_restriction_enabled, login_device_restriction_enabled, home_city FROM tenants WHERE id = ? LIMIT 1'
+    ).bind(tenantId).first<{ login_ip_restriction_enabled: number; login_device_restriction_enabled: number; home_city: string | null }>()
     if (!tenant) return c.json({ success: false, error: 'الشركة غير موجودة' }, 404)
     const ips = await c.env.DB.prepare(
       'SELECT id, ip, label, created_at FROM tenant_login_allowed_ips WHERE tenant_id = ? ORDER BY created_at ASC'
@@ -6347,6 +6344,7 @@ app.get('/api/admin/tenants/:id/login-restriction', async (c) => {
     return c.json({
       success: true,
       login_ip_restriction_enabled: tenant.login_ip_restriction_enabled,
+      login_device_restriction_enabled: tenant.login_device_restriction_enabled,
       home_city: tenant.home_city,
       tenant_ips: ips.results ?? [],
       geo_log: geoLog.results ?? [],
@@ -6376,18 +6374,13 @@ app.patch('/api/admin/tenants/:id/login-restriction', async (c) => {
       const enabling = body.login_ip_restriction_enabled === true
         || body.login_ip_restriction_enabled === 1
         || body.login_ip_restriction_enabled === '1'
-      if (enabling) {
-        const ipCount = await c.env.DB.prepare(
-          'SELECT COUNT(*) as n FROM tenant_login_allowed_ips WHERE tenant_id = ?'
-        ).bind(tenantId).first<{ n: number }>()
-        if (!ipCount || ipCount.n === 0) {
-          return c.json({
-            success: false,
-            error: 'أضف عنوان IP واحداً على الأقل قبل تفعيل قيود تسجيل الدخول'
-          }, 400)
-        }
-      }
       updates.login_ip_restriction_enabled = enabling ? 1 : 0
+    }
+    if ('login_device_restriction_enabled' in body) {
+      const enabling = body.login_device_restriction_enabled === true
+        || body.login_device_restriction_enabled === 1
+        || body.login_device_restriction_enabled === '1'
+      updates.login_device_restriction_enabled = enabling ? 1 : 0
     }
     if ('home_city' in body) {
       const city = body.home_city == null ? null : String(body.home_city).trim() || null

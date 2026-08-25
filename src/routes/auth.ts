@@ -45,7 +45,8 @@ authRoutes.post('/api/auth/login', async (c) => {
              r.role_name, r.description as role_description,
              s.company_name as subscription_company_name,
              t.id as actual_tenant_id, t.company_name as tenant_name, t.slug as tenant_slug,
-             t.login_ip_restriction_enabled, t.home_city, t.contact_email
+             t.login_ip_restriction_enabled, t.login_device_restriction_enabled,
+             t.home_city, t.contact_email
       FROM users u
       LEFT JOIN roles r ON u.role_id = r.id
       LEFT JOIN subscriptions s ON u.subscription_id = s.id
@@ -65,10 +66,13 @@ authRoutes.post('/api/auth/login', async (c) => {
     const tenantId = user.tenant_id as number | null
     const userId = user.id as number
     const ipRestricted = user.login_ip_restriction_enabled === 1
+    const deviceRestricted = user.login_device_restriction_enabled === 1
     const homeCity = user.home_city as string | null
     const contactEmail = user.contact_email as string | null
 
-    if (normalizedRole !== 1 && tenantId && ipRestricted) {
+    let autoRegisteredDeviceToken: string | null = null
+
+    if (normalizedRole !== 1 && tenantId && (ipRestricted || deviceRestricted)) {
       const ip = clientIp(c)
       if (!ip) {
         return c.json({ success: false, error: 'لا يمكن تحديد عنوان IP' }, 403)
@@ -88,55 +92,89 @@ authRoutes.post('/api/auth/login', async (c) => {
         `).bind(userId, tenantId, ip, (c.req.raw as any).cf?.country ?? null, city, otpVerified).run()
       }
 
-      // --- DEVICE CHECK (first) ---
-      const deviceToken = parseCookie(c.req.header('Cookie') ?? null, 'deviceToken')
-      let deviceKnown = false
-      if (deviceToken) {
-        const row = await c.env.DB.prepare(
-          'SELECT 1 FROM user_login_devices WHERE user_id = ? AND token = ?'
-        ).bind(userId, deviceToken).first()
-        deviceKnown = !!row
-      }
-
-      if (!deviceKnown) {
-        if (contactEmail && apiKey) {
-          const code = Math.floor(100000 + Math.random() * 900000).toString()
-          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          await c.env.DB.prepare(`
-            INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
-            VALUES (?, ?, ?, 'device', ?)
-          `).bind(userId, code, ip, expiresAt).run()
-          await maybeLogGeo(0)
-          const sent = await sendDeviceOtpEmail({
-            apiKey, from, to: contactEmail, code, username: String(user.username),
-          })
-          if (!sent.ok) console.error('Device OTP email error:', sent.error)
-          return c.json({ success: false, status: 'device_otp_required' })
+      // --- DEVICE CHECK (only when login_device_restriction_enabled = 1) ---
+      if (deviceRestricted) {
+        const deviceToken = parseCookie(c.req.header('Cookie') ?? null, 'deviceToken')
+        let deviceKnown = false
+        if (deviceToken) {
+          const row = await c.env.DB.prepare(
+            'SELECT 1 FROM user_login_devices WHERE user_id = ? AND token = ?'
+          ).bind(userId, deviceToken).first()
+          deviceKnown = !!row
         }
-        // No contact_email — treat device as trusted, fall through to IP check
-      }
 
-      // --- IP CHECK (only when device is known or contact_email missing) ---
-      const allowed = await isIpAllowed(ip, tenantId, userId, c.env.DB)
-      if (!allowed) {
-        const userEmail = String(user.email ?? '').trim()
-        if (userEmail && apiKey) {
-          const code = Math.floor(100000 + Math.random() * 900000).toString()
-          const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-          await c.env.DB.prepare(`
-            INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
-            VALUES (?, ?, ?, 'ip', ?)
-          `).bind(userId, code, ip, expiresAt).run()
-          await maybeLogGeo(0)
-          const sent = await sendLoginOtpEmail({ apiKey, from, to: userEmail, code })
-          if (!sent.ok) console.error('IP OTP email error:', sent.error)
-          return c.json({ success: false, status: 'ip_otp_required' })
+        if (!deviceKnown) {
+          // Check if this user has any registered devices at all
+          const deviceCount = await c.env.DB.prepare(
+            'SELECT COUNT(*) as cnt FROM user_login_devices WHERE user_id = ?'
+          ).bind(userId).first<{ cnt: number }>()
+          const hasDevices = (deviceCount?.cnt ?? 0) > 0
+
+          if (!hasDevices) {
+            // First-ever login for this user — auto-register this device, no OTP needed
+            autoRegisteredDeviceToken = crypto.randomUUID()
+            await c.env.DB.prepare('INSERT INTO user_login_devices (user_id, token) VALUES (?, ?)')
+              .bind(userId, autoRegisteredDeviceToken).run()
+          } else if (contactEmail && apiKey) {
+            // User has known devices but this one isn't recognized — require OTP
+            const code = Math.floor(100000 + Math.random() * 900000).toString()
+            const inserted = await c.env.DB.prepare(`
+              INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
+              VALUES (?, ?, ?, 'device', datetime('now', '+10 minutes'))
+              RETURNING id
+            `).bind(userId, code, ip).first<{ id: number }>()
+            await maybeLogGeo(0)
+            const sent = await sendDeviceOtpEmail({
+              apiKey, from, to: contactEmail, code, username: String(user.username),
+            })
+            if (!sent.ok) {
+              console.error('Device OTP email error:', sent.error)
+              if (inserted?.id) {
+                await c.env.DB.prepare('DELETE FROM tenant_login_otps WHERE id = ?').bind(inserted.id).run()
+              }
+              return c.json({
+                success: false,
+                error: 'تعذر إرسال رمز التحقق إلى بريد الشركة. تواصل مع المسؤول.',
+              }, 502)
+            }
+            return c.json({ success: false, status: 'device_otp_required' })
+          }
+          // No contact_email (and has devices) — treat as trusted, fall through to IP check
         }
-        // No user email — fail closed
-        return c.json({ success: false, error: 'غير مسموح بتسجيل الدخول من هذا الموقع' }, 403)
       }
 
-      // Both checks passed — log geo if out-of-city
+      // --- IP CHECK (only when login_ip_restriction_enabled = 1) ---
+      if (ipRestricted) {
+        const allowed = await isIpAllowed(ip, tenantId, userId, c.env.DB)
+        if (!allowed) {
+          const userEmail = String(user.email ?? '').trim()
+          if (userEmail && apiKey) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString()
+            const inserted = await c.env.DB.prepare(`
+              INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
+              VALUES (?, ?, ?, 'ip', datetime('now', '+10 minutes'))
+              RETURNING id
+            `).bind(userId, code, ip).first<{ id: number }>()
+            await maybeLogGeo(0)
+            const sent = await sendLoginOtpEmail({ apiKey, from, to: userEmail, code })
+            if (!sent.ok) {
+              console.error('IP OTP email error:', sent.error)
+              if (inserted?.id) {
+                await c.env.DB.prepare('DELETE FROM tenant_login_otps WHERE id = ?').bind(inserted.id).run()
+              }
+              return c.json({
+                success: false,
+                error: 'تعذر إرسال رمز التحقق إلى بريدك الإلكتروني. تواصل مع المسؤول.',
+              }, 502)
+            }
+            return c.json({ success: false, status: 'ip_otp_required' })
+          }
+          // No user email — fail closed
+          return c.json({ success: false, error: 'غير مسموح بتسجيل الدخول من هذا الموقع' }, 403)
+        }
+      }
+
+      // All enabled checks passed — log geo if out-of-city
       await maybeLogGeo(1)
     }
 
@@ -204,6 +242,13 @@ authRoutes.post('/api/auth/login', async (c) => {
       'Set-Cookie',
       `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     )
+    if (autoRegisteredDeviceToken) {
+      const deviceMaxAge = 365 * 24 * 60 * 60
+      response.headers.append(
+        'Set-Cookie',
+        `deviceToken=${autoRegisteredDeviceToken}; Path=/; Max-Age=${deviceMaxAge}; SameSite=Lax; Secure; HttpOnly`
+      )
+    }
     return response
   } catch (error: any) {
     const errorDump = {
@@ -303,10 +348,11 @@ authRoutes.post('/api/auth/verify-otp', async (c) => {
       `).bind(userId, ip).run()
     }
 
-    // Extra step for device OTP: register the device
+    // Extra step for device OTP: replace all previous device records with the new one (1 active device per user)
     let newDeviceToken: string | null = null
     if (otp_type === 'device') {
       newDeviceToken = crypto.randomUUID()
+      await c.env.DB.prepare('DELETE FROM user_login_devices WHERE user_id = ?').bind(userId).run()
       await c.env.DB.prepare('INSERT INTO user_login_devices (user_id, token) VALUES (?, ?)')
         .bind(userId, newDeviceToken).run()
     }

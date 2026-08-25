@@ -59,7 +59,6 @@ export const actionsDropdownCSS = `
     left: 0;
     z-index: 10050;
     margin: 0;
-    /* Top padding includes MENU_GAP_PX so the panel meets the trigger with no hit-test hole */
     padding: calc(0.25rem + ${MENU_GAP_PX}px) 0 0.25rem 0;
     width: ${MENU_WIDTH_PX}px;
     max-width: calc(100vw - 16px);
@@ -67,7 +66,8 @@ export const actionsDropdownCSS = `
     border: 1px solid rgba(229, 231, 235, 1);
     border-radius: 0.5rem;
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
   .actions-dropdown-menu[hidden] { display: none !important; }
   .actions-dropdown-btn { cursor: pointer; }
@@ -177,23 +177,29 @@ export const actionsDropdownScript = `
     function place(btn, menu) {
       var br = btn.getBoundingClientRect();
       var w = MENU_WIDTH;
-      // offsetHeight is 0 while hidden — compute below first, refine if needed
-      // after we unhide.
       var left = Math.max(PAD, Math.min(br.right - w, window.innerWidth - w - PAD));
-      // Top flush with trigger — spacing is CSS padding-top (avoids hover gaps).
-      var top = br.bottom;
-      menu.style.left = Math.round(left) + 'px';
-      menu.style.top = Math.round(top) + 'px';
-    }
+      var spaceBelow = window.innerHeight - br.bottom - PAD;
+      var spaceAbove = br.top - PAD - GAP;
 
-    function refineAfterOpen(btn, menu) {
-      var br = btn.getBoundingClientRect();
-      var h = menu.offsetHeight;
-      if (!h) return;
-      var topBelow = br.bottom;
-      // Flip above if the menu would overflow the viewport.
-      if (topBelow + h > window.innerHeight - PAD && br.top - h - GAP > PAD) {
-        menu.style.top = Math.round(br.top - h - GAP) + 'px';
+      menu.style.left = Math.round(left) + 'px';
+      menu.style.overflowY = 'auto';
+
+      if (spaceBelow >= spaceAbove) {
+        // Open downward — gap lives in padding-top.
+        menu.style.top = Math.round(br.bottom) + 'px';
+        menu.style.bottom = '';
+        menu.style.maxHeight = Math.round(Math.max(80, spaceBelow)) + 'px';
+        menu.style.paddingTop = 'calc(0.25rem + ' + GAP + 'px)';
+        menu.style.paddingBottom = '0.25rem';
+      } else {
+        // Open upward — anchor menu bottom to trigger top, gap in padding-bottom.
+        // Must use 'auto' not '' — clearing the inline style falls back to the CSS top:0,
+        // which combined with bottom:X stretches the element between both anchors (whitespace).
+        menu.style.top = 'auto';
+        menu.style.bottom = Math.round(window.innerHeight - br.top + GAP) + 'px';
+        menu.style.maxHeight = Math.round(Math.max(80, spaceAbove)) + 'px';
+        menu.style.paddingTop = '0.25rem';
+        menu.style.paddingBottom = 'calc(0.25rem + ' + GAP + 'px)';
       }
     }
 
@@ -207,6 +213,11 @@ export const actionsDropdownScript = `
       m.setAttribute('hidden', '');
       m.style.left = '';
       m.style.top = '';
+      m.style.bottom = '';
+      m.style.maxHeight = '';
+      m.style.overflowY = '';
+      m.style.paddingTop = '';
+      m.style.paddingBottom = '';
       restoreMenuFromBody(m);
       restoreTriggerButtons();
     }
@@ -224,8 +235,6 @@ export const actionsDropdownScript = `
       openBtn = btn;
       hideOtherTriggers(btn);
       document.body.classList.add('actions-dropdown-open');
-      // Now we can measure height and flip above if needed.
-      refineAfterOpen(btn, menu);
       var br0 = btn.getBoundingClientRect();
       lastRepositionKey = [Math.round(br0.left), Math.round(br0.top), Math.round(br0.right), Math.round(br0.bottom)].join(',');
     }
@@ -272,7 +281,6 @@ export const actionsDropdownScript = `
         if (key === lastRepositionKey) return;
         lastRepositionKey = key;
         place(openBtn, openMenu);
-        refineAfterOpen(openBtn, openMenu);
       });
     }
     window.addEventListener('resize', reposition);
