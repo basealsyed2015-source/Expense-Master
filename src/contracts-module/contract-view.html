@@ -731,6 +731,56 @@
       }
     }
 
+    /* ===== NO-IMAGE MODE (print on physical letterhead sheets) ===== */
+    /* Hide images but keep header/footer bands so their space is preserved */
+    body.no-images-mode .a4-letterhead-header img,
+    body.no-images-mode .a4-letterhead-footer img {
+      visibility: hidden !important;
+    }
+    body.no-images-mode .a4-sheet-bg-watermark,
+    body.no-images-mode .draft-watermark,
+    body.no-images-mode .tpl-stamp-img {
+      display: none !important;
+    }
+    .no-images-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-muted);
+      user-select: none;
+      padding: 6px 10px;
+      border: 1px solid #dde1e9;
+      border-radius: 6px;
+      background: #f8f9fb;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .no-images-label:hover { border-color: var(--primary); }
+    .no-images-label input[type="checkbox"] {
+      accent-color: var(--primary);
+      width: 15px; height: 15px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    body.no-images-mode .no-images-label {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    @media print {
+      body.no-images-mode .a4-letterhead-header img,
+      body.no-images-mode .a4-letterhead-footer img {
+        visibility: hidden !important;
+      }
+      body.no-images-mode .a4-sheet-bg-watermark,
+      body.no-images-mode .draft-watermark,
+      body.no-images-mode .tpl-stamp-img {
+        display: none !important;
+      }
+    }
+
     /* ===== Unapproved draft — document-relative diagonal ===== */
     .contract-doc-body,
     .a4-sheet-inner {
@@ -822,6 +872,10 @@
         <button class="btn btn-primary" onclick="printPage()">
           <i class="fas fa-print"></i> طباعة / PDF
         </button>
+        <label class="no-images-label no-print" id="noImagesLabel" title="طباعة بدون صور — للطباعة على نماذج جاهزة تحتوي على الترويسة والتذييل">
+          <input type="checkbox" id="noImagesToggle" onchange="toggleNoImages(this.checked)" />
+          <i class="fas fa-image"></i> بدون صور
+        </label>
         <button class="btn btn-outline" onclick="editContract()">
           <i class="fas fa-edit"></i> تعديل العقد
         </button>
@@ -1951,7 +2005,8 @@
         if (!year || !month || !day) return '';
         const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
         if (Number.isNaN(gregorianDate.getTime())) return '';
-        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+        // Umm al-Qura (official Saudi calendar). Do not use `islamic` — it is often 1 day off.
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
@@ -2140,6 +2195,10 @@
         delete el.dataset.printOverflowXPrev;
       });
       document.documentElement.classList.remove('printing-mixed-a4');
+    }
+
+    function toggleNoImages(enabled) {
+      document.body.classList.toggle('no-images-mode', enabled);
     }
 
     function printPage() {

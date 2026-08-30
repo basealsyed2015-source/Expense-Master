@@ -637,7 +637,8 @@
         if (!year || !month || !day) return '';
         const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
         if (Number.isNaN(gregorianDate.getTime())) return '';
-        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+        // Umm al-Qura (official Saudi calendar). Do not use `islamic` — it is often 1 day off.
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
@@ -680,7 +681,7 @@
     }
 
     function extractHijriPartsFromDate(dateObject) {
-      const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+      const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'

@@ -1206,7 +1206,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <!--CONTRACTS_FINANCING_REQUESTS_JSON-->
-  <script src="/contracts-module/js/app.js?v=20260809"></script>
+  <script src="/contracts-module/js/app.js?v=20260827"></script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
     let loadedTemplates = [];
@@ -1239,14 +1239,30 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           selectedContractTypeKey = null;
           return;
         }
-        container.innerHTML = loadedTemplates.map(t => \`
-        <div class="template-select-card" id="tcard_\${t.id}" onclick="selectTemplate(\${t.id}, this)"
-          style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
-          <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
-          <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">\${String(t.template_name || '').replace(/</g, '&lt;')}</div>
-          <div style="font-size:12px;color:var(--text-muted);">\${String(t.template_type || '—').replace(/</g, '&lt;')}</div>
-        </div>
-      \`).join('');
+        const ORDERED_TYPES = ['عقد', 'عقد سلفه', 'مخالصة إلغاء طلب', 'مخالصة انهاء طلب'];
+        const byType = {};
+        ORDERED_TYPES.forEach(tp => { byType[tp] = []; });
+        loadedTemplates.forEach(t => {
+          const tp = t.template_type || 'عقد';
+          if (!byType[tp]) byType[tp] = [];
+          byType[tp].push(t);
+        });
+        const buildCard = t => \`
+          <div class="template-select-card" id="tcard_\${t.id}" onclick="selectTemplate(\${t.id}, this)"
+            style="border:2px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;background:#fff;">
+            <div style="font-size:28px;margin-bottom:8px;"><i class="fas fa-file-contract" style="color:var(--secondary);"></i></div>
+            <div style="font-weight:700;font-size:15px;color:var(--primary);margin-bottom:4px;">\${String(t.template_name || '').replace(/</g, '&lt;')}</div>
+            <div style="font-size:12px;color:var(--text-muted);">\${String(t.template_type || '—').replace(/</g, '&lt;')}</div>
+          </div>\`;
+        const allTypes = [...ORDERED_TYPES, ...Object.keys(byType).filter(k => !ORDERED_TYPES.includes(k))];
+        container.innerHTML = allTypes
+          .filter(tp => byType[tp] && byType[tp].length > 0)
+          .map(tp => \`
+            <div style="grid-column:1/-1;margin-top:8px;margin-bottom:4px;">
+              <span style="font-size:13px;font-weight:700;color:var(--primary);border-bottom:2px solid var(--secondary);padding-bottom:4px;">\${tp}</span>
+            </div>
+            \${byType[tp].map(buildCard).join('')}
+          \`).join('');
 
         if (!skipAutoSelect && !selectedContractTypeKey && loadedTemplates.length > 0) {
           const first = loadedTemplates[0];
@@ -1503,7 +1519,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         if (!year || !month || !day) return '';
         const gregorianDate = new Date(year, month - 1, day, 12, 0, 0);
         if (Number.isNaN(gregorianDate.getTime())) return '';
-        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic', {
+        // Umm al-Qura (official Saudi calendar). Do not use \`islamic\` — it is often 1 day off.
+        return gregorianDate.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit'
@@ -1546,7 +1563,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     }
 
     function extractHijriPartsFromDate(dateObject) {
-      const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+      const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit'

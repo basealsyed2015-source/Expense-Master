@@ -80,7 +80,13 @@
       "Bash(node fix_inspect.cjs)",
       "Bash(xargs -I {} sh -c \"echo '=== {} ==='; head -12 {}\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(python -c \"import sys; sys.stdout.buffer.write\\(sys.stdin.buffer.read\\(\\)\\)\")",
+      "Bash(python *)",
+      "Bash(sort -k6,7 -r)",
+      "Bash(xargs ls *)",
+      "Bash(sqlite3 *)",
+      "PowerShell(sqlite3 *)"
     ]
   }
 }

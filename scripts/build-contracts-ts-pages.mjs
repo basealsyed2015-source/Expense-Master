@@ -15,7 +15,7 @@ const outDir = path.join(root, 'src/contracts-module-pages/generated')
 const contractsModuleCss = fs.readFileSync(cssPath, 'utf8')
 
 /** Keep in sync with LEGACY_ASSETS_QUERY in src/contracts-module-pages.ts */
-const ASSETS_VERSION = '20260809'
+const ASSETS_VERSION = '20260827'
 
 function patchHtml(html) {
   let h = html.replace(/\r\n/g, '\n')

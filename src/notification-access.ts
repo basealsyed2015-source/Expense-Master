@@ -1,6 +1,7 @@
 /**
  * Notification targeting and access checks (roles 4/5, financing requests, workflow alerts).
  */
+import { formatHijriDate } from './hijri.ts'
 
 export function parseRoleId(roleId: unknown): number | null {
   if (roleId == null || roleId === '') return null
@@ -369,7 +370,7 @@ export function formatWorkflowActionTimestamp(when: Date = new Date()): {
   })
   let hijriDate = ''
   try {
-    hijriDate = when.toLocaleDateString('ar-SA-u-ca-islamic', {
+    hijriDate = formatHijriDate(when, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

@@ -17073,7 +17073,7 @@ app.get('/admin/customers/add', async (c) => {
                     var g=document.getElementById('nie_gregorian'),hidden=document.getElementById('nie_value'),btnG=document.getElementById('nie_toggle_gregorian'),btnH=document.getElementById('nie_toggle_hijri'),hw=document.getElementById('nie_hijri_wrap'),hd=document.getElementById('nie_hijri_day'),hm=document.getElementById('nie_hijri_month'),hy=document.getElementById('nie_hijri_year');
                     if(!g||!hidden||!btnG||!btnH||!hw||!hd||!hm||!hy)return;
                     var syn=false;
-                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
                     function gStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
                     function fG(hp){var s=new Date(hp.year+577,0,1,12,0,0),e=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(s);c<=e;c.setDate(c.getDate()+1)){var cur=xHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return gStr(c);}return '';}
                     function sDD(gv){if(!gv){hd.value='';hm.value='';hy.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=xHP(d);if(!hp)return;hy.value=String(hp.year);hm.value=String(hp.month);hd.value=String(hp.day);}
@@ -17135,7 +17135,7 @@ app.get('/admin/customers/add', async (c) => {
                     var isSyncing = false;
                     if (!g || !hidden || !type || !btnG || !btnH || !hijriWrap || !hijriDay || !hijriMonth || !hijriYear) return;
                     function extractHP(d) {
-                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
                       var y = Number((parts.find(function(p) { return p.type === 'year'; }) || {}).value);
                       var m = Number((parts.find(function(p) { return p.type === 'month'; }) || {}).value);
                       var dy = Number((parts.find(function(p) { return p.type === 'day'; }) || {}).value);
@@ -17287,7 +17287,7 @@ app.get('/admin/customers/add', async (c) => {
                     var isSyncing = false;
                     if (!g || !hidden || !type || !btnG || !btnH || !hijriWrap || !hijriDay || !hijriMonth || !hijriYear) return;
                     function extractHP(d) {
-                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
+                      var parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d);
                       var y = Number((parts.find(function(p) { return p.type === 'year'; }) || {}).value);
                       var m = Number((parts.find(function(p) { return p.type === 'month'; }) || {}).value);
                       var dy = Number((parts.find(function(p) { return p.type === 'day'; }) || {}).value);
@@ -22144,7 +22144,7 @@ app.get('/admin/customers', async (c) => {
           let alarmCustomerName = '';
 
           function getHijriDate(d) {
-            try { return (d || new Date()).toLocaleDateString('ar-SA-u-ca-islamic', { year:'numeric', month:'2-digit', day:'2-digit' }); }
+            try { return (d || new Date()).toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year:'numeric', month:'2-digit', day:'2-digit' }); }
             catch { return ''; }
           }
           function syncHijriFromGregorian() {
@@ -28247,7 +28247,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     var g=document.getElementById('edit_nie_gregorian'),hidden=document.getElementById('edit_nie_value'),btnG=document.getElementById('edit_nie_toggle_gregorian'),btnH=document.getElementById('edit_nie_toggle_hijri'),hw=document.getElementById('edit_nie_hijri_wrap'),hd=document.getElementById('edit_nie_hijri_day'),hm=document.getElementById('edit_nie_hijri_month'),hy=document.getElementById('edit_nie_hijri_year');
                     if(!g||!hidden||!btnG||!btnH||!hw||!hd||!hm||!hy)return;
                     var syn=false;
-                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                    function xHP(d){var ps=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((ps.find(function(p){return p.type==='year';})||{}).value),m=Number((ps.find(function(p){return p.type==='month';})||{}).value),dy=Number((ps.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
                     function gStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
                     function fG(hp){var s=new Date(hp.year+577,0,1,12,0,0),e=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(s);c<=e;c.setDate(c.getDate()+1)){var cur=xHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return gStr(c);}return '';}
                     function sDD(gv){if(!gv){hd.value='';hm.value='';hy.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=xHP(d);if(!hp)return;hy.value=String(hp.year);hm.value=String(hp.month);hd.value=String(hp.day);}
@@ -28518,7 +28518,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 var g=document.getElementById('edit_date_of_birth_gregorian'),hidden=document.getElementById('edit_date_of_birth'),type=document.getElementById('edit_dob_calendar_type'),btnG=document.getElementById('edit_dob_toggle_gregorian'),btnH=document.getElementById('edit_dob_toggle_hijri'),hijriWrap=document.getElementById('edit_dob_hijri_wrap'),hijriDay=document.getElementById('edit_dob_hijri_day'),hijriMonth=document.getElementById('edit_dob_hijri_month'),hijriYear=document.getElementById('edit_dob_hijri_year');
                 if(g&&hidden&&type&&btnG&&btnH&&hijriWrap&&hijriDay&&hijriMonth&&hijriYear){
                   var isDobSyncing=false;
-                  function editExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                  function editExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
                   function editGregStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
                   function editFindGreg(hp){var start=new Date(hp.year+577,0,1,12,0,0),end=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(start);c<=end;c.setDate(c.getDate()+1)){var cur=editExtractHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return editGregStr(c);}return'';}
                   function editSetDD(gv){if(!gv){hijriDay.value='';hijriMonth.value='';hijriYear.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=editExtractHP(d);if(!hp)return;hijriYear.value=String(hp.year);hijriMonth.value=String(hp.month);hijriDay.value=String(hp.day);}
@@ -28534,7 +28534,7 @@ app.get('/admin/customers/:id/edit', async (c) => {
                 var wsG=document.getElementById('edit_work_start_date_gregorian'),wsHidden=document.getElementById('edit_work_start_date'),wsBtnG=document.getElementById('edit_work_start_toggle_gregorian'),wsBtnH=document.getElementById('edit_work_start_toggle_hijri'),wsHijriWrap=document.getElementById('edit_work_start_hijri_wrap'),wsHijriDay=document.getElementById('edit_work_start_hijri_day'),wsHijriMonth=document.getElementById('edit_work_start_hijri_month'),wsHijriYear=document.getElementById('edit_work_start_hijri_year');
                 if(wsG&&wsHidden&&wsBtnG&&wsBtnH&&wsHijriWrap&&wsHijriDay&&wsHijriMonth&&wsHijriYear){
                   var isWSSyncing=false;
-                  function wsExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
+                  function wsExtractHP(d){var parts=new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);var y=Number((parts.find(function(p){return p.type==='year';})||{}).value),m=Number((parts.find(function(p){return p.type==='month';})||{}).value),dy=Number((parts.find(function(p){return p.type==='day';})||{}).value);if(!Number.isFinite(y)||!Number.isFinite(m)||!Number.isFinite(dy))return null;return{year:y,month:m,day:dy};}
                   function wsGregStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
                   function wsFindGreg(hp){var start=new Date(hp.year+577,0,1,12,0,0),end=new Date(hp.year+582,11,31,12,0,0);for(var c=new Date(start);c<=end;c.setDate(c.getDate()+1)){var cur=wsExtractHP(c);if(cur&&cur.year===hp.year&&cur.month===hp.month&&cur.day===hp.day)return wsGregStr(c);}return'';}
                   function wsSetDD(gv){if(!gv){wsHijriDay.value='';wsHijriMonth.value='';wsHijriYear.value='';return;}var pts=String(gv).split('-').map(Number),d=new Date(pts[0],pts[1]-1,pts[2],12,0,0);if(isNaN(d.getTime()))return;var hp=wsExtractHP(d);if(!hp)return;wsHijriYear.value=String(hp.year);wsHijriMonth.value=String(hp.month);wsHijriDay.value=String(hp.day);}
@@ -47494,7 +47494,7 @@ app.get('/admin/follow-ups', async (c) => {
             if (dp.length < 3 || !dp[0] || !dp[1] || !dp[2]) return '';
             const d = new Date(dp[0], dp[1] - 1, dp[2], 12, 0, 0);
             if (Number.isNaN(d.getTime())) return '';
-            const hijri = d.toLocaleDateString('ar-SA-u-ca-islamic', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const hijri = d.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: '2-digit', day: '2-digit' });
             return hijri + (timePart ? ' ' + timePart : '');
           } catch (_) { return ''; }
         }
@@ -47535,7 +47535,7 @@ app.get('/admin/follow-ups', async (c) => {
         }
 
         function extractHijriPartsFromDate(dateObject) {
-          const parts = new Intl.DateTimeFormat('en-u-ca-islamic', {
+          const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
             year: 'numeric', month: '2-digit', day: '2-digit'
           }).formatToParts(dateObject);
           const year = Number((parts.find((p) => p.type === 'year') || {}).value);

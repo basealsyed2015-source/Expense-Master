@@ -5,7 +5,7 @@
 import contractsModuleCss from '../contracts-module/css/style.css?raw'
 
 /** Bump when contracts-module JS changes to bust browser cache. */
-export const CONTRACTS_ASSETS_VERSION = '20260401'
+export const CONTRACTS_ASSETS_VERSION = '20260827'
 
 export const contractsAppJsSrc = `/contracts-module/js/app.js?v=${CONTRACTS_ASSETS_VERSION}`
 export const contractsDashboardJsSrc = `/contracts-module/js/dashboard.js?v=${CONTRACTS_ASSETS_VERSION}`

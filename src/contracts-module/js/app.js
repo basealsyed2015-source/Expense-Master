@@ -199,11 +199,11 @@ function generateContractNumber() {
   return `CNT-${year}-${rand}`;
 }
 
-// ===== HIJRI DATE =====
+// ===== HIJRI DATE (Umm al-Qura / official Saudi calendar) =====
 function getHijriDate() {
   try {
     const today = new Date();
-    const hijri = today.toLocaleDateString('ar-SA-u-ca-islamic', {
+    const hijri = today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', {
       year: 'numeric', month: '2-digit', day: '2-digit'
     });
     return hijri;
@@ -294,7 +294,7 @@ function setCurrentDate() {
   if (!el) return;
   const now = new Date();
   const greg = now.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const hijri = now.toLocaleDateString('ar-SA-u-ca-islamic', { year: 'numeric', month: 'long', day: 'numeric' });
+  const hijri = now.toLocaleDateString('ar-SA-u-ca-islamic-umalqura', { year: 'numeric', month: 'long', day: 'numeric' });
   el.innerHTML = `<span>${greg}</span>`;
 }
 

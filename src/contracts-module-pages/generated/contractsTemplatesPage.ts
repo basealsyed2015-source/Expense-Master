@@ -932,6 +932,23 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       border-top: 1px solid var(--border);
       display: flex; gap: 8px;
     }
+    .tpl-tabs {
+      display: flex; gap: 4px; flex-wrap: wrap;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .tpl-tab {
+      padding: 8px 18px;
+      border: none; background: none; cursor: pointer;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 14px; font-weight: 500;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: var(--transition);
+    }
+    .tpl-tab:hover { color: var(--primary); }
+    .tpl-tab.active { color: var(--primary); border-bottom-color: var(--secondary); font-weight: 700; }
     .builder-area {
       background: #fff;
       border-radius: var(--radius);
@@ -1036,9 +1053,16 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         <div class="page-header">
           <div class="page-header-title">
             <h2>قوالب العقود</h2>
-            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء عقود جديدة</p>
+            <p>أنشئ وعدّل قوالب العقود لاستخدامها عند إنشاء مستندات جديدة</p>
           </div>
         </div>
+        <div class="tpl-tabs" id="tplTabs">
+          <button class="tpl-tab active" data-type="عقد" onclick="switchTab('عقد', this)">عقد</button>
+          <button class="tpl-tab" data-type="عقد سلفه" onclick="switchTab('عقد سلفه', this)">عقد سلفه</button>
+          <button class="tpl-tab" data-type="مخالصة إلغاء طلب" onclick="switchTab('مخالصة إلغاء طلب', this)">مخالصة إلغاء طلب</button>
+          <button class="tpl-tab" data-type="مخالصة انهاء طلب" onclick="switchTab('مخالصة انهاء طلب', this)">مخالصة انهاء طلب</button>
+        </div>
+
         <div class="templates-grid" id="templatesGrid">
           <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> جاري التحميل...</div>
         </div>
@@ -1067,11 +1091,10 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <div class="form-group">
                 <label class="form-label">نوع القالب</label>
                 <select class="form-control notranslate" id="tpl_type" translate="no" lang="ar">
-                  <option value="عقد وساطة عقارية">عقد وساطة عقارية</option>
-                  <option value="عقد إيجار">عقد إيجار</option>
-                  <option value="عقد بيع">عقد بيع</option>
-                  <option value="عقد مقاولات">عقد مقاولات</option>
-                  <option value="أخرى">أخرى</option>
+                  <option value="عقد">عقد</option>
+                  <option value="عقد سلفه">عقد سلفه</option>
+                  <option value="مخالصة إلغاء طلب">مخالصة إلغاء طلب</option>
+                  <option value="مخالصة انهاء طلب">مخالصة انهاء طلب</option>
                 </select>
               </div>
               <div class="form-group">
@@ -1150,6 +1173,77 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
               <input type="text" class="form-control notranslate" id="tpl_footer" translate="no" lang="ar" placeholder="مثال: والله ولي التوفيق" value="والله ولي التوفيق" />
             </div>
 
+            <!-- Document branding images (header / footer / watermark) -->
+            <div style="margin-top:20px;padding:16px;border:1px solid var(--border);border-radius:10px;background:rgba(26,60,94,0.03);">
+              <div style="font-weight:600;font-size:14px;margin-bottom:14px;color:var(--primary);"><i class="fas fa-image"></i> صور المستند (ترويسة / تذييل / علامة مائية)</div>
+
+              <!-- Header -->
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">صورة الترويسة العلوية</label>
+                <input type="file" class="form-control notranslate" id="tpl_header_img_file" translate="no" accept="image/png,image/jpeg,image/webp" />
+                <input type="hidden" id="tpl_header_img_url" />
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">PNG أو JPEG — حتى 3 ميجابايت</div>
+                <div id="tpl_header_img_preview" style="margin-top:10px;display:none;">
+                  <img id="tpl_header_img_img" alt="" style="max-height:60px;max-width:320px;border-radius:6px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
+                  <div style="margin-top:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-ghost btn-sm" id="tpl_header_img_clear"><i class="fas fa-times"></i> إزالة</button>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <input type="checkbox" id="tpl_header_img_enabled" checked /> تفعيل
+                    </label>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      الشفافية
+                      <input type="range" id="tpl_header_img_opacity" min="0.1" max="1" step="0.05" value="1" style="width:100px;" />
+                      <span id="tpl_header_img_opacity_label" style="min-width:30px;">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Footer -->
+              <div class="form-group" style="margin-bottom:16px;">
+                <label class="form-label">صورة التذييل السفلية</label>
+                <input type="file" class="form-control notranslate" id="tpl_footer_img_file" translate="no" accept="image/png,image/jpeg,image/webp" />
+                <input type="hidden" id="tpl_footer_img_url" />
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">PNG أو JPEG — حتى 3 ميجابايت</div>
+                <div id="tpl_footer_img_preview" style="margin-top:10px;display:none;">
+                  <img id="tpl_footer_img_img" alt="" style="max-height:60px;max-width:320px;border-radius:6px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
+                  <div style="margin-top:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-ghost btn-sm" id="tpl_footer_img_clear"><i class="fas fa-times"></i> إزالة</button>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <input type="checkbox" id="tpl_footer_img_enabled" checked /> تفعيل
+                    </label>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      الشفافية
+                      <input type="range" id="tpl_footer_img_opacity" min="0.1" max="1" step="0.05" value="1" style="width:100px;" />
+                      <span id="tpl_footer_img_opacity_label" style="min-width:30px;">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Watermark -->
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">العلامة المائية (الخلفية)</label>
+                <input type="file" class="form-control notranslate" id="tpl_watermark_file" translate="no" accept="image/png,image/jpeg,image/webp" />
+                <input type="hidden" id="tpl_watermark_url" />
+                <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">PNG أو JPEG — حتى 3 ميجابايت</div>
+                <div id="tpl_watermark_preview" style="margin-top:10px;display:none;">
+                  <img id="tpl_watermark_img" alt="" style="max-height:60px;max-width:180px;border-radius:6px;border:1px solid var(--border);object-fit:contain;background:#fff;" />
+                  <div style="margin-top:6px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="button" class="btn btn-ghost btn-sm" id="tpl_watermark_clear"><i class="fas fa-times"></i> إزالة</button>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      <input type="checkbox" id="tpl_watermark_enabled" checked /> تفعيل
+                    </label>
+                    <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+                      الشفافية
+                      <input type="range" id="tpl_watermark_opacity" min="0.03" max="1" step="0.01" value="0.12" style="width:100px;" />
+                      <span id="tpl_watermark_opacity_label" style="min-width:30px;">12%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="form-group" style="margin-top:16px;">
               <label class="form-label">ختم الطرف الأول <small class="text-muted">(يظهر في معاينة/طباعة العقد بعد اكتماله فقط)</small></label>
               <input type="file" class="form-control notranslate" id="tpl_stamp_file" translate="no" accept="image/png,image/jpeg,image/webp,image/gif" />
@@ -1187,10 +1281,24 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260809"></script>
+  <script src="/contracts-module/js/app.js?v=20260827"></script>
   <script>
     let editingId = null;
     let tplBodyEditorReady = null;
+    let activeTabType = 'عقد';
+    let allTemplates = [];
+
+    function switchTab(type, el) {
+      activeTabType = type;
+      location.hash = encodeURIComponent(type);
+      document.querySelectorAll('.tpl-tab').forEach(t => t.classList.remove('active'));
+      if (el) el.classList.add('active');
+      renderTemplatesGrid();
+    }
+
+    function getActiveTabType() {
+      return activeTabType;
+    }
 
     /** True when body was saved from a rich editor (vs legacy plain text). */
     function isRichHtmlTemplate(body) {
@@ -1462,16 +1570,22 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     async function loadTemplates() {
       const grid = document.getElementById('templatesGrid');
       try {
-        const data = await API.get('templates', { limit: 50 });
-        const templates = data.data || [];
-        if (templates.length === 0) {
-          grid.innerHTML = \`<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب بعد. أضف قالبك الأول!</p></div>\`;
-          return;
-        }
-        grid.innerHTML = templates.map(t => buildTemplateCard(t)).join('');
+        const data = await API.get('templates', { limit: 200 });
+        allTemplates = data.data || [];
+        renderTemplatesGrid();
       } catch (e) {
         grid.innerHTML = \`<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-exclamation-triangle"></i><p>خطأ في تحميل البيانات</p></div>\`;
       }
+    }
+
+    function renderTemplatesGrid() {
+      const grid = document.getElementById('templatesGrid');
+      const filtered = allTemplates.filter(t => (t.template_type || 'عقد') === activeTabType);
+      if (filtered.length === 0) {
+        grid.innerHTML = \`<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-layer-group"></i><p>لا توجد قوالب من هذا النوع بعد. أضف قالبك الأول!</p></div>\`;
+        return;
+      }
+      grid.innerHTML = filtered.map(t => buildTemplateCard(t)).join('');
     }
 
     function buildTemplateCard(t) {
@@ -1567,14 +1681,91 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    // --- Branding images: header / footer / watermark ---
+    const BRANDING_TYPES = {
+      header:    { endpoint: '/api/contracts/template-header-upload',    label: 'الترويسة' },
+      footer:    { endpoint: '/api/contracts/template-footer-upload',    label: 'التذييل' },
+      watermark: { endpoint: '/api/contracts/template-watermark-upload', label: 'العلامة المائية' },
+    };
+
+    function setBrandingPreview(type, url, enabled, opacity) {
+      const prefix = type === 'watermark' ? 'tpl_watermark' : \`tpl_\${type}_img\`;
+      const urlInput  = document.getElementById(prefix + '_url') || document.getElementById('tpl_watermark_url');
+      const prev      = document.getElementById(prefix + '_preview') || document.getElementById('tpl_watermark_preview');
+      const img       = document.getElementById(prefix + '_img') || document.getElementById('tpl_watermark_img');
+      const fileInput = document.getElementById(prefix + '_file') || document.getElementById('tpl_watermark_file');
+      const enabledCb = document.getElementById(prefix + '_enabled') || document.getElementById('tpl_watermark_enabled');
+      const opSlider  = document.getElementById(prefix + '_opacity') || document.getElementById('tpl_watermark_opacity');
+      const opLabel   = document.getElementById(prefix + '_opacity_label') || document.getElementById('tpl_watermark_opacity_label');
+
+      if (urlInput) urlInput.value = url || '';
+      if (url && prev && img) {
+        img.src = url;
+        prev.style.display = 'block';
+        if (enabledCb) enabledCb.checked = enabled !== false;
+        if (opSlider) {
+          const val = opacity != null ? Number(opacity) : (type === 'watermark' ? 0.12 : 1);
+          opSlider.value = val;
+          if (opLabel) opLabel.textContent = Math.round(val * 100) + '%';
+        }
+      } else if (prev) {
+        prev.style.display = 'none';
+        if (img) img.removeAttribute('src');
+        if (fileInput) fileInput.value = '';
+      }
+    }
+
+    function getBrandingValue(type) {
+      const prefix = type === 'watermark' ? 'tpl_watermark' : \`tpl_\${type}_img\`;
+      const url     = (document.getElementById(prefix + '_url') || document.getElementById('tpl_watermark_url'))?.value || '';
+      const enabled = (document.getElementById(prefix + '_enabled') || document.getElementById('tpl_watermark_enabled'))?.checked !== false;
+      const opRaw   = (document.getElementById(prefix + '_opacity') || document.getElementById('tpl_watermark_opacity'))?.value;
+      const opacity = opRaw != null ? Number(opRaw) : (type === 'watermark' ? 0.12 : 1);
+      return { url, enabled, opacity };
+    }
+
+    async function onBrandingFileChange(type, ev) {
+      const prefix    = type === 'watermark' ? 'tpl_watermark' : \`tpl_\${type}_img\`;
+      const input     = ev?.target || document.getElementById(prefix + '_file') || document.getElementById('tpl_watermark_file');
+      const file      = input?.files?.[0];
+      if (!file) return;
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('الحد الأقصى 3 ميجابايت', 'warning');
+        input.value = '';
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('file', file, file.name || \`\${type}.jpg\`);
+        const t = new URLSearchParams(window.location.search).get('tenant_id');
+        if (t && /^\\d+$/.test(t)) fd.append('tenant_id', t);
+        let endpoint = BRANDING_TYPES[type].endpoint;
+        if (t && /^\\d+$/.test(t)) endpoint += '?tenant_id=' + encodeURIComponent(t);
+        const res = await fetch(endpoint, { method: 'POST', body: fd, credentials: 'same-origin' });
+        const j   = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((j && (j.detail || j.error)) || ('HTTP ' + res.status));
+        if (!j.url) throw new Error('لم يُرجع الخادم رابط الصورة');
+        setBrandingPreview(type, j.url, true, type === 'watermark' ? 0.12 : 1);
+        showToast('تم رفع ' + BRANDING_TYPES[type].label, 'success');
+      } catch (e) {
+        console.error(e);
+        showToast('تعذر الرفع: ' + (e.message || e), 'error');
+        input.value = '';
+      }
+    }
+
     function openNewTemplateModal() {
       editingId = null;
       document.getElementById('templateForm').reset();
       document.getElementById('tpl_footer').value = 'والله ولي التوفيق';
       document.getElementById('tpl_court').value = 'الرياض';
       document.getElementById('tpl_render_mode').value = 'structured';
+      document.getElementById('tpl_type').value = getActiveTabType();
       setDocFontSizeSelect('12px');
       setTemplateStampPreview('');
+      setBrandingPreview('header', '', true, 1);
+      setBrandingPreview('footer', '', true, 1);
+      setBrandingPreview('watermark', '', true, 0.12);
       showTemplateEditor(false);
       setTplBodyContent(getDefaultBody()).then(() => applyDocFontSizeToEditor('12px'));
     }
@@ -1622,6 +1813,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         document.getElementById('tpl_header').value = t.header_content || '';
         document.getElementById('tpl_footer').value = t.footer_content || 'والله ولي التوفيق';
         setTemplateStampPreview(t.stamp_url || '');
+        setBrandingPreview('header',    t.document_header_url    || '', t.document_header_enabled    !== 0, t.document_header_opacity    ?? 1);
+        setBrandingPreview('footer',    t.document_footer_url    || '', t.document_footer_enabled    !== 0, t.document_footer_opacity    ?? 1);
+        setBrandingPreview('watermark', t.document_watermark_url || '', t.document_watermark_enabled !== 0, t.document_watermark_opacity ?? 0.12);
         const docSize = extractDocFontSize(t.body_content || '');
         setDocFontSizeSelect(docSize);
         showTemplateEditor(true);
@@ -1675,6 +1869,22 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           body_content: body,
           footer_content: document.getElementById('tpl_footer').value,
           stamp_url: document.getElementById('tpl_stamp_url')?.value || '',
+          ...(() => {
+            const h = getBrandingValue('header');
+            const f = getBrandingValue('footer');
+            const w = getBrandingValue('watermark');
+            return {
+              document_header_url:      h.url,
+              document_header_enabled:  h.enabled,
+              document_header_opacity:  h.opacity,
+              document_footer_url:      f.url,
+              document_footer_enabled:  f.enabled,
+              document_footer_opacity:  f.opacity,
+              document_watermark_url:   w.url,
+              document_watermark_enabled: w.enabled,
+              document_watermark_opacity: w.opacity,
+            };
+          })(),
           variables_list: uniqueVars
         };
 
@@ -1723,7 +1933,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       property_location: 'الرياض - حي النرجس'
     };
 
-    function showBodyPreview(rawBody) {
+    function showBodyPreview(rawBody, branding) {
       const raw = String(rawBody || '');
       const filled = raw.replace(/\\{\\{\\s*(\\w+)\\s*\\}\\}/g, (m, key) =>
         Object.prototype.hasOwnProperty.call(PREVIEW_SAMPLE, key) ? String(PREVIEW_SAMPLE[key]) : m
@@ -1734,9 +1944,36 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         ? sanitizeTemplateHtml(filled)
         : escHtml(filled).replace(/\\r\\n|\\r|\\n/g, '<br>');
 
+      const hdr = branding?.header;
+      const ftr = branding?.footer;
+      const wm  = branding?.watermark;
+
+      const headerHtml = (hdr?.url && hdr?.enabled !== false)
+        ? \`<div style="position:relative;z-index:1;line-height:0;">
+             <img src="\${escHtml(hdr.url)}" alt="" style="width:100%;height:auto;display:block;opacity:\${Number(hdr.opacity ?? 1)};" />
+           </div>\`
+        : '';
+      const footerHtml = (ftr?.url && ftr?.enabled !== false)
+        ? \`<div style="position:relative;z-index:1;line-height:0;">
+             <img src="\${escHtml(ftr.url)}" alt="" style="width:100%;height:auto;display:block;opacity:\${Number(ftr.opacity ?? 1)};" />
+           </div>\`
+        : '';
+      const watermarkHtml = (wm?.url && wm?.enabled !== false)
+        ? \`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;overflow:hidden;z-index:0;">
+             <img src="\${escHtml(wm.url)}" alt="" style="max-width:62%;max-height:62%;width:auto;height:auto;opacity:\${Number(wm.opacity ?? 0.12)};" />
+           </div>\`
+        : '';
+
       document.getElementById('previewContent').innerHTML = \`
-        <div style="padding:20px;background:#f9f9f9;border-radius:8px;font-family:'Tajawal',sans-serif;font-size:\${docFont};line-height:1.6;\${rich ? '' : 'white-space:pre-wrap;'}">\${previewHtml}</div>
-        <div style="margin-top:16px;padding:14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
+        <div style="background:#e8eaed;padding:16px;border-radius:8px;overflow-y:auto;max-height:72vh;">
+          <div style="position:relative;width:100%;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.15);overflow:hidden;font-family:'Tajawal',sans-serif;direction:rtl;">
+            \${watermarkHtml}
+            \${headerHtml}
+            <div style="position:relative;z-index:1;padding:20px 28px;font-size:\${docFont};line-height:1.6;\${rich ? '' : 'white-space:pre-wrap;'}">\${previewHtml}</div>
+            \${footerHtml}
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:12px 14px;background:rgba(200,168,75,0.08);border-radius:8px;font-size:12px;color:var(--text-muted);">
           <i class="fas fa-info-circle text-secondary"></i> المعاينة تستخدم بيانات تجريبية
         </div>
       \`;
@@ -1746,7 +1983,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     async function previewTemplate(id) {
       try {
         const t = await API.getOne('templates', id);
-        showBodyPreview(t.body_content || '');
+        showBodyPreview(t.body_content || '', {
+          header:    { url: t.document_header_url,    enabled: t.document_header_enabled    !== 0, opacity: t.document_header_opacity    ?? 1 },
+          footer:    { url: t.document_footer_url,    enabled: t.document_footer_enabled    !== 0, opacity: t.document_footer_opacity    ?? 1 },
+          watermark: { url: t.document_watermark_url, enabled: t.document_watermark_enabled !== 0, opacity: t.document_watermark_opacity ?? 0.12 },
+        });
       } catch (e) {
         showToast('خطأ في المعاينة', 'error');
       }
@@ -1756,16 +1997,38 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     async function previewEditorTemplate() {
       try {
         await ensureTplBodyEditor();
-        showBodyPreview(getTplBodyContent());
+        showBodyPreview(getTplBodyContent(), {
+          header:    getBrandingValue('header'),
+          footer:    getBrandingValue('footer'),
+          watermark: getBrandingValue('watermark'),
+        });
       } catch (e) {
         showToast('خطأ في المعاينة', 'error');
       }
     }
 
+    // Restore active tab from URL hash on load
     document.addEventListener('DOMContentLoaded', () => {
+      const hash = location.hash.replace('#', '');
+      const validTypes = ['عقد', 'عقد سلفه', 'مخالصة إلغاء طلب', 'مخالصة انهاء طلب'];
+      if (hash && validTypes.includes(decodeURIComponent(hash))) {
+        const decoded = decodeURIComponent(hash);
+        activeTabType = decoded;
+        document.querySelectorAll('.tpl-tab').forEach(t => {
+          t.classList.toggle('active', t.getAttribute('data-type') === decoded);
+        });
+      }
       loadTemplates();
       document.getElementById('tpl_stamp_file')?.addEventListener('change', onTemplateStampFileChange);
       document.getElementById('tpl_stamp_clear')?.addEventListener('click', () => setTemplateStampPreview(''));
+      for (const type of ['header', 'footer', 'watermark']) {
+        const prefix = type === 'watermark' ? 'tpl_watermark' : \`tpl_\${type}_img\`;
+        document.getElementById(prefix + '_file')?.addEventListener('change', ev => onBrandingFileChange(type, ev));
+        document.getElementById(prefix + '_clear')?.addEventListener('click', () => setBrandingPreview(type, '', true, type === 'watermark' ? 0.12 : 1));
+        const slider = document.getElementById(prefix + '_opacity');
+        const label  = document.getElementById(prefix + '_opacity_label');
+        if (slider && label) slider.addEventListener('input', () => { label.textContent = Math.round(Number(slider.value) * 100) + '%'; });
+      }
     });
   </script>
 </body>

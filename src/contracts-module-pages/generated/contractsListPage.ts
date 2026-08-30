@@ -948,11 +948,11 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           <option value="ملغي">ملغي</option>
         </select>
         <select class="form-control" id="typeFilter" style="width:auto;" onchange="filterContracts()">
-          <option value="">جميع الأنواع</option>
-          <option value="عقد وساطة عقارية">وساطة عقارية</option>
-          <option value="عقد إيجار">إيجار</option>
-          <option value="عقد بيع">بيع</option>
-          <option value="عقد مقاولات">مقاولات</option>
+          <option value="">جميع أنواع المستندات</option>
+          <option value="عقد">عقد</option>
+          <option value="عقد سلفه">عقد سلفه</option>
+          <option value="مخالصة إلغاء طلب">مخالصة إلغاء طلب</option>
+          <option value="مخالصة انهاء طلب">مخالصة انهاء طلب</option>
         </select>
         <button class="btn btn-ghost btn-sm" onclick="resetFilters()">
           <i class="fas fa-undo"></i> إعادة ضبط
@@ -970,7 +970,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
             <thead>
               <tr>
                 <th>رقم العقد</th>
-                <th>نوع العقد</th>
+                <th>نوع المستند</th>
                 <th>العميل</th>
                 <th>الجوال</th>
                 <th>الموظف</th>
@@ -1016,7 +1016,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260809"></script>
+  <script src="/contracts-module/js/app.js?v=20260827"></script>
   <script>
     let allContracts = [];
     let filteredContracts = [];
@@ -1067,7 +1067,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           (c.employee_name || '').toLowerCase().includes(q) ||
           (c.bank_agent_name || '').toLowerCase().includes(q);
         const matchSt = !st || c.status === st;
-        const matchTp = !tp || c.template_name?.includes(tp);
+        const matchTp = !tp || (c.document_type || 'عقد') === tp;
         return matchQ && matchSt && matchTp;
       });
       currentPage = 1;

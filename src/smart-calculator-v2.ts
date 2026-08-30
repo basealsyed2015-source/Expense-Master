@@ -362,12 +362,13 @@ export const smartCalculatorV2 = `<!DOCTYPE html>
         let isBirthdateSyncing = false;
         let hijriBirthdatePicker = null;
 
-        const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic', {
+        // Umm al-Qura (official Saudi calendar). ICU `islamic` is often 1 day off.
+        const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit'
         });
-        const hijriPartsFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', {
+        const hijriPartsFormatter = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit'
