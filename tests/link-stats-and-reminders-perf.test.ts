@@ -59,4 +59,19 @@ describe('customer reminders batching', () => {
     assert.match(slice, /db\.batch\(/)
     assert.doesNotMatch(slice, /ALTER TABLE customer_alarms/)
   })
+
+  it('skips completed and archived customers in both assignment paths', () => {
+    const src = readFileSync(join(process.cwd(), 'src', 'index.tsx'), 'utf8')
+    const idx = src.indexOf('async function processCustomerReminders')
+    assert.ok(idx > 0)
+    const slice = src.slice(idx, idx + 12_000)
+    const unionIdx = slice.indexOf('\n    UNION ALL\n')
+    assert.ok(unionIdx > 0)
+    const role4Path = slice.slice(0, unionIdx)
+    const bankAgentPath = slice.slice(unionIdx)
+    for (const path of [role4Path, bankAgentPath]) {
+      assert.match(path, /COALESCE\(c\.is_completed, 0\) = 0/)
+      assert.match(path, /COALESCE\(c\.is_archived, 0\) = 0/)
+    }
+  })
 })

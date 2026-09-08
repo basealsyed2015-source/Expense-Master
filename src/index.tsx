@@ -3210,6 +3210,25 @@ function isFollowupAssignableRole(roleId: unknown): boolean {
   return r === 4 || r === 5 || r === 6
 }
 
+/**
+ * Round-robin pick that walks the full base pool but only assigns to the eligible subset.
+ * Keeping the cursor on the full pool (not the filtered subset) means links with different
+ * exclusion lists stay in a single linear sequence within the same branch or tenant.
+ */
+function pickNextInPool(
+  fullPool: number[],
+  eligibleSet: Set<number>,
+  lastId: number | null,
+): number | null {
+  if (!fullPool.length || !eligibleSet.size) return null
+  const lastIdx = lastId != null ? fullPool.indexOf(lastId) : -1
+  for (let i = 1; i <= fullPool.length; i++) {
+    const candidate = fullPool[(lastIdx + i) % fullPool.length]
+    if (eligibleSet.has(candidate)) return candidate
+  }
+  return null
+}
+
 async function listFollowupAssignableStaff(
   db: D1Database,
   tenantId: number
@@ -37307,8 +37326,6 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     let affiliateLinkId: number | null = null
     let affiliateLinkAssignmentMode: string = 'auto'
     let affiliateLinkAssignmentBranchId: number | null = null
-    // Per-link contact-form cursor (independent from wa_last_auto_assigned_user_id and global state).
-    let affiliateLinkCfLastAutoAssigned: number | null = null
     const companyLinkAssignmentMode = tenant.contact_assignment_mode ?? 'auto'
     const companyLinkAssignmentBranchId = tenant.contact_assignment_branch_id ?? null
     if (affiliatePathRaw) {
@@ -37316,13 +37333,13 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
       }
       const affRow = await c.env.DB.prepare(`
-        SELECT id, path_segment, label, assignment_mode, assignment_branch_id, cf_last_auto_assigned_user_id
+        SELECT id, path_segment, label, assignment_mode, assignment_branch_id
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
       `)
         .bind(tenant.id, affiliatePathRaw)
-        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null; assignment_branch_id: number | null; cf_last_auto_assigned_user_id: number | null }>()
+        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null; assignment_branch_id: number | null }>()
       if (!affRow) {
         return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
       }
@@ -37331,7 +37348,6 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       affiliateLinkId = affRow.id
       affiliateLinkAssignmentMode = affRow.assignment_mode ?? 'auto'
       affiliateLinkAssignmentBranchId = affRow.assignment_branch_id ?? null
-      affiliateLinkCfLastAutoAssigned = affRow.cf_last_auto_assigned_user_id ?? null
     } else {
       affiliateLabel = CONTACT_COMPANY_LINK_SOURCE_LABEL
     }
@@ -37387,6 +37403,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
 
     let assignedUserId: number | null = null
     let usedCustomRoster = false
+    let cfCursorBranchId: number | null = null  // branch_id used when branch cursor is active
     try {
       const useCustomRoster =
         (affiliateLinkId != null && affiliateLinkAssignmentMode === 'custom') ||
@@ -37483,8 +37500,9 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         }
       } else {
         // Auto, branch, and exclusion modes all round-robin among roles 4/5/6.
-        // Branch modes first restrict the pool to their configured branch; exclusion
-        // modes then remove the saved roster members from that pool.
+        // The cursor is shared at the branch level (for branch/branch_excl modes) or at the
+        // tenant level (for auto/custom_excl modes), so all links with the same pool stay
+        // in one linear sequence regardless of which link a lead comes from.
         const activeAssignmentMode = affiliateLinkId != null
           ? affiliateLinkAssignmentMode
           : companyLinkAssignmentMode
@@ -37496,16 +37514,21 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           ? (affiliateLinkId != null ? affiliateLinkAssignmentBranchId : companyLinkAssignmentBranchId)
           : null
 
-        let staff = await listFollowupAssignableStaff(c.env.DB, tenant.id)
-        if (useBranchMode && branchIdForFilter != null && staff.length) {
-          const placeholders = staff.map(() => '?').join(',')
+        // fullPool = the complete base pool (branch or tenant). The cursor walks this entire
+        // list so that links with different exclusion lists don't compress each other's rotation.
+        let fullPool = await listFollowupAssignableStaff(c.env.DB, tenant.id)
+        if (useBranchMode && branchIdForFilter != null && fullPool.length) {
+          const placeholders = fullPool.map(() => '?').join(',')
           const { results: branchStaff } = await c.env.DB.prepare(
             `SELECT id FROM users WHERE id IN (${placeholders}) AND assigned_location_id = ?`
-          ).bind(...staff.map((u) => u.id), branchIdForFilter).all<{ id: number }>()
+          ).bind(...fullPool.map((u) => u.id), branchIdForFilter).all<{ id: number }>()
           const allowed = new Set(((branchStaff || []) as { id: number }[]).map((r) => r.id))
-          staff = staff.filter((u) => allowed.has(u.id))
+          fullPool = fullPool.filter((u) => allowed.has(u.id))
         }
-        if (useExclusionRoster && staff.length) {
+
+        // eligibleSet = fullPool minus this link's per-link exclusions.
+        let exclusionIds = new Set<number>()
+        if (useExclusionRoster && fullPool.length) {
           const assignmentTable = affiliateLinkId != null
             ? 'affiliate_link_employee_assignments'
             : 'tenant_contact_employee_assignments'
@@ -37514,17 +37537,25 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
           const { results: excludedRows } = await c.env.DB.prepare(
             `SELECT user_id FROM ${assignmentTable} WHERE ${scopeColumn} = ?`
           ).bind(assignmentScopeId).all<{ user_id: number }>()
-          const excludedUserIds = new Set(((excludedRows || []) as { user_id: number }[]).map((row) => row.user_id))
-          staff = staff.filter((user) => !excludedUserIds.has(user.id))
+          exclusionIds = new Set(((excludedRows || []) as { user_id: number }[]).map((r) => r.user_id))
         }
 
-        if (staff.length) {
-          // Each affiliate link keeps its own contact-form cursor so links with different
-          // branch/exclusion pools don't contaminate each other's rotation.
-          // The company link (no affiliate) continues to use the global tenant state.
+        const fullPoolIds = fullPool.map((u) => u.id)
+        const eligibleSet = new Set(fullPoolIds.filter((id) => !exclusionIds.has(id)))
+
+        if (eligibleSet.size) {
+          // Branch mode uses a per-branch cursor; auto/exclusion modes use the tenant-level cursor.
+          // Both are shared across all links with the same pool for linear distribution.
           let lastId: number | null = null
-          if (affiliateLinkId != null) {
-            lastId = affiliateLinkCfLastAutoAssigned
+          if (useBranchMode && branchIdForFilter != null) {
+            cfCursorBranchId = branchIdForFilter
+            const stateRow = await c.env.DB.prepare(`
+              SELECT last_auto_assigned_user_id
+              FROM tenant_followup_branch_assign_state
+              WHERE tenant_id = ? AND branch_id = ?
+              LIMIT 1
+            `).bind(tenant.id, branchIdForFilter).first<{ last_auto_assigned_user_id: number | null }>()
+            lastId = stateRow?.last_auto_assigned_user_id ?? null
           } else {
             const stateRow = await c.env.DB.prepare(`
               SELECT last_auto_assigned_user_id
@@ -37535,14 +37566,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
             lastId = stateRow?.last_auto_assigned_user_id ?? null
           }
 
-          const staffIds = staff.map((u) => u.id)
-          function pickNextUserId(last: number | null): number {
-            if (last == null) return staffIds[0]
-            const idx = staffIds.indexOf(last)
-            if (idx === -1) return staffIds[0]
-            return staffIds[(idx + 1) % staffIds.length]
-          }
-          assignedUserId = pickNextUserId(lastId)
+          assignedUserId = pickNextInPool(fullPoolIds, eligibleSet, lastId)
         }
       }
     } catch (_assignError) {
@@ -37570,11 +37594,14 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       ).run()
 
       if (assignedUserId != null && !usedCustomRoster) {
-        if (affiliateLinkId != null) {
-          // Advance this link's own contact-form cursor (separate from WhatsApp cursor and CSV cursor).
+        if (cfCursorBranchId != null) {
           await c.env.DB.prepare(`
-            UPDATE tenant_contact_affiliate_links SET cf_last_auto_assigned_user_id = ? WHERE id = ?
-          `).bind(assignedUserId, affiliateLinkId).run()
+            INSERT INTO tenant_followup_branch_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
+              last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+              updated_at = CURRENT_TIMESTAMP
+          `).bind(tenant.id, cfCursorBranchId, assignedUserId).run()
         } else {
           await c.env.DB.prepare(`
             INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
@@ -39344,12 +39371,17 @@ app.post('/api/follow-ups/import-csv', async (c) => {
     }
 
     // Pre-compute round-robin staff + cursor once so we don't refetch per row.
-    let staffIds: number[] = []
-    let lastAssignedUserId: number | null = null
+    // fullPool  = the complete base pool the cursor walks (before per-import exclusions).
+    // eligibleSet = fullPool minus any explicitly excluded employees for this import.
+    // Branch imports share a per-branch cursor; everything else shares the tenant-level cursor.
+    let csvFullPoolIds: number[] = []
+    let csvEligibleSet = new Set<number>()
+    let csvLastAssignedUserId: number | null = null
+    let csvCursorBranchId: number | null = null  // set only for 'branch' mode
     if (autoAssign) {
       let staff = await listFollowupAssignableStaff(c.env.DB, tenant_id)
 
-      // Branch filter — only staff assigned to the given branch (or all-but for excl).
+      // Branch filter — restricts the base pool to the given branch (or all-but-branch for branch_excl).
       if ((assignMode === 'branch' || assignMode === 'branch_excl') && requestedBranchId != null && staff.length) {
         const placeholders = staff.map(() => '?').join(',')
         const { results: branchStaff } = await c.env.DB.prepare(
@@ -39359,37 +39391,44 @@ app.post('/api/follow-ups/import-csv', async (c) => {
         staff = assignMode === 'branch'
           ? staff.filter((u) => branchIds.has(u.id))
           : staff.filter((u) => !branchIds.has(u.id))
+        if (assignMode === 'branch') csvCursorBranchId = requestedBranchId
       }
 
-      // Custom inclusion — only the users the caller listed.
+      // Custom inclusion — the base pool is exactly the caller-listed staff.
       if (assignMode === 'custom' && requestedStaffIds.length && staff.length) {
         const allowed = new Set(requestedStaffIds)
         staff = staff.filter((u) => allowed.has(u.id))
       }
 
-      // Custom exclusion — every eligible user except the listed ones.
-      if (assignMode === 'custom_excl' && requestedStaffIds.length && staff.length) {
-        const excluded = new Set(requestedStaffIds)
-        staff = staff.filter((u) => !excluded.has(u.id))
-      }
+      // staff is now the full base pool. Exclusions only shrink the eligible set,
+      // not the pool the cursor walks — that keeps the rotation linear across imports.
+      csvFullPoolIds = staff.map((u) => u.id)
 
-      staffIds = staff.map((u) => u.id)
-      if (staffIds.length) {
-        const stateRow = await c.env.DB.prepare(`
-          SELECT last_auto_assigned_user_id
-          FROM tenant_followup_auto_assign_state
-          WHERE tenant_id = ?
-          LIMIT 1
-        `).bind(tenant_id).first<{ last_auto_assigned_user_id: number | null }>()
-        lastAssignedUserId = stateRow?.last_auto_assigned_user_id ?? null
+      let exclusionIds = new Set<number>()
+      if (assignMode === 'custom_excl' && requestedStaffIds.length) {
+        exclusionIds = new Set(requestedStaffIds)
       }
-    }
-    function pickNextUserId(last: number | null): number | null {
-      if (!staffIds.length) return null
-      if (last == null) return staffIds[0]
-      const idx = staffIds.indexOf(last)
-      if (idx === -1) return staffIds[0]
-      return staffIds[(idx + 1) % staffIds.length]
+      csvEligibleSet = new Set(csvFullPoolIds.filter((id) => !exclusionIds.has(id)))
+
+      if (csvEligibleSet.size) {
+        if (csvCursorBranchId != null) {
+          const stateRow = await c.env.DB.prepare(`
+            SELECT last_auto_assigned_user_id
+            FROM tenant_followup_branch_assign_state
+            WHERE tenant_id = ? AND branch_id = ?
+            LIMIT 1
+          `).bind(tenant_id, csvCursorBranchId).first<{ last_auto_assigned_user_id: number | null }>()
+          csvLastAssignedUserId = stateRow?.last_auto_assigned_user_id ?? null
+        } else {
+          const stateRow = await c.env.DB.prepare(`
+            SELECT last_auto_assigned_user_id
+            FROM tenant_followup_auto_assign_state
+            WHERE tenant_id = ?
+            LIMIT 1
+          `).bind(tenant_id).first<{ last_auto_assigned_user_id: number | null }>()
+          csvLastAssignedUserId = stateRow?.last_auto_assigned_user_id ?? null
+        }
+      }
     }
 
     let followupsCreated = 0
@@ -39481,9 +39520,9 @@ app.post('/api/follow-ups/import-csv', async (c) => {
             : fiveDaysFromNow
 
         let assignedUserId: number | null = null
-        if (autoAssign && staffIds.length) {
-          assignedUserId = pickNextUserId(lastAssignedUserId)
-          if (assignedUserId != null) lastAssignedUserId = assignedUserId
+        if (autoAssign && csvEligibleSet.size) {
+          assignedUserId = pickNextInPool(csvFullPoolIds, csvEligibleSet, csvLastAssignedUserId)
+          if (assignedUserId != null) csvLastAssignedUserId = assignedUserId
         }
 
         await c.env.DB.prepare(`
@@ -39507,14 +39546,24 @@ app.post('/api/follow-ups/import-csv', async (c) => {
       }
     }
 
-    if (autoAssign && tasksAssigned > 0 && lastAssignedUserId != null) {
-      await c.env.DB.prepare(`
-        INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(tenant_id) DO UPDATE SET
-          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
-          updated_at = CURRENT_TIMESTAMP
-      `).bind(tenant_id, lastAssignedUserId).run()
+    if (autoAssign && tasksAssigned > 0 && csvLastAssignedUserId != null) {
+      if (csvCursorBranchId != null) {
+        await c.env.DB.prepare(`
+          INSERT INTO tenant_followup_branch_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
+            last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(tenant_id, csvCursorBranchId, csvLastAssignedUserId).run()
+      } else {
+        await c.env.DB.prepare(`
+          INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(tenant_id) DO UPDATE SET
+            last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(tenant_id, csvLastAssignedUserId).run()
+      }
     }
 
     return c.json({
@@ -49104,9 +49153,9 @@ app.get('/:slug', async (c) => {
 
 // ─── Customer Rating Reminder System ─────────────────────────────────────────
 // Runs daily via Cloudflare cron (see wrangler.toml [triggers]).
-// For each customer with a rating (excluding عميل موقف = 1), inserts a
-// customer_alarm for the assigned user when the interval since the last
-// auto-reminder has elapsed.
+// For each active customer with a rating (excluding عميل موقف = 1, completed,
+// and archived), inserts a customer_alarm for the assigned user when the
+// interval since the last auto-reminder has elapsed.
 
 const REMINDER_NOTE_PREFIX = '[تذكير-تلقائي-تقييم]'
 
@@ -49152,6 +49201,8 @@ async function processCustomerReminders(db: D1Database): Promise<{ created: numb
     )
     AND cr.rating BETWEEN 2 AND 5
     AND c.tenant_id IS NOT NULL
+    AND COALESCE(c.is_completed, 0) = 0
+    AND COALESCE(c.is_archived, 0) = 0
 
     UNION ALL
 
@@ -49174,6 +49225,8 @@ async function processCustomerReminders(db: D1Database): Promise<{ created: numb
     AND cr.rating BETWEEN 2 AND 5
     AND c.assigned_bank_agent_id IS NOT NULL
     AND c.tenant_id IS NOT NULL
+    AND COALESCE(c.is_completed, 0) = 0
+    AND COALESCE(c.is_archived, 0) = 0
   `).all()
 
   let created = 0
@@ -49323,8 +49376,7 @@ app.post('/api/customer-reminders/trigger', async (c) => {
 })
 
 // Auto-transfer "no response" followup tasks to the next eligible employee after 48 hours.
-// Distribution order mirrors the follow-up CSV import: staff ordered by name, cursor from
-// tenant_followup_auto_assign_state, pure round-robin excluding the current assignee.
+// Uses its own cursor (tenant_no_response_assign_state) separate from the lead assignment queues.
 async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; skipped: number }> {
   const { results: expiredRows } = await db.prepare(`
     SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
@@ -49364,7 +49416,7 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       for (const s of dedupedStaff) userNameCache.set(s.id, s.full_name || '')
 
       const stateRow = await db.prepare(`
-        SELECT last_auto_assigned_user_id FROM tenant_followup_auto_assign_state
+        SELECT last_auto_assigned_user_id FROM tenant_no_response_assign_state
         WHERE tenant_id = ? LIMIT 1
       `).bind(tenantId).first<{ last_auto_assigned_user_id: number | null }>()
       tenantStateCache.set(tenantId, stateRow?.last_auto_assigned_user_id ?? null)
@@ -49436,9 +49488,9 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       console.error('followup_no_response_transfer notification insert failed:', notifErr)
     }
 
-    // Update follow-up round-robin cursor (same state table as CSV import)
+    // Update the no-response cursor (separate from the lead assignment queues).
     await db.prepare(`
-      INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+      INSERT INTO tenant_no_response_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
       VALUES (?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(tenant_id) DO UPDATE SET
         last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
