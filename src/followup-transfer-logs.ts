@@ -29,7 +29,7 @@ export type TransferHistoryEntry = {
 
 /** Employees eligible for auto no-response transfers (bank agents 5/15 excluded). */
 export const NO_RESPONSE_TRANSFER_STAFF_SQL = `
-  SELECT u.id, u.full_name
+  SELECT u.id, u.full_name, u.assigned_location_id
   FROM users u
   WHERE u.is_active = 1
     AND u.role_id IN (4, 6, 14)
@@ -40,19 +40,19 @@ export const NO_RESPONSE_TRANSFER_STAFF_SQL = `
 export async function listNoResponseTransferStaff(
   db: D1Database,
   tenantId: number,
-): Promise<{ id: number; full_name: string }[]> {
+): Promise<{ id: number; full_name: string; assigned_location_id: number | null }[]> {
   const { results } = await db
     .prepare(NO_RESPONSE_TRANSFER_STAFF_SQL)
     .bind(tenantId)
-    .all<{ id: number; full_name: string }>()
+    .all<{ id: number; full_name: string; assigned_location_id: number | null }>()
 
   const seen = new Set<number>()
-  const out: { id: number; full_name: string }[] = []
+  const out: { id: number; full_name: string; assigned_location_id: number | null }[] = []
   for (const s of results || []) {
     const id = Number(s.id)
     if (!Number.isFinite(id) || seen.has(id)) continue
     seen.add(id)
-    out.push({ id, full_name: String(s.full_name || '') })
+    out.push({ id, full_name: String(s.full_name || ''), assigned_location_id: s.assigned_location_id ?? null })
   }
   return out
 }

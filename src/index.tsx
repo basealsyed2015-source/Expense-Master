@@ -49378,11 +49378,14 @@ app.post('/api/customer-reminders/trigger', async (c) => {
 // Auto-transfer "no response" followup tasks to the next eligible employee after 48 hours.
 // Uses its own cursor (tenant_no_response_assign_state) separate from the lead assignment queues.
 async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; skipped: number }> {
+  // Fetch the current assignee's branch so we can scope the transfer pool.
   const { results: expiredRows } = await db.prepare(`
     SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
-           f.customer_name
+           f.customer_name,
+           COALESCE(u.assigned_location_id, 0) AS assignee_branch_id
     FROM company_contact_followup_tasks t
     INNER JOIN company_contact_followups f ON f.id = t.followup_id
+    LEFT JOIN users u ON u.id = t.assigned_user_id
     WHERE COALESCE(f.is_no_response, 0) = 1
       AND f.no_response_at IS NOT NULL
       AND datetime(f.no_response_at) <= datetime('now', '-48 hours')
@@ -49396,40 +49399,54 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     followup_id: number
     task_title: string | null
     customer_name: string | null
+    assignee_branch_id: number  // 0 = no branch (global pool)
   }>()
 
   let transferred = 0
   let skipped = 0
 
-  // Per-tenant cache: staff list, round-robin cursor, and user name lookup
-  const tenantStaffCache = new Map<number, { id: number; full_name: string }[]>()
-  const tenantStateCache = new Map<number, number | null>()
+  // Cache full staff list per tenant (loaded once, then sliced per branch).
+  // Cache branch-filtered lists and cursors per "tenantId:branchId" key.
+  const tenantAllStaffCache = new Map<number, { id: number; full_name: string; assigned_location_id: number | null }[]>()
+  const branchStaffCache = new Map<string, { id: number; full_name: string }[]>()
+  const branchStateCache = new Map<string, number | null>()
   const userNameCache = new Map<number, string>()
 
   for (const row of (expiredRows || [])) {
     const tenantId = row.tenant_id
+    const branchId = Number(row.assignee_branch_id) || 0  // 0 = global
+    const cacheKey = `${tenantId}:${branchId}`
 
-    if (!tenantStaffCache.has(tenantId)) {
-      // Employees only (4/6/14) — bank agents (5/15) are excluded from auto no-response transfers.
-      const dedupedStaff = await listNoResponseTransferStaff(db, tenantId)
-      tenantStaffCache.set(tenantId, dedupedStaff)
-      for (const s of dedupedStaff) userNameCache.set(s.id, s.full_name || '')
+    // Load the full tenant staff list once, then derive per-branch slices.
+    if (!tenantAllStaffCache.has(tenantId)) {
+      const allStaff = await listNoResponseTransferStaff(db, tenantId)
+      tenantAllStaffCache.set(tenantId, allStaff)
+      for (const s of allStaff) userNameCache.set(s.id, s.full_name || '')
+    }
+
+    if (!branchStaffCache.has(cacheKey)) {
+      const allStaff = tenantAllStaffCache.get(tenantId) || []
+      // Scope to the current assignee's branch. branchId = 0 means no branch → use full tenant pool.
+      const scopedStaff = branchId > 0
+        ? allStaff.filter((s) => s.assigned_location_id === branchId)
+        : allStaff
+      branchStaffCache.set(cacheKey, scopedStaff)
 
       const stateRow = await db.prepare(`
         SELECT last_auto_assigned_user_id FROM tenant_no_response_assign_state
-        WHERE tenant_id = ? LIMIT 1
-      `).bind(tenantId).first<{ last_auto_assigned_user_id: number | null }>()
-      tenantStateCache.set(tenantId, stateRow?.last_auto_assigned_user_id ?? null)
+        WHERE tenant_id = ? AND branch_id = ? LIMIT 1
+      `).bind(tenantId, branchId).first<{ last_auto_assigned_user_id: number | null }>()
+      branchStateCache.set(cacheKey, stateRow?.last_auto_assigned_user_id ?? null)
     }
 
-    const staff = tenantStaffCache.get(tenantId) || []
+    const staff = branchStaffCache.get(cacheKey) || []
     if (!staff.length) { skipped++; continue }
 
     const staffIds = staff.map((s) => s.id)
     const nextId = pickNextNoResponseAssignee(
       staffIds,
       row.assigned_user_id,
-      tenantStateCache.get(tenantId) ?? null,
+      branchStateCache.get(cacheKey) ?? null,
     )
     if (nextId == null) { skipped++; continue }
 
@@ -49488,16 +49505,16 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       console.error('followup_no_response_transfer notification insert failed:', notifErr)
     }
 
-    // Update the no-response cursor (separate from the lead assignment queues).
+    // Advance the per-branch no-response cursor.
     await db.prepare(`
-      INSERT INTO tenant_no_response_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(tenant_id) DO UPDATE SET
+      INSERT INTO tenant_no_response_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
         last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
         updated_at = CURRENT_TIMESTAMP
-    `).bind(tenantId, nextId).run()
+    `).bind(tenantId, branchId, nextId).run()
 
-    tenantStateCache.set(tenantId, nextId)
+    branchStateCache.set(cacheKey, nextId)
     transferred++
   }
 

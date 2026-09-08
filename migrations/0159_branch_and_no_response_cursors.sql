@@ -9,10 +9,14 @@ CREATE TABLE IF NOT EXISTS tenant_followup_branch_assign_state (
   PRIMARY KEY (tenant_id, branch_id)
 );
 
--- Separate no-response transfer cursor.
--- Keeps no-response redistribution linear without contaminating the new-lead assignment queues.
+-- No-response transfer cursor, per (tenant, branch).
+-- branch_id = 0 means global (current assignee has no branch).
+-- Keeps no-response redistribution linear within each branch, and separate
+-- from the new-lead assignment queues.
 CREATE TABLE IF NOT EXISTS tenant_no_response_assign_state (
-  tenant_id   INTEGER NOT NULL PRIMARY KEY,
+  tenant_id   INTEGER NOT NULL,
+  branch_id   INTEGER NOT NULL DEFAULT 0,
   last_auto_assigned_user_id INTEGER,
-  updated_at  TEXT
+  updated_at  TEXT,
+  PRIMARY KEY (tenant_id, branch_id)
 );

@@ -17247,13 +17247,13 @@ ${t.note}`,u=p.includes("وقت الإجراء")?p:`${p}
          WHERE tenant_id = ?
        )
        WHERE id = ? AND tenant_customer_number IS NULL`).bind(n,r).run()}function Ui(e,t){if(e.length!==t.length)return!1;let a=0;for(let r=0;r<e.length;r++)a|=e.charCodeAt(r)^t.charCodeAt(r);return a===0}function Wi(e){const t=e.get("Authorization")||"";return t.startsWith("Bearer ")?t.slice(7).trim():(e.get("X-Cron-Secret")||"").trim()}function zi(e,t){return!t||!e?!1:Ui(e,t)}const Yi=`
-  SELECT u.id, u.full_name
+  SELECT u.id, u.full_name, u.assigned_location_id
   FROM users u
   WHERE u.is_active = 1
     AND u.role_id IN (4, 6, 14)
     AND u.tenant_id = ?
   ORDER BY COALESCE(NULLIF(TRIM(u.full_name), ''), u.username) ASC
-`;async function Vi(e,t){const{results:a}=await e.prepare(Yi).bind(t).all(),r=new Set,n=[];for(const s of a||[]){const o=Number(s.id);!Number.isFinite(o)||r.has(o)||(r.add(o),n.push({id:o,full_name:String(s.full_name||"")}))}return n}function Gi(e,t,a){if(!e.length)return null;const r=e.filter(o=>o!==t),n=r.length?r:e;if(!n.length)return null;const s=a!=null?e.indexOf(a):-1;for(let o=1;o<=e.length;o++){const i=e[(s+o)%e.length];if(n.includes(i))return i}return n[0]}function Ji(e){const t=String(e||"").match(/من\s+(.+?)\s+إلى\s+(.+?)\s+بسبب/);if(!t)return null;const a=t[1].trim(),r=t[2].trim();return!a||!r?null:{from_name:a,to_name:r}}function Xi(e){if(!e.length)return null;const t=e.slice(),a=[t[0].from_name];for(const n of t)a.push(n.to_name);const r=t[t.length-1];return{initial_name:t[0].from_name,latest_to_name:r.to_name,latest_at:r.created_at,chain:a,hops:t}}const na=90;async function Ki(e,t,a){const r=[];for(let n=0;n<t.length;n+=na){const s=t.slice(n,n+na),o=s.map(()=>"?").join(","),i=a==="task"?`SELECT tn.task_id AS map_id, tn.task_id, tn.note_text, tn.created_at AS at
+`;async function Vi(e,t){const{results:a}=await e.prepare(Yi).bind(t).all(),r=new Set,n=[];for(const s of a||[]){const o=Number(s.id);!Number.isFinite(o)||r.has(o)||(r.add(o),n.push({id:o,full_name:String(s.full_name||""),assigned_location_id:s.assigned_location_id??null}))}return n}function Gi(e,t,a){if(!e.length)return null;const r=e.filter(o=>o!==t),n=r.length?r:e;if(!n.length)return null;const s=a!=null?e.indexOf(a):-1;for(let o=1;o<=e.length;o++){const i=e[(s+o)%e.length];if(n.includes(i))return i}return n[0]}function Ji(e){const t=String(e||"").match(/من\s+(.+?)\s+إلى\s+(.+?)\s+بسبب/);if(!t)return null;const a=t[1].trim(),r=t[2].trim();return!a||!r?null:{from_name:a,to_name:r}}function Xi(e){if(!e.length)return null;const t=e.slice(),a=[t[0].from_name];for(const n of t)a.push(n.to_name);const r=t[t.length-1];return{initial_name:t[0].from_name,latest_to_name:r.to_name,latest_at:r.created_at,chain:a,hops:t}}const na=90;async function Ki(e,t,a){const r=[];for(let n=0;n<t.length;n+=na){const s=t.slice(n,n+na),o=s.map(()=>"?").join(","),i=a==="task"?`SELECT tn.task_id AS map_id, tn.task_id, tn.note_text, tn.created_at AS at
            FROM company_contact_followup_task_notes tn
            WHERE tn.note_type = 'auto_transfer' AND tn.task_id IN (${o})
            ORDER BY tn.created_at ASC, tn.id ASC`:`SELECT t.followup_id AS map_id, tn.task_id, tn.note_text, tn.created_at AS at
@@ -68593,32 +68593,34 @@ ${r?`
     VALUES (?, ?, ?, ?, ?, ?, 'reminder', 0)
   `);for(let m=0;m<p.length;m+=25){const y=p.slice(m,m+25);await e.batch(y.map(g=>u.bind(g.customer_id,g.customer_name,a,g.note,g.user_id,g.tenant_id))),n+=y.length}return{created:n,skipped:s}}async function zs(e){const t=Wi({get:n=>e.req.header(n)??null});if(zi(t,e.env.CRON_SECRET))return null;const a=await E(e);if(!a.userId)return e.json({success:!1,error:"Unauthorized"},401);const r=R(a.roleId);return r!==1&&r!==2?e.json({success:!1,error:"Forbidden"},403):null}f.post("/api/customer-reminders/trigger",async e=>{try{const t=await zs(e);if(t)return t;const a=await Ws(e.env.DB);return e.json({success:!0,...a})}catch(t){return console.error("Error triggering customer reminders:",t),e.json({success:!1,error:t.message},500)}});async function Ys(e){const{results:t}=await e.prepare(`
     SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
-           f.customer_name
+           f.customer_name,
+           COALESCE(u.assigned_location_id, 0) AS assignee_branch_id
     FROM company_contact_followup_tasks t
     INNER JOIN company_contact_followups f ON f.id = t.followup_id
+    LEFT JOIN users u ON u.id = t.assigned_user_id
     WHERE COALESCE(f.is_no_response, 0) = 1
       AND f.no_response_at IS NOT NULL
       AND datetime(f.no_response_at) <= datetime('now', '-48 hours')
       AND COALESCE(f.is_archived, 0) = 0
     ORDER BY f.no_response_at ASC
     LIMIT 200
-  `).all();let a=0,r=0;const n=new Map,s=new Map,o=new Map;for(const i of t||[]){const l=i.tenant_id;if(!n.has(l)){const g=await Vi(e,l);n.set(l,g);for(const h of g)o.set(h.id,h.full_name||"");const b=await e.prepare(`
+  `).all();let a=0,r=0;const n=new Map,s=new Map,o=new Map,i=new Map;for(const l of t||[]){const c=l.tenant_id,d=Number(l.assignee_branch_id)||0,p=`${c}:${d}`;if(!n.has(c)){const x=await Vi(e,c);n.set(c,x);for(const I of x)i.set(I.id,I.full_name||"")}if(!s.has(p)){const x=n.get(c)||[],I=d>0?x.filter(_=>_.assigned_location_id===d):x;s.set(p,I);const v=await e.prepare(`
         SELECT last_auto_assigned_user_id FROM tenant_no_response_assign_state
-        WHERE tenant_id = ? LIMIT 1
-      `).bind(l).first();s.set(l,b?.last_auto_assigned_user_id??null)}const c=n.get(l)||[];if(!c.length){r++;continue}const d=c.map(g=>g.id),p=Gi(d,i.assigned_user_id,s.get(l)??null);if(p==null){r++;continue}await e.prepare(`
+        WHERE tenant_id = ? AND branch_id = ? LIMIT 1
+      `).bind(c,d).first();o.set(p,v?.last_auto_assigned_user_id??null)}const u=s.get(p)||[];if(!u.length){r++;continue}const m=u.map(x=>x.id),y=Gi(m,l.assigned_user_id,o.get(p)??null);if(y==null){r++;continue}await e.prepare(`
       UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?
-    `).bind(p,i.task_id,l).run(),await e.prepare(`
+    `).bind(y,l.task_id,c).run(),await e.prepare(`
       UPDATE company_contact_followups
       SET is_no_response = 1, no_response_at = CURRENT_TIMESTAMP
       WHERE id = ? AND tenant_id = ?
-    `).bind(i.followup_id,l).run();const u=o.get(i.assigned_user_id)||String(i.assigned_user_id),m=o.get(p)||String(p);try{await e.prepare(`
+    `).bind(l.followup_id,c).run();const g=i.get(l.assigned_user_id)||String(l.assigned_user_id),b=i.get(y)||String(y);try{await e.prepare(`
         INSERT INTO company_contact_followup_task_notes
           (task_id, tenant_id, user_id, user_name, note_text, note_type)
         VALUES (?, ?, 0, 'النظام', ?, 'auto_transfer')
-      `).bind(i.task_id,l,`تم تحويل المهمة تلقائياً من ${u} إلى ${m} بسبب عدم الرد خلال 48 ساعة`).run()}catch(g){console.error("auto_transfer note insert failed:",g)}const y=String(i.task_title||i.customer_name||"").trim()||`مهمة #${i.task_id}`;try{await Ir(e,{recipientUserId:i.assigned_user_id,tenantId:l,title:"تم تحويل مهمة (عدم رد)",message:`تم تحويل مهمة "${y}" تلقائياً إلى ${m} بسبب عدم الرد خلال 48 ساعة`,notifType:"info",category:"followup_no_response_transfer_out",taskId:i.task_id}),await Ir(e,{recipientUserId:p,tenantId:l,title:"مهمة جديدة (عدم رد)",message:`تم إسناد مهمة "${y}" إليك تلقائياً من ${u} بسبب عدم الرد خلال 48 ساعة`,notifType:"warning",category:"followup_no_response_transfer_in",taskId:i.task_id})}catch(g){console.error("followup_no_response_transfer notification insert failed:",g)}await e.prepare(`
-      INSERT INTO tenant_no_response_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(tenant_id) DO UPDATE SET
+      `).bind(l.task_id,c,`تم تحويل المهمة تلقائياً من ${g} إلى ${b} بسبب عدم الرد خلال 48 ساعة`).run()}catch(x){console.error("auto_transfer note insert failed:",x)}const h=String(l.task_title||l.customer_name||"").trim()||`مهمة #${l.task_id}`;try{await Ir(e,{recipientUserId:l.assigned_user_id,tenantId:c,title:"تم تحويل مهمة (عدم رد)",message:`تم تحويل مهمة "${h}" تلقائياً إلى ${b} بسبب عدم الرد خلال 48 ساعة`,notifType:"info",category:"followup_no_response_transfer_out",taskId:l.task_id}),await Ir(e,{recipientUserId:y,tenantId:c,title:"مهمة جديدة (عدم رد)",message:`تم إسناد مهمة "${h}" إليك تلقائياً من ${g} بسبب عدم الرد خلال 48 ساعة`,notifType:"warning",category:"followup_no_response_transfer_in",taskId:l.task_id})}catch(x){console.error("followup_no_response_transfer notification insert failed:",x)}await e.prepare(`
+      INSERT INTO tenant_no_response_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
         last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
         updated_at = CURRENT_TIMESTAMP
-    `).bind(l,p).run(),s.set(l,p),a++}return{transferred:a,skipped:r}}f.post("/api/followup-no-response/trigger",async e=>{try{const t=await zs(e);if(t)return t;const a=await Ys(e.env.DB);return e.json({success:!0,...a})}catch(t){return e.json({success:!1,error:t.message},500)}});const oc={fetch:f.fetch.bind(f),async scheduled(e,t,a){a.waitUntil(Ws(t.DB).then(({created:r,skipped:n})=>{console.log(`[customer-reminders] created=${r} skipped=${n}`)})),a.waitUntil(Ys(t.DB).then(({transferred:r,skipped:n})=>{console.log(`[no-response-transfers] transferred=${r} skipped=${n}`)}))}},an=new Dt,ic=Object.assign({"/src/index.tsx":oc});let Vs=!1;for(const[,e]of Object.entries(ic))e&&(an.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),an.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Vs=!0);if(!Vs)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{an as default};
+    `).bind(c,d,y).run(),o.set(p,y),a++}return{transferred:a,skipped:r}}f.post("/api/followup-no-response/trigger",async e=>{try{const t=await zs(e);if(t)return t;const a=await Ys(e.env.DB);return e.json({success:!0,...a})}catch(t){return e.json({success:!1,error:t.message},500)}});const oc={fetch:f.fetch.bind(f),async scheduled(e,t,a){a.waitUntil(Ws(t.DB).then(({created:r,skipped:n})=>{console.log(`[customer-reminders] created=${r} skipped=${n}`)})),a.waitUntil(Ys(t.DB).then(({transferred:r,skipped:n})=>{console.log(`[no-response-transfers] transferred=${r} skipped=${n}`)}))}},an=new Dt,ic=Object.assign({"/src/index.tsx":oc});let Vs=!1;for(const[,e]of Object.entries(ic))e&&(an.all("*",t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),an.notFound(t=>{let a;try{a=t.executionCtx}catch{}return e.fetch(t.req.raw,t.env,a)}),Vs=!0);if(!Vs)throw new Error("Can't import modules from ['/src/index.ts','/src/index.tsx','/app/server.ts']");export{an as default};
