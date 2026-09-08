@@ -597,7 +597,7 @@ export const smartCalculator = `<!DOCTYPE html>
         let isBirthdateSyncing = false;
         let hijriBirthdatePicker = null;
 
-        // Umm al-Qura (official Saudi calendar). ICU `islamic` is often 1 day off.
+        // Umm al-Qura (official Saudi calendar). ICU "islamic" is often 1 day off.
         const hijriDisplayFormatter = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
             year: 'numeric',
             month: '2-digit',

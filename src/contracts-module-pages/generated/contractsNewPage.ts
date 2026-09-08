@@ -890,11 +890,20 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/ar.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2/build/global/luxon.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr-hijri-calendar@1.0.0/dist/flatpickr-hijri-calendar.min.js"></script>
+  <style>
+    .flatpickr-day .hijri-sublabel {
+      display: block;
+      font-size: 9px;
+      color: #999;
+      line-height: 1;
+      margin-top: 1px;
+      font-family: inherit;
+    }
+    .flatpickr-day.selected .hijri-sublabel,
+    .flatpickr-day:hover .hijri-sublabel { color: rgba(255,255,255,0.85); }
+  </style>
 </head>
 <body>
 
@@ -1631,26 +1640,27 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     function initContractHijriDatePicker() {
       const hijriInput = document.getElementById('date_hijri');
       const gregorianInput = document.getElementById('date_gregorian');
-      if (!hijriInput || !gregorianInput) return;
-      if (typeof flatpickr !== 'function' || typeof hijriCalendarPlugin !== 'function' || !window.luxon?.DateTime) {
-        return;
-      }
+      if (!hijriInput || !gregorianInput || typeof flatpickr !== 'function') return;
 
-      contractHijriPicker = flatpickr(hijriInput, {
+      // Flatpickr owns a hidden anchor so it never reads/writes the visible Hijri field.
+      const fpAnchor = document.createElement('input');
+      fpAnchor.type = 'text';
+      fpAnchor.setAttribute('aria-hidden', 'true');
+      fpAnchor.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
+      hijriInput.parentNode.insertBefore(fpAnchor, hijriInput.nextSibling);
+
+      contractHijriPicker = flatpickr(fpAnchor, {
         locale: 'ar',
         disableMobile: true,
-        dateFormat: 'Y-m-d',
-        allowInput: true,
-        plugins: [
-          hijriCalendarPlugin(window.luxon.DateTime, {
-            showHijriDates: true,
-            showHijriToggle: false
-          })
-        ],
-        onOpen: [(_, __, instance) => {
-          if (gregorianInput.value) {
-            instance.setDate(gregorianInput.value, false, 'Y-m-d');
-          }
+        positionElement: hijriInput,
+        onDayCreate: [(dObj, dStr, fp, dayElem) => {
+          try {
+            const hijriDay = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { day: 'numeric' }).format(dayElem.dateObj);
+            const sub = document.createElement('span');
+            sub.className = 'hijri-sublabel';
+            sub.textContent = hijriDay;
+            dayElem.appendChild(sub);
+          } catch(_) {}
         }],
         onChange: [(selectedDates) => {
           if (!selectedDates.length || isContractDateSyncing) return;
@@ -1666,9 +1676,15 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           isContractDateSyncing = false;
         }]
       });
+
+      // Open the picker when the Hijri field is clicked.
+      hijriInput.addEventListener('click', () => {
+        if (gregorianInput.value) contractHijriPicker.setDate(gregorianInput.value, false, 'Y-m-d');
+        contractHijriPicker.open();
+      });
     }
 
-    function goStep1() {
+function goStep1() {
       document.getElementById('step1').style.display = 'block';
       document.getElementById('step2').style.display = 'none';
       document.getElementById('step3').style.display = 'none';

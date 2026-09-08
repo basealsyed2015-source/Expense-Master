@@ -37307,6 +37307,8 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
     let affiliateLinkId: number | null = null
     let affiliateLinkAssignmentMode: string = 'auto'
     let affiliateLinkAssignmentBranchId: number | null = null
+    // Per-link contact-form cursor (independent from wa_last_auto_assigned_user_id and global state).
+    let affiliateLinkCfLastAutoAssigned: number | null = null
     const companyLinkAssignmentMode = tenant.contact_assignment_mode ?? 'auto'
     const companyLinkAssignmentBranchId = tenant.contact_assignment_branch_id ?? null
     if (affiliatePathRaw) {
@@ -37314,13 +37316,13 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         return c.json({ success: false, error: 'مسار الإحالة غير صالح' }, 400)
       }
       const affRow = await c.env.DB.prepare(`
-        SELECT id, path_segment, label, assignment_mode, assignment_branch_id
+        SELECT id, path_segment, label, assignment_mode, assignment_branch_id, cf_last_auto_assigned_user_id
         FROM tenant_contact_affiliate_links
         WHERE tenant_id = ? AND path_segment = ?
         LIMIT 1
       `)
         .bind(tenant.id, affiliatePathRaw)
-        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null; assignment_branch_id: number | null }>()
+        .first<{ id: number; path_segment: string; label: string; assignment_mode: string | null; assignment_branch_id: number | null; cf_last_auto_assigned_user_id: number | null }>()
       if (!affRow) {
         return c.json({ success: false, error: 'رابط الإحالة غير معروف' }, 400)
       }
@@ -37329,6 +37331,7 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       affiliateLinkId = affRow.id
       affiliateLinkAssignmentMode = affRow.assignment_mode ?? 'auto'
       affiliateLinkAssignmentBranchId = affRow.assignment_branch_id ?? null
+      affiliateLinkCfLastAutoAssigned = affRow.cf_last_auto_assigned_user_id ?? null
     } else {
       affiliateLabel = CONTACT_COMPANY_LINK_SOURCE_LABEL
     }
@@ -37516,15 +37519,23 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
         }
 
         if (staff.length) {
-          const stateRow = await c.env.DB.prepare(`
-            SELECT last_auto_assigned_user_id
-            FROM tenant_followup_auto_assign_state
-            WHERE tenant_id = ?
-            LIMIT 1
-          `).bind(tenant.id).first<{ last_auto_assigned_user_id: number | null }>()
+          // Each affiliate link keeps its own contact-form cursor so links with different
+          // branch/exclusion pools don't contaminate each other's rotation.
+          // The company link (no affiliate) continues to use the global tenant state.
+          let lastId: number | null = null
+          if (affiliateLinkId != null) {
+            lastId = affiliateLinkCfLastAutoAssigned
+          } else {
+            const stateRow = await c.env.DB.prepare(`
+              SELECT last_auto_assigned_user_id
+              FROM tenant_followup_auto_assign_state
+              WHERE tenant_id = ?
+              LIMIT 1
+            `).bind(tenant.id).first<{ last_auto_assigned_user_id: number | null }>()
+            lastId = stateRow?.last_auto_assigned_user_id ?? null
+          }
 
           const staffIds = staff.map((u) => u.id)
-          const lastId: number | null = stateRow?.last_auto_assigned_user_id ?? null
           function pickNextUserId(last: number | null): number {
             if (last == null) return staffIds[0]
             const idx = staffIds.indexOf(last)
@@ -37559,13 +37570,20 @@ app.post('/api/public/:slug/contact-submissions', async (c) => {
       ).run()
 
       if (assignedUserId != null && !usedCustomRoster) {
-        await c.env.DB.prepare(`
-          INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
-          VALUES (?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(tenant_id) DO UPDATE SET
-            last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
-            updated_at = CURRENT_TIMESTAMP
-        `).bind(tenant.id, assignedUserId).run()
+        if (affiliateLinkId != null) {
+          // Advance this link's own contact-form cursor (separate from WhatsApp cursor and CSV cursor).
+          await c.env.DB.prepare(`
+            UPDATE tenant_contact_affiliate_links SET cf_last_auto_assigned_user_id = ? WHERE id = ?
+          `).bind(assignedUserId, affiliateLinkId).run()
+        } else {
+          await c.env.DB.prepare(`
+            INSERT INTO tenant_followup_auto_assign_state (tenant_id, last_auto_assigned_user_id, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(tenant_id) DO UPDATE SET
+              last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+              updated_at = CURRENT_TIMESTAMP
+          `).bind(tenant.id, assignedUserId).run()
+        }
       }
     }
 
