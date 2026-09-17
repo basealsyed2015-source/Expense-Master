@@ -42461,49 +42461,67 @@ app.get('/admin/my-no-response-tasks', async (c) => {
       <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
       <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
     </head>
-    <body class="bg-gray-50 min-h-screen">
-      <div class="max-w-5xl mx-auto p-6">
-        <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <body class="bg-gray-100 min-h-screen">
+      <!-- Page header -->
+      <div class="bg-white border-b border-gray-200 mb-6">
+        <div class="max-w-7xl mx-auto px-6 py-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 class="text-2xl md:text-3xl font-bold text-gray-900"><i class="fas fa-phone-slash ml-2 text-orange-600"></i>لا يرد</h1>
-            <p class="text-gray-600 mt-2 text-sm">الطلبات التي صُنِّفت كـ "لا يرد" — تُحوَّل تلقائياً إلى الموظف التالي بعد 48 ساعة ما لم تسترجعها</p>
+            <h1 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-orange-100 text-orange-600"><i class="fas fa-phone-slash text-sm"></i></span>
+              لا يرد
+            </h1>
+            <p class="text-gray-500 mt-1 text-xs">الطلبات المصنّفة كـ "لا يرد" — تُحوَّل تلقائياً بعد 48 ساعة ما لم تسترجعها</p>
           </div>
           <div class="flex gap-2 flex-wrap">
-            <a href="/admin/my-tasks" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
-              <i class="fas fa-tasks ml-2"></i>${myTasksLabel}
+            <a href="/admin/my-tasks" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              <i class="fas fa-tasks"></i>${myTasksLabel}
             </a>
-            <a href="/admin/panel" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm">
-              <i class="fas fa-arrow-right ml-2"></i>لوحة التحكم
+            <a href="/admin/panel" class="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              <i class="fas fa-arrow-right"></i>لوحة التحكم
             </a>
           </div>
         </div>
+      </div>
 
-        <div class="flex flex-col sm:flex-row gap-2 mb-4">
+      <div class="max-w-7xl mx-auto px-6 pb-10">
+        <!-- Search & filter bar -->
+        <div class="flex flex-col sm:flex-row gap-2 mb-5">
           <div class="relative flex-1">
             <i class="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
-            <input type="text" id="nrSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full border border-gray-300 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <input type="text" id="nrSearchInput" placeholder="بحث بالعنوان أو اسم العميل أو الهاتف..." class="w-full bg-white border border-gray-200 rounded-xl pr-9 pl-3 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400" />
           </div>
           <div id="nrEmployeeFilterWrap" class="hidden">
-            <select id="nrEmployeeFilter" class="w-full sm:w-auto border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white text-gray-700">
+            <select id="nrEmployeeFilter" class="w-full sm:w-auto bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400 text-gray-700">
               <option value="">كل الموظفين</option>
             </select>
           </div>
         </div>
-        <div id="nrListStatus" class="text-sm text-gray-600 mb-3"></div>
-        <div class="flex gap-4 items-start">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-3">
-              <span class="text-sm font-semibold text-gray-700"><i class="fas fa-user-clock ml-1 text-gray-400"></i>لم تُحوَّل بعد</span>
-              <span id="nrFreshCount" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium"></span>
+        <div id="nrListStatus" class="text-xs text-gray-400 mb-4"></div>
+
+        <!-- Two-column split -->
+        <div class="grid grid-cols-2 gap-6 items-start">
+          <!-- Right column: not yet transferred -->
+          <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gray-200 text-gray-500"><i class="fas fa-user-clock text-xs"></i></span>
+                <span class="font-semibold text-gray-700 text-sm">لم تُحوَّل بعد</span>
+              </div>
+              <span id="nrFreshCount" class="text-xs bg-gray-200 text-gray-600 px-2.5 py-0.5 rounded-full font-semibold"></span>
             </div>
-            <div id="nrCardsFresh" class="space-y-3"></div>
+            <div id="nrCardsFresh" class="p-3 space-y-2.5"></div>
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-3">
-              <span class="text-sm font-semibold text-gray-700"><i class="fas fa-exchange-alt ml-1 text-orange-500"></i>محوّلة</span>
-              <span id="nrTransferredCount" class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium"></span>
+
+          <!-- Left column: transferred -->
+          <div class="bg-white rounded-2xl border border-orange-100 shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-orange-100 bg-orange-50">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-orange-200 text-orange-600"><i class="fas fa-exchange-alt text-xs"></i></span>
+                <span class="font-semibold text-orange-800 text-sm">محوّلة</span>
+              </div>
+              <span id="nrTransferredCount" class="text-xs bg-orange-200 text-orange-700 px-2.5 py-0.5 rounded-full font-semibold"></span>
             </div>
-            <div id="nrCardsTransferred" class="space-y-3"></div>
+            <div id="nrCardsTransferred" class="p-3 space-y-2.5"></div>
           </div>
         </div>
       </div>
@@ -42742,7 +42760,7 @@ app.get('/admin/my-no-response-tasks', async (c) => {
         function renderCards(tasks) {
           var fresh = tasks.filter(function(t) { return (Number(t.transfer_count) || 0) === 0; });
           var transferred = tasks.filter(function(t) { return (Number(t.transfer_count) || 0) > 0; });
-          var emptyMsg = '<div class="text-center text-gray-400 py-10 bg-white rounded-xl border border-gray-200 text-sm">لا توجد طلبات</div>';
+          var emptyMsg = '<div class="text-center text-gray-400 py-10 text-sm">لا توجد طلبات</div>';
 
           var freshRoot = document.getElementById('nrCardsFresh');
           var transferredRoot = document.getElementById('nrCardsTransferred');

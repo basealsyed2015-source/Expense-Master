@@ -66,23 +66,33 @@ export async function sendLoginOtpEmail(params: {
   return sendEmail({ apiKey, from, to, subject, text, html })
 }
 
-export async function sendDeviceOtpEmail(params: {
+export async function sendIpOtpEmail(params: {
   apiKey: string
   from: string
   to: string
   code: string
   username: string
+  fullName: string
+  phone: string
 }): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { apiKey, from, to, code, username } = params
-  const subject = 'طلب تسجيل دخول من جهاز جديد — New device login request'
+  const { apiKey, from, to, code, username, fullName, phone } = params
+  const subject = 'طلب تسجيل دخول من موقع جديد — New location login request'
   const text = [
-    `يحاول المستخدم "${username}" تسجيل الدخول من جهاز جديد.`,
+    `يحاول المستخدم التالي تسجيل الدخول من موقع جديد:`,
+    `الاسم: ${fullName}`,
+    `اسم المستخدم: ${username}`,
+    `الهاتف: ${phone}`,
+    '',
     'رمز التحقق:',
     code,
     '',
     'صلاحية الرمز 10 دقائق. أرسل هذا الرمز للمستخدم فقط إذا كنت تتوقع هذا الطلب.',
     '',
-    `User "${username}" is attempting to log in from a new device.`,
+    `The following user is attempting to log in from a new location:`,
+    `Name: ${fullName}`,
+    `Username: ${username}`,
+    `Phone: ${phone}`,
+    '',
     'Verification code:',
     code,
     '',
@@ -90,12 +100,79 @@ export async function sendDeviceOtpEmail(params: {
   ].join('\n')
   const html = `
   <div dir="rtl" style="font-family:system-ui,sans-serif;max-width:480px;line-height:1.6">
-    <p>يحاول المستخدم <strong>${escapeHtml(username)}</strong> تسجيل الدخول من <strong>جهاز جديد</strong>.</p>
+    <p>يحاول المستخدم التالي تسجيل الدخول من <strong>موقع جديد</strong>:</p>
+    <table style="border-collapse:collapse;margin-bottom:16px">
+      <tr><td style="color:#555;padding:2px 12px 2px 0">الاسم</td><td><strong>${escapeHtml(fullName)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">اسم المستخدم</td><td><strong>${escapeHtml(username)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">الهاتف</td><td><strong>${escapeHtml(phone)}</strong></td></tr>
+    </table>
     <p><strong>رمز التحقق:</strong></p>
     <p style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${escapeHtml(code)}</p>
     <p style="color:#555">صلاحية الرمز <strong>10 دقائق</strong>. أرسل هذا الرمز للمستخدم فقط إذا كنت تتوقع هذا الطلب.</p>
     <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
-    <p dir="ltr">User <strong>${escapeHtml(username)}</strong> is attempting to log in from a <strong>new device</strong>.</p>
+    <p dir="ltr">The following user is attempting to log in from a <strong>new location</strong>:</p>
+    <table dir="ltr" style="border-collapse:collapse;margin-bottom:16px">
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Name</td><td><strong>${escapeHtml(fullName)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Username</td><td><strong>${escapeHtml(username)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Phone</td><td><strong>${escapeHtml(phone)}</strong></td></tr>
+    </table>
+    <p dir="ltr"><strong>Verification code:</strong></p>
+    <p dir="ltr" style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${escapeHtml(code)}</p>
+    <p dir="ltr" style="color:#555">Valid for <strong>10 minutes</strong>. Only share it with the user if you expect this request.</p>
+  </div>`
+  return sendEmail({ apiKey, from, to, subject, text, html })
+}
+
+export async function sendDeviceOtpEmail(params: {
+  apiKey: string
+  from: string
+  to: string
+  code: string
+  username: string
+  fullName: string
+  phone: string
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { apiKey, from, to, code, username, fullName, phone } = params
+  const subject = 'طلب تسجيل دخول من جهاز جديد — New device login request'
+  const text = [
+    `يحاول المستخدم التالي تسجيل الدخول من جهاز جديد:`,
+    `الاسم: ${fullName}`,
+    `اسم المستخدم: ${username}`,
+    `الهاتف: ${phone}`,
+    '',
+    'رمز التحقق:',
+    code,
+    '',
+    'صلاحية الرمز 10 دقائق. أرسل هذا الرمز للمستخدم فقط إذا كنت تتوقع هذا الطلب.',
+    '',
+    `The following user is attempting to log in from a new device:`,
+    `Name: ${fullName}`,
+    `Username: ${username}`,
+    `Phone: ${phone}`,
+    '',
+    'Verification code:',
+    code,
+    '',
+    'This code expires in 10 minutes. Only share it with the user if you expect this request.',
+  ].join('\n')
+  const html = `
+  <div dir="rtl" style="font-family:system-ui,sans-serif;max-width:480px;line-height:1.6">
+    <p>يحاول المستخدم التالي تسجيل الدخول من <strong>جهاز جديد</strong>:</p>
+    <table style="border-collapse:collapse;margin-bottom:16px">
+      <tr><td style="color:#555;padding:2px 12px 2px 0">الاسم</td><td><strong>${escapeHtml(fullName)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">اسم المستخدم</td><td><strong>${escapeHtml(username)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">الهاتف</td><td><strong>${escapeHtml(phone)}</strong></td></tr>
+    </table>
+    <p><strong>رمز التحقق:</strong></p>
+    <p style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${escapeHtml(code)}</p>
+    <p style="color:#555">صلاحية الرمز <strong>10 دقائق</strong>. أرسل هذا الرمز للمستخدم فقط إذا كنت تتوقع هذا الطلب.</p>
+    <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+    <p dir="ltr">The following user is attempting to log in from a <strong>new device</strong>:</p>
+    <table dir="ltr" style="border-collapse:collapse;margin-bottom:16px">
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Name</td><td><strong>${escapeHtml(fullName)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Username</td><td><strong>${escapeHtml(username)}</strong></td></tr>
+      <tr><td style="color:#555;padding:2px 12px 2px 0">Phone</td><td><strong>${escapeHtml(phone)}</strong></td></tr>
+    </table>
     <p dir="ltr"><strong>Verification code:</strong></p>
     <p dir="ltr" style="font-size:28px;letter-spacing:0.2em;font-weight:bold">${escapeHtml(code)}</p>
     <p dir="ltr" style="color:#555">Valid for <strong>10 minutes</strong>. Only share it with the user if you expect this request.</p>

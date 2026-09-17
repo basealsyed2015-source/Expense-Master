@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { normalizeRoleId } from '../notification-access.ts'
-import { sendPasswordResetCodeEmail, sendLoginOtpEmail, sendDeviceOtpEmail } from '../resend-email.ts'
+import { sendPasswordResetCodeEmail, sendIpOtpEmail, sendDeviceOtpEmail } from '../resend-email.ts'
 import { getRoleDisplayName } from '../shared/role-display.ts'
 import { clientIp, clientCity, parseCookie, isIpAllowed } from '../shared/login-ip.ts'
 import type { AppEnv } from '../shared/context.ts'
@@ -125,7 +125,10 @@ authRoutes.post('/api/auth/login', async (c) => {
             `).bind(userId, code, ip).first<{ id: number }>()
             await maybeLogGeo(0)
             const sent = await sendDeviceOtpEmail({
-              apiKey, from, to: contactEmail, code, username: String(user.username),
+              apiKey, from, to: contactEmail, code,
+              username: String(user.username),
+              fullName: String(user.full_name ?? ''),
+              phone: String(user.phone ?? ''),
             })
             if (!sent.ok) {
               console.error('Device OTP email error:', sent.error)
@@ -147,8 +150,7 @@ authRoutes.post('/api/auth/login', async (c) => {
       if (ipRestricted) {
         const allowed = await isIpAllowed(ip, tenantId, userId, c.env.DB)
         if (!allowed) {
-          const userEmail = String(user.email ?? '').trim()
-          if (userEmail && apiKey) {
+          if (contactEmail && apiKey) {
             const code = Math.floor(100000 + Math.random() * 900000).toString()
             const inserted = await c.env.DB.prepare(`
               INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
@@ -156,7 +158,12 @@ authRoutes.post('/api/auth/login', async (c) => {
               RETURNING id
             `).bind(userId, code, ip).first<{ id: number }>()
             await maybeLogGeo(0)
-            const sent = await sendLoginOtpEmail({ apiKey, from, to: userEmail, code })
+            const sent = await sendIpOtpEmail({
+              apiKey, from, to: contactEmail, code,
+              username: String(user.username),
+              fullName: String(user.full_name ?? ''),
+              phone: String(user.phone ?? ''),
+            })
             if (!sent.ok) {
               console.error('IP OTP email error:', sent.error)
               if (inserted?.id) {
@@ -164,13 +171,12 @@ authRoutes.post('/api/auth/login', async (c) => {
               }
               return c.json({
                 success: false,
-                error: 'تعذر إرسال رمز التحقق إلى بريدك الإلكتروني. تواصل مع المسؤول.',
+                error: 'تعذر إرسال رمز التحقق إلى بريد الشركة. تواصل مع المسؤول.',
               }, 502)
             }
             return c.json({ success: false, status: 'ip_otp_required' })
           }
-          // No user email — fail closed
-          return c.json({ success: false, error: 'غير مسموح بتسجيل الدخول من هذا الموقع' }, 403)
+          // No contact email — treat as trusted, fall through
         }
       }
 

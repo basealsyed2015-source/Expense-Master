@@ -268,7 +268,7 @@ export const loginPage = `<!DOCTYPE html>
                 desc.textContent = 'تم إرسال رمز التحقق إلى البريد الإلكتروني الرسمي للشركة. تواصل مع مسؤول الشركة للحصول على الرمز.';
                 iconWrap.className = 'inline-block text-white rounded-full p-4 mb-4 bg-gradient-to-br from-emerald-500 to-teal-600';
             } else {
-                desc.textContent = 'تم إرسال رمز التحقق إلى بريدك الإلكتروني. أدخله للمتابعة من هذا الموقع.';
+                desc.textContent = 'تم إرسال رمز التحقق إلى البريد الإلكتروني الرسمي للشركة. تواصل مع مسؤول الشركة للحصول على الرمز.';
                 iconWrap.className = 'inline-block text-white rounded-full p-4 mb-4 bg-gradient-to-br from-indigo-500 to-purple-600';
             }
             document.getElementById('otpCode').value = '';
