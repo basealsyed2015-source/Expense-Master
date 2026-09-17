@@ -55,3 +55,6 @@ cmd.md
 # Local docs & plans
 docs/
 docs
+
+# Claude Code agent worktrees
+.claude/worktrees/

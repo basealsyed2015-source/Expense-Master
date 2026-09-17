@@ -86,7 +86,9 @@
       "Bash(sort -k6,7 -r)",
       "Bash(xargs ls *)",
       "Bash(sqlite3 *)",
-      "PowerShell(sqlite3 *)"
+      "PowerShell(sqlite3 *)",
+      "Bash(npx -y typescript@5 tsc --noEmit --project tsconfig.json)",
+      "Bash(xxd .gitignore)"
     ]
   }
 }

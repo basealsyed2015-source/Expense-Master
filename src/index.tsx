@@ -9263,9 +9263,97 @@ app.post('/api/customers/:id', async (c) => {
         /* columns may be missing on very old DBs */
       }
     }
+    // Sync customer fields onto linked non-archived contracts (all document_types).
+    try {
+      await c.env.DB.prepare(
+        `UPDATE contracts
+           SET party_two_name = ?, party_two_id = ?, party_two_phone = ?, party_two_address = ?
+         WHERE customer_id = ? AND COALESCE(is_archived, 0) = 0`
+      ).bind(full_name, national_id, phone, city, id).run()
+    } catch (_) { /* contracts table may not exist */ }
+    if (national_id_expiry != null) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE contracts SET party_two_id_expiry = ?
+           WHERE customer_id = ? AND COALESCE(is_archived, 0) = 0`
+        ).bind(national_id_expiry, id).run()
+      } catch (_) { /* column may not exist until migration 0147 */ }
+    }
     return c.redirect('/admin/customers')
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Preview: which non-archived contracts (any document_type) will be updated
+// when a customer's identity/contact fields change, and what changes.
+app.get('/api/customers/:id/contract-sync-preview', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const q = c.req.query.bind(c.req)
+    const newName = (q('full_name') ?? '').trim() || null
+    const rawPhone = (q('phone') ?? '').trim()
+    const normPhone = normalizeCustomerPhoneForStorage(rawPhone).normalized || rawPhone || null
+    const rawNid = (q('national_id') ?? '').trim()
+    const newNid = rawNid === '' ? null : rawNid
+    const newNidExpiry = (q('national_id_expiry') ?? '').trim() || null
+    const newAddress = (q('city') ?? '').trim() || null
+
+    let rows: any[] = []
+    try {
+      const { results } = await c.env.DB.prepare(
+        `SELECT id, contract_number, party_two_name, party_two_id, party_two_id_expiry,
+                party_two_phone, party_two_address
+           FROM contracts
+          WHERE customer_id = ? AND COALESCE(is_archived, 0) = 0`
+      ).bind(id).all()
+      rows = (results || []) as any[]
+    } catch (_) {
+      // party_two_id_expiry may not exist on very old DBs
+      try {
+        const { results } = await c.env.DB.prepare(
+          `SELECT id, contract_number, party_two_name, party_two_id,
+                  party_two_phone, party_two_address
+             FROM contracts
+            WHERE customer_id = ? AND COALESCE(is_archived, 0) = 0`
+        ).bind(id).all()
+        rows = (results || []) as any[]
+      } catch (__) { rows = [] }
+    }
+
+    const valChanged = (oldV: any, newV: any) => {
+      const n = newV == null ? '' : String(newV).trim()
+      const o = oldV == null ? '' : String(oldV).trim()
+      // Ignore fields the form did not submit (empty new value) to avoid false positives.
+      if (!n) return false
+      return n !== o
+    }
+
+    const contracts = rows.map((r) => {
+      const changes: { field: string; label: string; old: string; new: string }[] = []
+      if (valChanged(r.party_two_name, newName)) {
+        changes.push({ field: 'party_two_name', label: 'اسم الطرف الثاني', old: String(r.party_two_name ?? ''), new: String(newName ?? '') })
+      }
+      if (valChanged(r.party_two_id, newNid)) {
+        changes.push({ field: 'party_two_id', label: 'رقم الهوية', old: String(r.party_two_id ?? ''), new: String(newNid ?? '') })
+      }
+      if ('party_two_id_expiry' in r && valChanged(r.party_two_id_expiry, newNidExpiry)) {
+        changes.push({ field: 'party_two_id_expiry', label: 'تاريخ انتهاء الهوية', old: String(r.party_two_id_expiry ?? ''), new: String(newNidExpiry ?? '') })
+      }
+      if (valChanged(r.party_two_phone, normPhone)) {
+        changes.push({ field: 'party_two_phone', label: 'رقم الجوال', old: String(r.party_two_phone ?? ''), new: String(normPhone ?? '') })
+      }
+      if (valChanged(r.party_two_address, newAddress)) {
+        changes.push({ field: 'party_two_address', label: 'العنوان', old: String(r.party_two_address ?? ''), new: String(newAddress ?? '') })
+      }
+      return { id: r.id, contract_number: r.contract_number ?? String(r.id), changes }
+    }).filter((x) => x.changes.length > 0)
+
+    return c.json({ success: true, contracts })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message, contracts: [] })
   }
 })
 
@@ -11855,11 +11943,72 @@ app.put('/api/financing-requests/:id', async (c) => {
         additional_3_attachment_url
       })
     }
-    
+
+    // Sync requested_amount onto linked non-archived 'عقد' contracts only.
+    if (body.requested_amount !== undefined) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE contracts SET finance_amount = ?
+           WHERE financing_request_id = ?
+             AND document_type = 'عقد'
+             AND COALESCE(is_archived, 0) = 0`
+        ).bind(Number(body.requested_amount), id).run()
+      } catch (_) { /* contracts / document_type may not exist */ }
+    }
+
     return c.json({ success: true })
   } catch (error: any) {
     console.error('Update financing request error:', error)
     return c.json({ success: false, error: error.message }, 500)
+  }
+})
+
+// Preview: which non-archived 'عقد' contracts will be updated when an FR's
+// requested_amount changes, and what will change.
+app.get('/api/financing-requests/:id/contract-sync-preview', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const userInfo = await getUserInfo(c)
+    if (!userInfo.userId) return c.json({ success: false, error: 'Unauthorized' }, 401)
+    const raw = c.req.query('requested_amount')
+    if (raw == null || String(raw).trim() === '') {
+      return c.json({ success: true, contracts: [] })
+    }
+    const newAmount = Number(raw)
+    if (!Number.isFinite(newAmount)) return c.json({ success: true, contracts: [] })
+
+    let rows: any[] = []
+    try {
+      const { results } = await c.env.DB.prepare(
+        `SELECT id, contract_number, finance_amount
+           FROM contracts
+          WHERE financing_request_id = ?
+            AND document_type = 'عقد'
+            AND COALESCE(is_archived, 0) = 0`
+      ).bind(id).all()
+      rows = (results || []) as any[]
+    } catch (_) { rows = [] }
+
+    const contracts = rows
+      .map((r) => {
+        const oldV = r.finance_amount == null ? null : Number(r.finance_amount)
+        if (oldV != null && Number.isFinite(oldV) && Math.abs(oldV - newAmount) < 0.005) return null
+        return {
+          id: r.id,
+          contract_number: r.contract_number ?? String(r.id),
+          changes: [{
+            field: 'finance_amount',
+            label: 'مبلغ التمويل',
+            old: oldV == null ? '' : String(oldV),
+            new: String(newAmount)
+          }]
+        }
+      })
+      .filter(Boolean)
+
+    return c.json({ success: true, contracts })
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message, contracts: [] })
   }
 })
 
@@ -25376,9 +25525,47 @@ app.get('/admin/requests/:id/edit', async (c) => {
             initialAttachments: requestAttachmentsInitialJson
           });
 
+          window.__showContractSyncModal = function (opts) {
+            return new Promise(function (resolve) {
+              var existing = document.getElementById('__contractSyncModal');
+              if (existing) existing.remove();
+              var overlay = document.createElement('div');
+              overlay.id = '__contractSyncModal';
+              overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+              var rowsHtml = (opts.contracts || []).map(function (ct) {
+                var chg = (ct.changes || []).map(function (c) {
+                  return '<tr>' +
+                    '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600;">' + c.label + '</td>' +
+                    '<td style="padding:6px 8px;border-bottom:1px solid #eee;"><span style="color:#dc2626;text-decoration:line-through;">' + (c.old || '—') + '</span></td>' +
+                    '<td style="padding:6px 8px;border-bottom:1px solid #eee;"><span style="color:#16a34a;font-weight:600;">' + (c.new || '—') + '</span></td>' +
+                    '</tr>';
+                }).join('');
+                return '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">' +
+                  '<div style="padding:8px 12px;background:#f9fafb;font-weight:700;">عقد: ' + (ct.contract_number || ct.id) + '</div>' +
+                  '<table style="width:100%;border-collapse:collapse;font-size:14px;"><tbody>' + chg + '</tbody></table>' +
+                  '</div>';
+              }).join('');
+              overlay.innerHTML =
+                '<div style="background:white;border-radius:12px;max-width:720px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 40px rgba(0,0,0,0.2);">' +
+                  '<div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-size:18px;font-weight:700;color:#111;">' + opts.title + '</div>' +
+                  '<div style="padding:16px 20px;overflow:auto;">' +
+                    '<p style="margin:0 0 12px;color:#374151;">' + opts.intro + '</p>' +
+                    rowsHtml +
+                  '</div>' +
+                  '<div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;">' +
+                    '<button type="button" id="__syncCancel" style="padding:8px 18px;background:#e5e7eb;color:#111;border-radius:8px;font-weight:600;">إلغاء</button>' +
+                    '<button type="button" id="__syncConfirm" style="padding:8px 18px;background:#16a34a;color:white;border-radius:8px;font-weight:700;">تأكيد وحفظ</button>' +
+                  '</div>' +
+                '</div>';
+              document.body.appendChild(overlay);
+              document.getElementById('__syncCancel').onclick = function () { overlay.remove(); resolve(false); };
+              document.getElementById('__syncConfirm').onclick = function () { overlay.remove(); resolve(true); };
+            });
+          };
+
           async function handleSubmit(event) {
             event.preventDefault()
-            
+
             // Show loading message
             document.getElementById('message').innerHTML = \`
               <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
@@ -25432,6 +25619,25 @@ app.get('/admin/requests/:id/edit', async (c) => {
                 data.attachments_json = attHidden ? (attHidden.value || '[]') : '[]';
               }
 
+              // Contract-sync confirmation for 'عقد' contracts linked to this FR.
+              try {
+                const previewRes = await axios.get('/api/financing-requests/${id}/contract-sync-preview', { params: { requested_amount: data.requested_amount } });
+                const affected = (previewRes.data && previewRes.data.contracts) || [];
+                if (affected.length && typeof window.__showContractSyncModal === 'function') {
+                  const ok = await window.__showContractSyncModal({
+                    title: 'تأكيد تعديل العقود المرتبطة',
+                    intro: 'سيتم تحديث مبلغ التمويل على العقود المرتبطة (نوع "عقد" فقط). راجع التغييرات قبل الحفظ:',
+                    contracts: affected
+                  });
+                  if (!ok) {
+                    document.getElementById('message').innerHTML = '';
+                    return;
+                  }
+                }
+              } catch (previewErr) {
+                console.error('[EditRequest] preview error', previewErr);
+              }
+
               // Update financing request
               document.getElementById('message').innerHTML = \`
                 <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded">
@@ -25439,7 +25645,7 @@ app.get('/admin/requests/:id/edit', async (c) => {
                   جاري حفظ التعديلات النهائية...
                 </div>
               \`
-              
+
               const response = await axios.put('/api/financing-requests/${id}', data)
               
               if (response.data.success) {
@@ -28654,8 +28860,15 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     }
                     var submitBtn = editForm.querySelector('button[type="submit"]');
                     if (submitBtn) submitBtn.disabled = true;
-                    setEditMessage('loading', 'جاري حفظ التعديلات...');
+                    setEditMessage('loading', 'جاري التحقق من العقود المرتبطة...');
                     try {
+                      var proceed = await window.__confirmCustomerContractSync(${id}, editForm);
+                      if (!proceed) {
+                        setEditMessage('', '');
+                        if (submitBtn) submitBtn.disabled = false;
+                        return;
+                      }
+                      setEditMessage('loading', 'جاري حفظ التعديلات...');
                       if (typeof window.uploadDynamicCustomerAttachments === 'function') {
                         await window.uploadDynamicCustomerAttachments({
                           customerId: String(${id}),
@@ -28670,6 +28883,70 @@ app.get('/admin/customers/:id/edit', async (c) => {
                     }
                   });
                 }
+
+                // Contract-sync confirmation modal.
+                window.__confirmCustomerContractSync = async function (customerId, form) {
+                  try {
+                    var fd = new FormData(form);
+                    var qs = new URLSearchParams({
+                      full_name: String(fd.get('full_name') || ''),
+                      phone: String(fd.get('phone') || ''),
+                      national_id: String(fd.get('national_id') || ''),
+                      national_id_expiry: String(fd.get('national_id_expiry') || ''),
+                      city: String(fd.get('city') || '')
+                    });
+                    var res = await fetch('/api/customers/' + encodeURIComponent(customerId) + '/contract-sync-preview?' + qs.toString(), { credentials: 'include' });
+                    var data = await res.json();
+                    var contracts = (data && data.contracts) || [];
+                    if (!contracts.length) return true;
+                    return await window.__showContractSyncModal({
+                      title: 'تأكيد تعديل العقود المرتبطة',
+                      intro: 'سيتم تحديث الحقول التالية على العقود المرتبطة (غير المؤرشفة). راجع التغييرات قبل الحفظ:',
+                      contracts: contracts
+                    });
+                  } catch (e) {
+                    console.error('[CustomerEdit] preview error', e);
+                    return true; // fail-open: don't block save on preview error
+                  }
+                };
+
+                window.__showContractSyncModal = function (opts) {
+                  return new Promise(function (resolve) {
+                    var existing = document.getElementById('__contractSyncModal');
+                    if (existing) existing.remove();
+                    var overlay = document.createElement('div');
+                    overlay.id = '__contractSyncModal';
+                    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+                    var rowsHtml = (opts.contracts || []).map(function (ct) {
+                      var chg = (ct.changes || []).map(function (c) {
+                        return '<tr>' +
+                          '<td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600;">' + c.label + '</td>' +
+                          '<td style="padding:6px 8px;border-bottom:1px solid #eee;"><span style="color:#dc2626;text-decoration:line-through;">' + (c.old || '—') + '</span></td>' +
+                          '<td style="padding:6px 8px;border-bottom:1px solid #eee;"><span style="color:#16a34a;font-weight:600;">' + (c.new || '—') + '</span></td>' +
+                          '</tr>';
+                      }).join('');
+                      return '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">' +
+                        '<div style="padding:8px 12px;background:#f9fafb;font-weight:700;">عقد: ' + (ct.contract_number || ct.id) + '</div>' +
+                        '<table style="width:100%;border-collapse:collapse;font-size:14px;"><tbody>' + chg + '</tbody></table>' +
+                        '</div>';
+                    }).join('');
+                    overlay.innerHTML =
+                      '<div style="background:white;border-radius:12px;max-width:720px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 40px rgba(0,0,0,0.2);">' +
+                        '<div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;font-size:18px;font-weight:700;color:#111;">' + opts.title + '</div>' +
+                        '<div style="padding:16px 20px;overflow:auto;">' +
+                          '<p style="margin:0 0 12px;color:#374151;">' + opts.intro + '</p>' +
+                          rowsHtml +
+                        '</div>' +
+                        '<div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end;">' +
+                          '<button type="button" id="__syncCancel" style="padding:8px 18px;background:#e5e7eb;color:#111;border-radius:8px;font-weight:600;">إلغاء</button>' +
+                          '<button type="button" id="__syncConfirm" style="padding:8px 18px;background:#16a34a;color:white;border-radius:8px;font-weight:700;">تأكيد وحفظ</button>' +
+                        '</div>' +
+                      '</div>';
+                    document.body.appendChild(overlay);
+                    document.getElementById('__syncCancel').onclick = function () { overlay.remove(); resolve(false); };
+                    document.getElementById('__syncConfirm').onclick = function () { overlay.remove(); resolve(true); };
+                  });
+                };
               })();
             </script>
           </div>
@@ -34992,16 +35269,42 @@ app.get('/admin/contracts/new', async (c) => {
   if ((userInfo.roleId === 2 || userInfo.roleId === 3 || userInfo.roleId === 4 || userInfo.roleId === 5 || userInfo.roleId === 6) && !userInfo.tenantId) {
     return c.html('<h1>خطأ: يجب تحديد الشركة</h1>', 400)
   }
-  const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true, filterRole4ByFundingRequests: true })
+  const { results } = await loadCustomersForAdminForms(c, userInfo, { scopeSuperAdminToTenant: true, filterRole4ByFundingRequests: false })
   const escAttr = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   const escText = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  // Set of customer IDs that have at least one active (non-completed) FR — used to gate 'عقد' type selection.
+  const customersWithFR = new Set<string>()
+  try {
+    const tenantIdForFr = userInfo.tenantId
+    let frSql: string
+    let frBinds: (number | string)[]
+    if (tenantIdForFr) {
+      if ((userInfo.roleId === 4 || userInfo.roleId === 6) && userInfo.userId) {
+        frSql = `SELECT DISTINCT fr.customer_id FROM financing_requests fr
+                 WHERE fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0
+                   AND EXISTS (SELECT 1 FROM customer_assignments ca
+                               WHERE ca.customer_id = fr.customer_id AND ca.employee_id = ?)`
+        frBinds = [tenantIdForFr, userInfo.userId]
+      } else {
+        frSql = `SELECT DISTINCT fr.customer_id FROM financing_requests fr
+                 WHERE fr.tenant_id = ? AND COALESCE(fr.is_completed, 0) = 0`
+        frBinds = [tenantIdForFr]
+      }
+    } else {
+      frSql = `SELECT DISTINCT customer_id FROM financing_requests WHERE COALESCE(is_completed, 0) = 0`
+      frBinds = []
+    }
+    const frCustRows = (await c.env.DB.prepare(frSql).bind(...frBinds).all()).results as { customer_id: number | null }[]
+    for (const r of frCustRows) if (r.customer_id != null) customersWithFR.add(String(r.customer_id))
+  } catch (_) { /* keep set empty if the query fails */ }
   const optionsHtml = (results as any[]).map((cust: any) => {
     const natId = (cust.national_id && !String(cust.national_id).startsWith('TEMP-')) ? String(cust.national_id) : ''
     const natIdExpiry = cust.national_id_expiry ? String(cust.national_id_expiry) : ''
     const label = escText(cust.full_name || '')
       + (cust.phone ? ' — ' + escText(cust.phone) : '')
       + (natId ? ' (' + escText(natId) + ')' : '')
-    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national-id="${escAttr(natId)}" data-national-id-expiry="${escAttr(natIdExpiry)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}">${label}</option>`
+    const hasFr = customersWithFR.has(String(cust.id)) ? 'true' : 'false'
+    return `<option value="${escAttr(String(cust.id))}" data-name="${escAttr(cust.full_name || '')}" data-national-id="${escAttr(natId)}" data-national-id-expiry="${escAttr(natIdExpiry)}" data-phone="${escAttr(cust.phone || '')}" data-city="${escAttr(cust.city || '')}" data-has-fr="${hasFr}">${label}</option>`
   }).join('\n')
 
   let partyOneSummaryHtml = ''
@@ -42187,7 +42490,22 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           </div>
         </div>
         <div id="nrListStatus" class="text-sm text-gray-600 mb-3"></div>
-        <div id="nrCards" class="space-y-3"></div>
+        <div class="flex gap-4 items-start">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-sm font-semibold text-gray-700"><i class="fas fa-user-clock ml-1 text-gray-400"></i>لم تُحوَّل بعد</span>
+              <span id="nrFreshCount" class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium"></span>
+            </div>
+            <div id="nrCardsFresh" class="space-y-3"></div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-sm font-semibold text-gray-700"><i class="fas fa-exchange-alt ml-1 text-orange-500"></i>محوّلة</span>
+              <span id="nrTransferredCount" class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium"></span>
+            </div>
+            <div id="nrCardsTransferred" class="space-y-3"></div>
+          </div>
+        </div>
       </div>
 
       <script>
@@ -42357,57 +42675,51 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
         }
 
-        function renderCards(tasks) {
-          var root = document.getElementById('nrCards');
-          if (!tasks.length) {
-            root.innerHTML = '<div class="text-center text-gray-500 py-12 bg-white rounded-xl border border-gray-200">لا توجد طلبات مصنفة كـ "لا يرد" حالياً.</div>';
-            setStatus('');
-            return;
-          }
-          setStatus(tasks.length + ' طلب');
-          root.innerHTML = tasks.map(function (task) {
-            var countdown = task.no_response_at
-              ? '<div class="mt-2 flex items-center gap-2 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">' +
-                '<i class="fas fa-clock flex-shrink-0"></i><span data-countdown-id="' + task.no_response_at + '">' + formatCountdown(task.no_response_at) + '</span></div>'
-              : '';
-            var noteBlock = task.employee_note_text
-              ? '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
-                '<div class="text-xs font-medium text-gray-700 mb-1"><i class="fas fa-note-sticky ml-1 text-orange-600"></i>ملاحظة الموظف</div>' +
-                '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
-                '</div>'
-              : '';
-            var railBtn = transferHistoryButtonHtml(task, 'task-' + task.id);
-            var cardContent =
-              '<div class="flex flex-wrap items-start justify-between gap-2">' +
-                '<div class="min-w-0 flex-1">' +
-                  '<div class="text-base font-semibold text-gray-900">' + escapeHtml(task.task_title || '') + '</div>' +
-                  '<div class="flex flex-wrap gap-2 mt-2">' + priorityBadge(task.priority) +
-                  '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-phone-slash ml-1"></i>لا يرد</span>' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-              '<div class="mt-3 text-xs text-gray-600 space-y-1">' +
-                '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
-                '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
-                (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
-                '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
-                  (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
-                '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
-              '</div>' +
-              countdown +
-              noteBlock +
-              '<div class="mt-3 flex flex-wrap gap-2">' +
-                '<button type="button" data-revoke="' + task.id + '" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg"><i class="fas fa-undo ml-1"></i>استرجاع للقائمة الرئيسية</button>' +
-              '</div>';
-            return (
-              '<div class="bg-white border border-orange-200 rounded-xl p-4 shadow-sm">' +
-                '<div class="flex items-stretch gap-3">' +
-                  '<div class="min-w-0 flex-1">' + cardContent + '</div>' +
-                  (railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : '') +
-                '</div>' +
+        function buildCardHtml(task) {
+          var countdown = task.no_response_at
+            ? '<div class="mt-2 flex items-center gap-2 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">' +
+              '<i class="fas fa-clock flex-shrink-0"></i><span data-countdown-id="' + task.no_response_at + '">' + formatCountdown(task.no_response_at) + '</span></div>'
+            : '';
+          var noteBlock = task.employee_note_text
+            ? '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
+              '<div class="text-xs font-medium text-gray-700 mb-1"><i class="fas fa-note-sticky ml-1 text-orange-600"></i>ملاحظة الموظف</div>' +
+              '<div class="text-sm text-gray-800 whitespace-pre-wrap break-words">' + escapeHtml(String(task.employee_note_text)) + '</div>' +
               '</div>'
-            );
-          }).join('');
+            : '';
+          var railBtn = transferHistoryButtonHtml(task, 'task-' + task.id);
+          var cardContent =
+            '<div class="flex flex-wrap items-start justify-between gap-2">' +
+              '<div class="min-w-0 flex-1">' +
+                '<div class="text-sm font-semibold text-gray-900 leading-snug">' + escapeHtml(task.task_title || '') + '</div>' +
+                '<div class="flex flex-wrap gap-1.5 mt-2">' + priorityBadge(task.priority) +
+                '<span class="inline-block bg-orange-100 text-orange-800 text-xs font-medium px-2 py-0.5 rounded-full"><i class="fas fa-phone-slash ml-1"></i>لا يرد</span>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="mt-2.5 text-xs text-gray-600 space-y-1">' +
+              '<div><i class="fas fa-building ml-1 text-gray-400"></i>' + escapeHtml(task.company_name || '-') + '</div>' +
+              '<div class="flex items-center gap-2 flex-wrap"><span><i class="fas fa-user ml-1 text-gray-400"></i>' + escapeHtml(task.customer_name || '-') + ' — <span dir="ltr">' + escapeHtml(task.customer_phone || '-') + '</span></span>' + whatsappBtnHtml(task.customer_phone, task.customer_name) + '</div>' +
+              (task.customer_message ? '<div><i class="fas fa-comment ml-1 text-gray-400"></i><span class="whitespace-pre-wrap break-words">' + escapeHtml(task.customer_message) + '</span></div>' : '') +
+              '<div><i class="fas fa-calendar-alt ml-1 text-indigo-400"></i>' + escapeHtml(task.scheduled_at_gregorian || '-') +
+                (task.scheduled_at_hijri ? ' <span class="text-gray-400">|</span> ' + escapeHtml(task.scheduled_at_hijri) : '') + '</div>' +
+              '<div class="text-gray-400">طلب متابعة رقم #' + escapeHtml(String(task.followup_id)) + ' · ' + formatDate(task.created_at) + '</div>' +
+            '</div>' +
+            countdown +
+            noteBlock +
+            '<div class="mt-3 flex flex-wrap gap-2">' +
+              '<button type="button" data-revoke="' + task.id + '" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg"><i class="fas fa-undo ml-1"></i>استرجاع للقائمة الرئيسية</button>' +
+            '</div>';
+          return (
+            '<div class="bg-white border border-orange-200 rounded-xl p-3.5 shadow-sm">' +
+              '<div class="flex items-stretch gap-2">' +
+                '<div class="min-w-0 flex-1">' + cardContent + '</div>' +
+                (railBtn ? '<div class="relative flex-shrink-0 flex flex-col items-center justify-start pt-1">' + railBtn + '</div>' : '') +
+              '</div>' +
+            '</div>'
+          );
+        }
+
+        function bindColumnEvents(root) {
           bindWhatsAppButtons(root);
           bindTransferHistoryPopovers(root);
           root.querySelectorAll('[data-revoke]').forEach(function (btn) {
@@ -42425,6 +42737,25 @@ app.get('/admin/my-no-response-tasks', async (c) => {
               }
             });
           });
+        }
+
+        function renderCards(tasks) {
+          var fresh = tasks.filter(function(t) { return (Number(t.transfer_count) || 0) === 0; });
+          var transferred = tasks.filter(function(t) { return (Number(t.transfer_count) || 0) > 0; });
+          var emptyMsg = '<div class="text-center text-gray-400 py-10 bg-white rounded-xl border border-gray-200 text-sm">لا توجد طلبات</div>';
+
+          var freshRoot = document.getElementById('nrCardsFresh');
+          var transferredRoot = document.getElementById('nrCardsTransferred');
+
+          freshRoot.innerHTML = fresh.length ? fresh.map(buildCardHtml).join('') : emptyMsg;
+          transferredRoot.innerHTML = transferred.length ? transferred.map(buildCardHtml).join('') : emptyMsg;
+
+          document.getElementById('nrFreshCount').textContent = fresh.length ? String(fresh.length) : '';
+          document.getElementById('nrTransferredCount').textContent = transferred.length ? String(transferred.length) : '';
+
+          setStatus(tasks.length ? tasks.length + ' طلب' : '');
+          bindColumnEvents(freshRoot);
+          bindColumnEvents(transferredRoot);
         }
 
         function applyFilters() {
@@ -42474,7 +42805,8 @@ app.get('/admin/my-no-response-tasks', async (c) => {
 
         async function loadTasks() {
           setStatus('جاري التحميل...', 'neutral');
-          document.getElementById('nrCards').innerHTML = '';
+          document.getElementById('nrCardsFresh').innerHTML = '';
+          document.getElementById('nrCardsTransferred').innerHTML = '';
           try {
             const res = await axios.get('/api/my-followup-tasks?no_response=1');
             allNrTasks = Array.isArray(res?.data?.data) ? res.data.data : [];
@@ -42498,10 +42830,8 @@ app.get('/admin/my-no-response-tasks', async (c) => {
 
         // Refresh countdown every minute
         setInterval(function() {
-          var root = document.getElementById('nrCards');
-          root.querySelectorAll('[data-countdown-id]').forEach(function(el) {
-            var noResponseAt = el.getAttribute('data-countdown-id');
-            el.innerHTML = formatCountdown(noResponseAt);
+          document.querySelectorAll('[data-countdown-id]').forEach(function(el) {
+            el.innerHTML = formatCountdown(el.getAttribute('data-countdown-id'));
           });
         }, 60000);
 

@@ -1305,8 +1305,28 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       if (courtInput) courtInput.value = court;
     }
 
+    function filterCustomersByContractType() {
+      var select = document.getElementById('customer_lookup');
+      if (!select) return;
+      var needsFR = !!(selectedTemplate && selectedTemplate.template_type === 'عقد');
+      var resetValue = false;
+      Array.prototype.forEach.call(select.options, function (opt) {
+        if (!opt.value) return;
+        var hasFr = opt.getAttribute('data-has-fr') === 'true';
+        var visible = !needsFR || hasFr;
+        opt.hidden = !visible;
+        opt.disabled = !visible;
+        if (!visible && opt.selected) resetValue = true;
+      });
+      if (resetValue) {
+        select.value = '';
+        if (typeof fillFromCustomer === 'function') fillFromCustomer('');
+      }
+    }
+
     function goStep2() {
       if (!selectedTemplate?.template_name) { showToast('اختر نوع العقد أولاً', 'warning'); return; }
+      filterCustomersByContractType();
       document.getElementById('step1').style.display = 'none';
       document.getElementById('step2').style.display = 'block';
       document.getElementById('step3').style.display = 'none';
