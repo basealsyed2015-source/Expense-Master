@@ -70,8 +70,6 @@ authRoutes.post('/api/auth/login', async (c) => {
     const homeCity = user.home_city as string | null
     const contactEmail = user.contact_email as string | null
 
-    let autoRegisteredDeviceToken: string | null = null
-
     if (normalizedRole !== 1 && tenantId && (ipRestricted || deviceRestricted)) {
       const ip = clientIp(c)
       if (!ip) {
@@ -104,19 +102,7 @@ authRoutes.post('/api/auth/login', async (c) => {
         }
 
         if (!deviceKnown) {
-          // Check if this user has any registered devices at all
-          const deviceCount = await c.env.DB.prepare(
-            'SELECT COUNT(*) as cnt FROM user_login_devices WHERE user_id = ?'
-          ).bind(userId).first<{ cnt: number }>()
-          const hasDevices = (deviceCount?.cnt ?? 0) > 0
-
-          if (!hasDevices) {
-            // First-ever login for this user — auto-register this device, no OTP needed
-            autoRegisteredDeviceToken = crypto.randomUUID()
-            await c.env.DB.prepare('INSERT INTO user_login_devices (user_id, token) VALUES (?, ?)')
-              .bind(userId, autoRegisteredDeviceToken).run()
-          } else if (contactEmail && apiKey) {
-            // User has known devices but this one isn't recognized — require OTP
+          if (contactEmail && apiKey) {
             const code = Math.floor(100000 + Math.random() * 900000).toString()
             const inserted = await c.env.DB.prepare(`
               INSERT INTO tenant_login_otps (user_id, code, ip, otp_type, expires_at)
@@ -142,7 +128,7 @@ authRoutes.post('/api/auth/login', async (c) => {
             }
             return c.json({ success: false, status: 'device_otp_required' })
           }
-          // No contact_email (and has devices) — treat as trusted, fall through to IP check
+          // No contact_email — treat as trusted, fall through to IP check
         }
       }
 
@@ -248,13 +234,6 @@ authRoutes.post('/api/auth/login', async (c) => {
       'Set-Cookie',
       `authToken=${token}; Path=/; Max-Age=${cookieMaxAge}; SameSite=Lax; Secure`
     )
-    if (autoRegisteredDeviceToken) {
-      const deviceMaxAge = 365 * 24 * 60 * 60
-      response.headers.append(
-        'Set-Cookie',
-        `deviceToken=${autoRegisteredDeviceToken}; Path=/; Max-Age=${deviceMaxAge}; SameSite=Lax; Secure; HttpOnly`
-      )
-    }
     return response
   } catch (error: any) {
     const errorDump = {

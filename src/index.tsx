@@ -78,6 +78,7 @@ import {
   validateStaffRoleChange,
   isEmployeeAssignableRole,
   isBankAgentAssignableRole,
+  formatWorkflowActionTimestamp,
 } from './notification-access'
 import { extractCronSecretFromHeaders, isValidCronSecret } from './cron-auth'
 import { attachNoResponseTransferLogs, attachTransferHistory, listNoResponseTransferStaff, pickNextNoResponseAssignee } from './followup-transfer-logs'
@@ -39743,6 +39744,7 @@ app.post('/api/follow-ups/import-csv', async (c) => {
     const errors: { row: number; phone: string; reason: string }[] = []
     const skipped: { row: number; phone: string; reason: 'existing_customer' | 'existing_followup' | 'duplicate_in_file' }[] = []
     const seenPhonesInBatch = new Set<string>()
+    const notifiedPhonesInBatch = new Set<string>()
 
     for (let i = 0; i < incoming.length; i++) {
       const row = incoming[i] || {}
@@ -39766,19 +39768,66 @@ app.post('/api/follow-ups/import-csv', async (c) => {
           continue
         }
         const existingCustomer = await c.env.DB.prepare(
-          `SELECT 1 FROM customers WHERE phone = ? AND tenant_id = ? LIMIT 1`
-        ).bind(phone, tenant_id).first<{ 1: number }>()
+          `SELECT c.id, c.full_name, ca.employee_id
+           FROM customers c
+           LEFT JOIN customer_assignments ca ON ca.customer_id = c.id
+           WHERE c.phone = ? AND c.tenant_id = ?
+           LIMIT 1`
+        ).bind(phone, tenant_id).first<{ id: number; full_name: string | null; employee_id: number | null }>()
         if (existingCustomer) {
           skippedExistingCustomer++
           skipped.push({ row: rowNum, phone, reason: 'existing_customer' })
+          if (existingCustomer.employee_id && !notifiedPhonesInBatch.has(phone)) {
+            notifiedPhonesInBatch.add(phone)
+            const contactName = String(row.name ?? '').trim() || existingCustomer.full_name || phone
+            const ts = formatWorkflowActionTimestamp(new Date())
+            const title = 'تواصل عميل مجدداً'
+            const message = `العميل: ${existingCustomer.full_name || contactName}\nالرقم: ${phone}\nتواصل مع الشركة مجدداً عبر استيراد CSV\nالمصدر: ${sourceLabel}\nوقت الإجراء: ${ts.label}`
+            try {
+              await c.env.DB.prepare(
+                `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'csv_revisit', '/admin/customers?highlightCustomer=' || ?)`
+              ).bind(existingCustomer.id, title, ts.gregorianDate, ts.hijriDate || null, ts.time, message, existingCustomer.employee_id, tenant_id, existingCustomer.id).run()
+            } catch { /* best-effort */ }
+            try {
+              await c.env.DB.prepare(
+                `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+                 VALUES (?, ?, ?, ?, 'info', 'csv_import_revisit', 0)`
+              ).bind(existingCustomer.employee_id, tenant_id, title, message).run()
+            } catch { /* best-effort */ }
+          }
           continue
         }
         const existingFollowup = await c.env.DB.prepare(
-          `SELECT 1 FROM company_contact_followups WHERE customer_phone = ? AND tenant_id = ? LIMIT 1`
-        ).bind(phone, tenant_id).first<{ 1: number }>()
+          `SELECT f.id, f.customer_name, t.assigned_user_id
+           FROM company_contact_followups f
+           LEFT JOIN company_contact_followup_tasks t ON t.followup_id = f.id
+           WHERE f.customer_phone = ? AND f.tenant_id = ?
+           ORDER BY t.created_at DESC
+           LIMIT 1`
+        ).bind(phone, tenant_id).first<{ id: number; customer_name: string | null; assigned_user_id: number | null }>()
         if (existingFollowup) {
           skippedExistingFollowup++
           skipped.push({ row: rowNum, phone, reason: 'existing_followup' })
+          if (existingFollowup.assigned_user_id && !notifiedPhonesInBatch.has(phone)) {
+            notifiedPhonesInBatch.add(phone)
+            const contactName = String(row.name ?? '').trim() || existingFollowup.customer_name || phone
+            const ts = formatWorkflowActionTimestamp(new Date())
+            const title = 'تواصل صاحب متابعة مجدداً'
+            const message = `المتابعة: ${existingFollowup.customer_name || contactName}\nالرقم: ${phone}\nتواصل مع الشركة مجدداً عبر استيراد CSV\nالمصدر: ${sourceLabel}\nوقت الإجراء: ${ts.label}`
+            try {
+              await c.env.DB.prepare(
+                `INSERT INTO customer_alarms (customer_id, customer_name, alarm_date_gregorian, alarm_date_hijri, alarm_time, note, user_id, tenant_id, alarm_type, link_url)
+                 VALUES (NULL, ?, ?, ?, ?, ?, ?, ?, 'csv_revisit', '/admin/my-tasks')`
+              ).bind(title, ts.gregorianDate, ts.hijriDate || null, ts.time, message, existingFollowup.assigned_user_id, tenant_id).run()
+            } catch { /* best-effort */ }
+            try {
+              await c.env.DB.prepare(
+                `INSERT INTO notifications (user_id, tenant_id, title, message, type, category, is_read)
+                 VALUES (?, ?, ?, ?, 'info', 'csv_import_revisit', 0)`
+              ).bind(existingFollowup.assigned_user_id, tenant_id, title, message).run()
+            } catch { /* best-effort */ }
+          }
           continue
         }
         seenPhonesInBatch.add(phone)
@@ -42693,10 +42742,18 @@ app.get('/admin/my-no-response-tasks', async (c) => {
           el.className = 'text-sm mb-3 ' + (type === 'error' ? 'text-red-700' : 'text-gray-600');
         }
 
+        var NR_TRANSFER_CAP = 5;
+
         function buildCardHtml(task) {
+          var transferCount = Number(task.transfer_count) || 0;
+          var willArchive = transferCount >= NR_TRANSFER_CAP;
           var countdown = task.no_response_at
-            ? '<div class="mt-2 flex items-center gap-2 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">' +
-              '<i class="fas fa-clock flex-shrink-0"></i><span data-countdown-id="' + task.no_response_at + '">' + formatCountdown(task.no_response_at) + '</span></div>'
+            ? (willArchive
+                ? '<div class="mt-2 flex items-center gap-2 text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">' +
+                  '<i class="fas fa-archive flex-shrink-0"></i><span><span class="font-semibold">سيتم الأرشفة تلقائياً</span> بعد انتهاء المهلة — وصل الحد الأقصى للتحويلات (' + NR_TRANSFER_CAP + ')</span></div>'
+                : '<div class="mt-2 flex items-center gap-2 text-xs text-orange-800 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">' +
+                  '<i class="fas fa-clock flex-shrink-0"></i><span data-countdown-id="' + task.no_response_at + '">' + formatCountdown(task.no_response_at) + '</span></div>'
+              )
             : '';
           var noteBlock = task.employee_note_text
             ? '<div class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3">' +
@@ -49725,12 +49782,16 @@ app.post('/api/customer-reminders/trigger', async (c) => {
 
 // Auto-transfer "no response" followup tasks to the next eligible employee after 48 hours.
 // Uses its own cursor (tenant_no_response_assign_state) separate from the lead assignment queues.
-async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; skipped: number }> {
+const NO_RESPONSE_TRANSFER_CAP = 5
+
+async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; archived: number; skipped: number }> {
   // Fetch the current assignee's branch so we can scope the transfer pool.
   const { results: expiredRows } = await db.prepare(`
     SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
            f.customer_name,
-           COALESCE(u.assigned_location_id, 0) AS assignee_branch_id
+           COALESCE(u.assigned_location_id, 0) AS assignee_branch_id,
+           (SELECT COUNT(*) FROM company_contact_followup_task_notes n
+            WHERE n.task_id = t.id AND n.note_type = 'auto_transfer') AS auto_transfer_count
     FROM company_contact_followup_tasks t
     INNER JOIN company_contact_followups f ON f.id = t.followup_id
     LEFT JOIN users u ON u.id = t.assigned_user_id
@@ -49748,9 +49809,11 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     task_title: string | null
     customer_name: string | null
     assignee_branch_id: number  // 0 = no branch (global pool)
+    auto_transfer_count: number
   }>()
 
   let transferred = 0
+  let archived = 0
   let skipped = 0
 
   // Cache full staff list per tenant (loaded once, then sliced per branch).
@@ -49785,6 +49848,25 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
         WHERE tenant_id = ? AND branch_id = ? LIMIT 1
       `).bind(tenantId, branchId).first<{ last_auto_assigned_user_id: number | null }>()
       branchStateCache.set(cacheKey, stateRow?.last_auto_assigned_user_id ?? null)
+    }
+
+    // Cap reached — archive instead of transferring further.
+    if (Number(row.auto_transfer_count) >= NO_RESPONSE_TRANSFER_CAP) {
+      const archiveReason = `تم الأرشفة تلقائياً بعد ${NO_RESPONSE_TRANSFER_CAP} تحويلات متتالية (عدم رد)`
+      await db.prepare(`
+        UPDATE company_contact_followups
+        SET is_archived = 1, archive_reason = ?, is_no_response = 0, no_response_at = NULL
+        WHERE id = ? AND tenant_id = ?
+      `).bind(archiveReason, row.followup_id, tenantId).run()
+      try {
+        await db.prepare(`
+          INSERT INTO company_contact_followup_task_notes
+            (task_id, tenant_id, user_id, user_name, note_text, note_type)
+          VALUES (?, ?, 0, 'النظام', ?, 'auto_archive')
+        `).bind(row.task_id, tenantId, archiveReason).run()
+      } catch (_) {}
+      archived++
+      continue
     }
 
     const staff = branchStaffCache.get(cacheKey) || []
@@ -49866,7 +49948,7 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     transferred++
   }
 
-  return { transferred, skipped }
+  return { transferred, archived, skipped }
 }
 
 // Trigger endpoint: admin session or companion cron Worker (CRON_SECRET).
@@ -49893,7 +49975,7 @@ export default {
     )
     ctx.waitUntil(
       processNoResponseTransfers(env.DB).then(({ transferred, skipped }) => {
-        console.log(`[no-response-transfers] transferred=${transferred} skipped=${skipped}`)
+        console.log(`[no-response-transfers] transferred=${transferred} archived=${archived} skipped=${skipped}`)
       })
     )
   },
