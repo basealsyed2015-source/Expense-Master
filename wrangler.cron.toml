@@ -19,6 +19,6 @@ workers_dev = false
 [vars]
 PAGES_BASE_URL = "https://tamweel-calc.com"
 
-# Daily 06:00 UTC (same schedule previously declared on the unused Pages Worker config)
+# Hourly: no-response transfers/archives are bounded per run, so run often to keep up.
 [triggers]
-crons = ["0 6 * * *"]
+crons = ["0 * * * *"]

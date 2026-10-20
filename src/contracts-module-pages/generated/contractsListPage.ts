@@ -954,6 +954,12 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           <option value="مخالصة إلغاء طلب">مخالصة إلغاء طلب</option>
           <option value="مخالصة انهاء طلب">مخالصة انهاء طلب</option>
         </select>
+        <select class="form-control" id="employeeFilter" style="width:auto;" onchange="filterContracts()">
+          <option value="">جميع الموظفين</option>
+        </select>
+        <select class="form-control" id="bankAgentFilter" style="width:auto;" onchange="filterContracts()">
+          <option value="">جميع موظفي البنك</option>
+        </select>
         <button class="btn btn-ghost btn-sm" onclick="resetFilters()">
           <i class="fas fa-undo"></i> إعادة ضبط
         </button>
@@ -1016,7 +1022,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
     </div>
   </div>
 
-  <script src="/contracts-module/js/app.js?v=20260827"></script>
+  <script src="/contracts-module/js/app.js?v=20261005b"></script>
   <script>
     let allContracts = [];
     let filteredContracts = [];
@@ -1028,6 +1034,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
         const data = await API.get('contracts', { limit: 200 });
         allContracts = (data.data || []).filter(c => !c.is_archived);
         filteredContracts = [...allContracts];
+        populateEmployeeFilter();
         renderContracts();
       } catch (e) {
         showToast('خطأ في تحميل العقود', 'error');
@@ -1053,10 +1060,48 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       }
     }
 
+    function populateEmployeeFilter() {
+      const empSel = document.getElementById('employeeFilter');
+      if (empSel) {
+        const current = empSel.value;
+        const seen = new Set();
+        const employees = [];
+        allContracts.forEach(c => {
+          if (c.created_by && c.employee_name && !seen.has(c.created_by)) {
+            seen.add(c.created_by);
+            employees.push({ id: c.created_by, name: c.employee_name });
+          }
+        });
+        employees.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+        empSel.innerHTML = '<option value="">جميع الموظفين</option>' +
+          employees.map(e => \`<option value="\${e.id}">\${e.name}</option>\`).join('');
+        empSel.value = current;
+      }
+
+      const agentSel = document.getElementById('bankAgentFilter');
+      if (agentSel) {
+        const current = agentSel.value;
+        const seen = new Set();
+        const agents = [];
+        allContracts.forEach(c => {
+          if (c.bank_agent_name && !seen.has(c.bank_agent_name)) {
+            seen.add(c.bank_agent_name);
+            agents.push(c.bank_agent_name);
+          }
+        });
+        agents.sort((a, b) => a.localeCompare(b, 'ar'));
+        agentSel.innerHTML = '<option value="">جميع موظفي البنك</option>' +
+          agents.map(n => \`<option value="\${n}">\${n}</option>\`).join('');
+        agentSel.value = current;
+      }
+    }
+
     function filterContracts() {
       const q = document.getElementById('searchInput').value.toLowerCase();
       const st = document.getElementById('statusFilter').value;
       const tp = document.getElementById('typeFilter').value;
+      const emp = document.getElementById('employeeFilter').value;
+      const agent = document.getElementById('bankAgentFilter').value;
 
       filteredContracts = allContracts.filter(c => {
         const matchQ = !q ||
@@ -1068,7 +1113,9 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
           (c.bank_agent_name || '').toLowerCase().includes(q);
         const matchSt = !st || c.status === st;
         const matchTp = !tp || (c.document_type || 'عقد') === tp;
-        return matchQ && matchSt && matchTp;
+        const matchEmp = !emp || String(c.created_by) === String(emp);
+        const matchAgent = !agent || (c.bank_agent_name || '') === agent;
+        return matchQ && matchSt && matchTp && matchEmp && matchAgent;
       });
       currentPage = 1;
       renderContracts();
@@ -1078,6 +1125,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       document.getElementById('searchInput').value = '';
       document.getElementById('statusFilter').value = '';
       document.getElementById('typeFilter').value = '';
+      document.getElementById('employeeFilter').value = '';
+      document.getElementById('bankAgentFilter').value = '';
       filteredContracts = [...allContracts];
       currentPage = 1;
       renderContracts();

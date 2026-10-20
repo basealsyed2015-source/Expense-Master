@@ -1215,7 +1215,7 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <!--CONTRACTS_FINANCING_REQUESTS_JSON-->
-  <script src="/contracts-module/js/app.js?v=20260827"></script>
+  <script src="/contracts-module/js/app.js?v=20261005b"></script>
   <script>
     /** Rows from GET /api/contract-tables/templates (قوالب العقود) */
     let loadedTemplates = [];

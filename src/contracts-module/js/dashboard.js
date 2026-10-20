@@ -3,11 +3,13 @@
    ============================================= */
 
 let contractsChart = null;
+let allDashboardContracts = [];
 
 async function loadDashboard() {
   try {
     const data = await API.get('contracts', { limit: 100 });
     const contracts = data.data || [];
+    allDashboardContracts = contracts;
 
     // ===== STATS =====
     const total = contracts.length;
@@ -35,6 +37,9 @@ async function loadDashboard() {
 
     // ===== ALERTS =====
     buildAlerts(contracts);
+
+    // ===== RECENT EMPLOYEE FILTER =====
+    populateRecentEmployeeFilter(contracts);
 
     // ===== RECENT TABLE =====
     buildRecentTable(contracts);
@@ -187,6 +192,53 @@ function buildAlerts(contracts) {
       </div>
     </div>
   `).join('');
+}
+
+function populateRecentEmployeeFilter(contracts) {
+  const empSel = document.getElementById('recentEmployeeFilter');
+  if (empSel) {
+    const current = empSel.value;
+    const seen = new Set();
+    const employees = [];
+    contracts.forEach(c => {
+      if (c.created_by && c.employee_name && !seen.has(c.created_by)) {
+        seen.add(c.created_by);
+        employees.push({ id: c.created_by, name: c.employee_name });
+      }
+    });
+    employees.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    empSel.innerHTML = '<option value="">جميع الموظفين</option>' +
+      employees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    empSel.value = current;
+  }
+
+  const agentSel = document.getElementById('recentBankAgentFilter');
+  if (agentSel) {
+    const current = agentSel.value;
+    const seen = new Set();
+    const agents = [];
+    contracts.forEach(c => {
+      if (c.bank_agent_name && !seen.has(c.bank_agent_name)) {
+        seen.add(c.bank_agent_name);
+        agents.push(c.bank_agent_name);
+      }
+    });
+    agents.sort((a, b) => a.localeCompare(b, 'ar'));
+    agentSel.innerHTML = '<option value="">جميع موظفي البنك</option>' +
+      agents.map(n => `<option value="${n}">${n}</option>`).join('');
+    agentSel.value = current;
+  }
+}
+
+function applyRecentFilters() {
+  const emp = (document.getElementById('recentEmployeeFilter')?.value || '');
+  const agent = (document.getElementById('recentBankAgentFilter')?.value || '');
+  const filtered = allDashboardContracts.filter(c => {
+    const matchEmp = !emp || String(c.created_by) === String(emp);
+    const matchAgent = !agent || (c.bank_agent_name || '') === agent;
+    return matchEmp && matchAgent;
+  });
+  buildRecentTable(filtered);
 }
 
 function buildRecentTable(contracts) {

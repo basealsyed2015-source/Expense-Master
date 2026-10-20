@@ -1,6 +1,6 @@
 /**
  * Companion cron Worker for Cloudflare Pages.
- * Pages Functions do not run [triggers].crons — this Worker fires daily and POSTs
+ * Pages Functions do not run [triggers].crons — this Worker fires hourly and POSTs
  * the Pages app trigger endpoints with CRON_SECRET.
  *
  * Deploy: npx wrangler deploy -c wrangler.cron.toml
@@ -29,7 +29,7 @@ async function postTrigger(env: CronEnv, path: string): Promise<{ ok: boolean; s
   return { ok: res.ok, status: res.status, body }
 }
 
-async function runScheduledJobs(env: CronEnv): Promise<void> {
+async function runScheduledJobs(env: CronEnv, scheduledTime: number): Promise<void> {
   if (!env.CRON_SECRET) {
     console.error('[tamweel-cron] CRON_SECRET is not set')
     return
@@ -39,9 +39,10 @@ async function runScheduledJobs(env: CronEnv): Promise<void> {
     return
   }
 
-  // Drain no-response backlog: each Pages call transfers at most 200 rows.
+  // Drain no-response backlog: each Pages call handles at most 200 rows (transfers + cap archives).
   const maxBatches = 10
   let totalTransferred = 0
+  let totalArchived = 0
   let totalSkipped = 0
   for (let i = 0; i < maxBatches; i++) {
     const r = await postTrigger(env, '/api/followup-no-response/trigger')
@@ -49,20 +50,25 @@ async function runScheduledJobs(env: CronEnv): Promise<void> {
       console.error(`[tamweel-cron] no-response trigger failed status=${r.status} body=${r.body.slice(0, 500)}`)
       break
     }
-    let transferred = 0
-    let skipped = 0
+    let processed = 0
     try {
-      const json = JSON.parse(r.body) as { transferred?: number; skipped?: number }
-      transferred = Number(json.transferred) || 0
-      skipped = Number(json.skipped) || 0
+      const json = JSON.parse(r.body) as { transferred?: number; archived?: number; skipped?: number; processed?: number }
+      totalTransferred += Number(json.transferred) || 0
+      totalArchived += Number(json.archived) || 0
+      totalSkipped += Number(json.skipped) || 0
+      processed = Number(json.processed) || 0
     } catch {
-      /* ignore parse errors; still count as a completed call */
+      /* ignore parse errors; stop draining */
     }
-    totalTransferred += transferred
-    totalSkipped += skipped
-    if (transferred < 200) break
+    // Skipped rows make no progress, so only transfers/archives count toward draining.
+    if (processed === 0) break
   }
-  console.log(`[tamweel-cron] no-response-transfers transferred=${totalTransferred} skipped=${totalSkipped}`)
+  console.log(
+    `[tamweel-cron] no-response-transfers transferred=${totalTransferred} archived=${totalArchived} skipped=${totalSkipped}`,
+  )
+
+  // Customer reminders are day-anchored: run them once a day (06:00 UTC), not on every hourly tick.
+  if (new Date(scheduledTime).getUTCHours() !== 6) return
 
   const reminders = await postTrigger(env, '/api/customer-reminders/trigger')
   if (!reminders.ok) {
@@ -80,7 +86,7 @@ export default {
     )
   },
 
-  async scheduled(_event: ScheduledEvent, env: CronEnv, ctx: ExecutionContext) {
-    ctx.waitUntil(runScheduledJobs(env))
+  async scheduled(event: ScheduledEvent, env: CronEnv, ctx: ExecutionContext) {
+    ctx.waitUntil(runScheduledJobs(env, event.scheduledTime))
   },
 }

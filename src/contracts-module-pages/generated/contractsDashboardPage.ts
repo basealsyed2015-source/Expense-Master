@@ -1021,7 +1021,15 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
       <div class="dashboard-card full-card">
         <div class="card-header">
           <h3><i class="fas fa-list-alt"></i> آخر العقود</h3>
-          <a href="/admin/contracts/list" class="btn btn-sm btn-outline">عرض الكل <i class="fas fa-arrow-left"></i></a>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <select class="form-control" id="recentEmployeeFilter" style="width:auto;font-size:13px;padding:7px 12px;" onchange="applyRecentFilters()">
+              <option value="">جميع الموظفين</option>
+            </select>
+            <select class="form-control" id="recentBankAgentFilter" style="width:auto;font-size:13px;padding:7px 12px;" onchange="applyRecentFilters()">
+              <option value="">جميع موظفي البنك</option>
+            </select>
+            <a href="/admin/contracts/list" class="btn btn-sm btn-outline">عرض الكل <i class="fas fa-arrow-left"></i></a>
+          </div>
         </div>
         <div class="card-body table-responsive">
           <table class="data-table" id="recentContractsTable">
@@ -1048,8 +1056,8 @@ html.contracts-role-5-hide-new .topbar-trailing a[href="/admin/contracts/new"] {
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="/contracts-module/js/app.js?v=20260827"></script>
-  <script src="/contracts-module/js/dashboard.js?v=20260827"></script>
+  <script src="/contracts-module/js/app.js?v=20261005b"></script>
+  <script src="/contracts-module/js/dashboard.js?v=20261005b"></script>
 </body>
 </html>
 `

@@ -49784,7 +49784,9 @@ app.post('/api/customer-reminders/trigger', async (c) => {
 // Uses its own cursor (tenant_no_response_assign_state) separate from the lead assignment queues.
 const NO_RESPONSE_TRANSFER_CAP = 5
 
-async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; archived: number; skipped: number }> {
+const NO_RESPONSE_BATCH_LIMIT = 200
+
+async function processNoResponseTransfers(db: D1Database): Promise<{ transferred: number; archived: number; skipped: number; processed: number }> {
   // Fetch the current assignee's branch so we can scope the transfer pool.
   const { results: expiredRows } = await db.prepare(`
     SELECT t.id AS task_id, t.tenant_id, t.assigned_user_id, t.followup_id, t.task_title,
@@ -49799,8 +49801,9 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       AND f.no_response_at IS NOT NULL
       AND datetime(f.no_response_at) <= datetime('now', '-48 hours')
       AND COALESCE(f.is_archived, 0) = 0
-    ORDER BY f.no_response_at ASC
-    LIMIT 200
+    -- Cap-reached rows first: archiving is cheap and must never wait behind transfers.
+    ORDER BY (auto_transfer_count >= ${NO_RESPONSE_TRANSFER_CAP}) DESC, f.no_response_at ASC
+    LIMIT ${NO_RESPONSE_BATCH_LIMIT}
   `).all<{
     task_id: number
     tenant_id: number
@@ -49828,6 +49831,18 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     const branchId = Number(row.assignee_branch_id) || 0  // 0 = global
     const cacheKey = `${tenantId}:${branchId}`
 
+    // Cap reached — archive instead of transferring further.
+    if (Number(row.auto_transfer_count) >= NO_RESPONSE_TRANSFER_CAP) {
+      const archiveReason = `تم الأرشفة تلقائياً بعد ${NO_RESPONSE_TRANSFER_CAP} تحويلات متتالية (عدم رد)`
+      await db.prepare(`
+        UPDATE company_contact_followups
+        SET is_archived = 1, archive_reason = ?, is_no_response = 0, no_response_at = NULL
+        WHERE id = ? AND tenant_id = ?
+      `).bind(archiveReason, row.followup_id, tenantId).run()
+      archived++
+      continue
+    }
+
     // Load the full tenant staff list once, then derive per-branch slices.
     if (!tenantAllStaffCache.has(tenantId)) {
       const allStaff = await listNoResponseTransferStaff(db, tenantId)
@@ -49850,25 +49865,6 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       branchStateCache.set(cacheKey, stateRow?.last_auto_assigned_user_id ?? null)
     }
 
-    // Cap reached — archive instead of transferring further.
-    if (Number(row.auto_transfer_count) >= NO_RESPONSE_TRANSFER_CAP) {
-      const archiveReason = `تم الأرشفة تلقائياً بعد ${NO_RESPONSE_TRANSFER_CAP} تحويلات متتالية (عدم رد)`
-      await db.prepare(`
-        UPDATE company_contact_followups
-        SET is_archived = 1, archive_reason = ?, is_no_response = 0, no_response_at = NULL
-        WHERE id = ? AND tenant_id = ?
-      `).bind(archiveReason, row.followup_id, tenantId).run()
-      try {
-        await db.prepare(`
-          INSERT INTO company_contact_followup_task_notes
-            (task_id, tenant_id, user_id, user_name, note_text, note_type)
-          VALUES (?, ?, 0, 'النظام', ?, 'auto_archive')
-        `).bind(row.task_id, tenantId, archiveReason).run()
-      } catch (_) {}
-      archived++
-      continue
-    }
-
     const staff = branchStaffCache.get(cacheKey) || []
     if (!staff.length) { skipped++; continue }
 
@@ -49880,34 +49876,38 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
     )
     if (nextId == null) { skipped++; continue }
 
-    // Transfer the task
-    await db.prepare(`
-      UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?
-    `).bind(nextId, row.task_id, tenantId).run()
-
-    // Keep it as a no-response task for the new assignee; reset the 48h clock so cron
-    // does not immediately re-transfer on the next run.
-    await db.prepare(`
-      UPDATE company_contact_followups
-      SET is_no_response = 1, no_response_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND tenant_id = ?
-    `).bind(row.followup_id, tenantId).run()
-
     // Audit trail: note visible on my-tasks / follow-ups cards (requires migration 0145)
     const fromName = userNameCache.get(row.assigned_user_id) || String(row.assigned_user_id)
     const toName = userNameCache.get(nextId) || String(nextId)
-    try {
-      await db.prepare(`
+
+    // One atomic batch: reassign, reset the 48h clock (so cron does not immediately
+    // re-transfer), write the audit note, and advance the per-branch cursor.
+    await db.batch([
+      db.prepare(`
+        UPDATE company_contact_followup_tasks SET assigned_user_id = ? WHERE id = ? AND tenant_id = ?
+      `).bind(nextId, row.task_id, tenantId),
+      db.prepare(`
+        UPDATE company_contact_followups
+        SET is_no_response = 1, no_response_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND tenant_id = ?
+      `).bind(row.followup_id, tenantId),
+      db.prepare(`
         INSERT INTO company_contact_followup_task_notes
           (task_id, tenant_id, user_id, user_name, note_text, note_type)
         VALUES (?, ?, 0, 'النظام', ?, 'auto_transfer')
       `).bind(
         row.task_id, tenantId,
         `تم تحويل المهمة تلقائياً من ${fromName} إلى ${toName} بسبب عدم الرد خلال 48 ساعة`
-      ).run()
-    } catch (noteErr) {
-      console.error('auto_transfer note insert failed:', noteErr)
-    }
+      ),
+      db.prepare(`
+        INSERT INTO tenant_no_response_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
+          last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(tenantId, branchId, nextId),
+    ])
+    branchStateCache.set(cacheKey, nextId)
 
     const taskLabel =
       String(row.task_title || row.customer_name || '').trim() || `مهمة #${row.task_id}`
@@ -49935,20 +49935,10 @@ async function processNoResponseTransfers(db: D1Database): Promise<{ transferred
       console.error('followup_no_response_transfer notification insert failed:', notifErr)
     }
 
-    // Advance the per-branch no-response cursor.
-    await db.prepare(`
-      INSERT INTO tenant_no_response_assign_state (tenant_id, branch_id, last_auto_assigned_user_id, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(tenant_id, branch_id) DO UPDATE SET
-        last_auto_assigned_user_id = excluded.last_auto_assigned_user_id,
-        updated_at = CURRENT_TIMESTAMP
-    `).bind(tenantId, branchId, nextId).run()
-
-    branchStateCache.set(cacheKey, nextId)
     transferred++
   }
 
-  return { transferred, archived, skipped }
+  return { transferred, archived, skipped, processed: transferred + archived }
 }
 
 // Trigger endpoint: admin session or companion cron Worker (CRON_SECRET).
@@ -49974,7 +49964,7 @@ export default {
       })
     )
     ctx.waitUntil(
-      processNoResponseTransfers(env.DB).then(({ transferred, skipped }) => {
+      processNoResponseTransfers(env.DB).then(({ transferred, archived, skipped }) => {
         console.log(`[no-response-transfers] transferred=${transferred} archived=${archived} skipped=${skipped}`)
       })
     )

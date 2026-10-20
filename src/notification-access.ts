@@ -503,14 +503,8 @@ export async function insertFollowupNoResponseTransferNotification(
   const ts = formatWorkflowActionTimestamp(new Date())
   const note = message.includes('وقت الإجراء') ? message : `${message}\nوقت الإجراء: ${ts.label}`
 
-  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN alarm_type TEXT`).run().catch(() => {})
-  await db.prepare(`ALTER TABLE customer_alarms ADD COLUMN link_url TEXT`).run().catch(() => {})
-  await db.prepare(`ALTER TABLE notifications ADD COLUMN tenant_id INTEGER`).run().catch(() => {})
-  await db
-    .prepare(`ALTER TABLE notifications ADD COLUMN related_followup_task_id INTEGER`)
-    .run()
-    .catch(() => {})
-
+  // No per-call ALTER TABLE here: this runs twice per transfer in a batch job, and the columns
+  // (alarm_type, link_url, notifications.tenant_id, related_followup_task_id) exist in prod.
   try {
     await db
       .prepare(
